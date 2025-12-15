@@ -130,6 +130,8 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     const [isChatExpanded, setIsChatExpanded] = React.useState(false)
     const createProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
     const editProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
+    const [isSettingsSpinning, setIsSettingsSpinning] = React.useState(false)
+    const settingsSpinTimeoutRef = React.useRef<number | null>(null)
 
     // Form state for editing
     const [newProjectLeadId, setNewProjectLeadId] = React.useState("none")
@@ -161,6 +163,14 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
         const interval = setInterval(fetchUserData, 2000)
         return () => clearInterval(interval)
     }, [fetchUserData])
+
+    React.useEffect(() => {
+        return () => {
+            if (settingsSpinTimeoutRef.current) {
+                window.clearTimeout(settingsSpinTimeoutRef.current)
+            }
+        }
+    }, [])
 
     // Fetch projects with lead info
     const fetchProjects = React.useCallback(() => {
@@ -432,22 +442,35 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     return (
         <div className="flex h-full flex-col bg-background w-64 border-r overflow-hidden">
             <div className={cn(
-                "flex items-center px-4 h-10 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
+                "relative flex items-center px-0 h-10 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
                 isChatExpanded ? "max-h-0 opacity-0 border-b-0" : "max-h-10 opacity-100"
             )}>
-                <div className="flex items-center justify-between w-full min-w-0">
-                    <h1 className="text-sm font-semibold truncate">{userData.workspaceName ?? ""}</h1>
+                <h1 className="text-sm font-semibold truncate pl-4 pr-12 w-full min-w-0">
+                    {userData.workspaceName ?? ""}
+                </h1>
+                <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-10 w-10 rounded-none"
+                >
                     <Link
                         href="/dashboard/settings"
-                        className="shrink-0"
                         aria-label="Workspace settings"
                         title="Settings"
+                        onClick={() => {
+                            setIsSettingsSpinning(true)
+                            if (settingsSpinTimeoutRef.current) {
+                                window.clearTimeout(settingsSpinTimeoutRef.current)
+                            }
+                            settingsSpinTimeoutRef.current = window.setTimeout(() => {
+                                setIsSettingsSpinning(false)
+                            }, 700)
+                        }}
                     >
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Settings className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                        <Settings className={cn("h-4 w-4 text-muted-foreground", isSettingsSpinning && "animate-spin")} />
                     </Link>
-                </div>
+                </Button>
             </div>
 
             <div className={cn(
