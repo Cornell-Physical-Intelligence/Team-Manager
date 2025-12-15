@@ -5,6 +5,15 @@ import { revalidatePath } from 'next/cache'
 import { sendDiscordNotification } from '@/lib/discord'
 import { getCurrentUser } from '@/lib/auth'
 import { appUrl } from '@/lib/appUrl'
+import { formatDistanceToNowStrict } from 'date-fns'
+
+function formatDueLine(due: Date | null) {
+    if (!due) return 'It has no due date'
+    const now = new Date()
+    const distance = formatDistanceToNowStrict(due, { roundingMethod: 'floor' })
+    if (due.getTime() < now.getTime()) return `It is overdue by ${distance}`
+    return `It is due in ${distance}`
+}
 
 type CreateTaskInput = {
     title: string
@@ -148,18 +157,19 @@ export async function createTask(input: CreateTaskInput) {
                         where: { id: { in: assignedIds }, discordId: { not: null } },
                         select: { discordId: true }
                     })
-                    const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
+	                    const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
 
-                    if (mentions) {
-                        const projectLink = appUrl(`/dashboard/projects/${projectId}?task=${task.id}`)
-                        await sendDiscordNotification(
-                            `${mentions}\nYou were assigned: **${task.title}**\nProject: **${project.name}**\n${projectLink}`,
-                            undefined,
-                            webhookUrl
-                        )
-                    }
-                }
-            }
+	                    if (mentions) {
+	                        const dueDate = endDate ? new Date(endDate) : null
+	                        const shortUrl = appUrl(`/t/${task.id}`)
+	                        await sendDiscordNotification(
+	                            `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}: ${shortUrl}`,
+	                            undefined,
+	                            webhookUrl
+	                        )
+	                    }
+	                }
+	            }
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`)
@@ -275,17 +285,16 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
                     where: { id: project.workspaceId },
                     select: { discordChannelId: true }
                 })
-                const webhookUrl = workspace?.discordChannelId || null
-                if (webhookUrl) {
-                    const dashboardLink = appUrl('/dashboard')
-                    await sendDiscordNotification(
-                        `<@${project.lead.discordId}>\n**${updatedTask.title}** was moved to **Review**.\n${dashboardLink}`,
-                        undefined,
-                        webhookUrl
-                    )
-                }
-            }
-        }
+	                const webhookUrl = workspace?.discordChannelId || null
+	                if (webhookUrl) {
+	                    await sendDiscordNotification(
+	                        `<@${project.lead.discordId}>, **${updatedTask.title}** needs review: ${appUrl(`/t/${taskId}`)}`,
+	                        undefined,
+	                        webhookUrl
+	                    )
+	                }
+	            }
+	        }
 
         return { success: true }
     } catch (e) {
@@ -480,19 +489,23 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
                         where: { id: { in: newlyAssignedIds }, discordId: { not: null } },
                         select: { discordId: true }
                     })
-                    const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
+	                    const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
 
-                    if (mentions) {
-                        const projectLink = appUrl(`/dashboard/projects/${projectId}?task=${taskId}`)
-                        await sendDiscordNotification(
-                            `${mentions}\nYou were assigned: **${task.title}**\nProject: **${projectName}**\n${projectLink}`,
-                            undefined,
-                            webhookUrl
-                        )
-                    }
-                }
-            }
-        }
+	                    if (mentions) {
+	                        const dueDate =
+	                            input.endDate !== undefined
+	                                ? (input.endDate ? new Date(input.endDate) : null)
+	                                : (task.endDate ?? null)
+	                        const shortUrl = appUrl(`/t/${taskId}`)
+	                        await sendDiscordNotification(
+	                            `${mentions}, you have been assigned **${task.title}** in project **${projectName}**\n${formatDueLine(dueDate)}: ${shortUrl}`,
+	                            undefined,
+	                            webhookUrl
+	                        )
+	                    }
+	                }
+	            }
+	        }
 
         // Create activity logs
         if (activityLogs.length > 0) {

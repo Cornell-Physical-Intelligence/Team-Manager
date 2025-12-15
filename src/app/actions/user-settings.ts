@@ -2,7 +2,6 @@
 
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { sendDiscordNotification } from "@/lib/discord"
 
 export async function updateDisplayName(newName: string) {
     const user = await getCurrentUser()
@@ -70,15 +69,6 @@ export async function updateDiscordChannel(channelId: string) {
     }
 
     try {
-        const pinged = await sendDiscordNotification(
-            "✅ CuPI Platform connected. Notifications will be sent to this channel.",
-            undefined,
-            webhookUrl
-        )
-        if (!pinged) {
-            return { error: "Couldn't ping that webhook. Double-check the URL and try again." }
-        }
-
         await prisma.workspace.update({
             where: { id: user.workspaceId },
             data: { discordChannelId: webhookUrl }

@@ -113,9 +113,8 @@ export async function POST(request: Request) {
             }
 
             // 3. Send to Discord
-            // We prepend the author name
-            const workspaceLink = appUrl('/dashboard')
-            const finalMessage = `**[Chat] ${user.name || 'User'}:** ${discordContent}\n${workspaceLink}`
+            const shortUrl = appUrl('/w')
+            const finalMessage = `${discordContent} - ${shortUrl}`
 
             // Only send if it has mentions (User asked: "only bring chats to the discrod if they at somehting")
             if (hasMentions && workspace?.discordChannelId) {
