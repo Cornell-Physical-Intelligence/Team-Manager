@@ -7,7 +7,6 @@ import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
     Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical
 } from "lucide-react"
-import { motion } from "framer-motion"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -220,21 +219,13 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 ref={setNodeRef}
                 style={style}
                 className={cn(
-                    "group relative flex items-center gap-1 rounded-md transition-colors",
-                    isActive ? "" : "hover:bg-[var(--project-hover-bg)]"
+                    "group flex items-center gap-1 rounded-md transition-colors",
+                    isActive ? "bg-[var(--project-active-bg)]" : "hover:bg-[var(--project-hover-bg)]"
                 )}
             >
-                {isActive && (
-                    <motion.div
-                        layoutId="cupi-project-active-indicator"
-                        className="absolute inset-0 rounded-md pointer-events-none"
-                        style={{ backgroundColor: hexToRgba(projectColor, 0.16) }}
-                        transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.6 }}
-                    />
-                )}
                 <button
                     type="button"
-                    className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
+                    className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
                     style={{ color: projectColor }}
                     onClick={(e) => e.preventDefault()}
                     {...attributes}
@@ -246,7 +237,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 <Link
                     href={`/dashboard/projects/${project.id}`}
                     className={cn(
-                        "relative z-10 flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
+                        "flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
                         isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                     )}
                 >
@@ -257,7 +248,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="relative z-10 h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                            className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
                         >
                             <MoreHorizontal className="h-4 w-4" />
                         </Button>
