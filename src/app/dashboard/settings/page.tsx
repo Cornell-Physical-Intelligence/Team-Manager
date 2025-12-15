@@ -73,10 +73,6 @@ export default async function SettingsPage() {
 
             {/* Profile Section */}
             <section className="space-y-6">
-                <div>
-                    <h2 className="text-lg font-semibold mb-1">Profile</h2>
-                    <p className="text-sm text-muted-foreground">Your personal account settings.</p>
-                </div>
                 <div className="space-y-4 max-w-xl">
                     <DisplayNameSettings initialName={user.name || ''} />
                     <div className="grid gap-2">
@@ -94,10 +90,6 @@ export default async function SettingsPage() {
                     <div>
                         <h2 className="text-lg font-semibold mb-1">Team Members</h2>
                         <p className="text-sm text-muted-foreground">Manage roles and project assignments.</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">You are:</span>
-                        <Badge variant="secondary">{user.name}</Badge>
                     </div>
                 </div>
 

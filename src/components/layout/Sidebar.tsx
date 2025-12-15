@@ -645,7 +645,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                     <form onSubmit={handleUpdate}>
                         <DialogHeader>
                             <DialogTitle>Edit Project</DialogTitle>
-                            <DialogDescription>Update project details</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-3 py-4">
                             <div className="grid gap-1.5">
