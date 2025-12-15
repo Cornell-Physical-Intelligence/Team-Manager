@@ -80,6 +80,21 @@ type UserData = {
     avatar?: string | null
 }
 
+function hexToRgba(hex: string, alpha: number) {
+    const clampedAlpha = Math.max(0, Math.min(1, alpha))
+    const normalized = hex.trim().replace(/^#/, "")
+    const expanded = normalized.length === 3
+        ? normalized.split("").map((c) => c + c).join("")
+        : normalized
+
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) return `rgba(59, 130, 246, ${clampedAlpha})`
+
+    const r = parseInt(expanded.slice(0, 2), 16)
+    const g = parseInt(expanded.slice(2, 4), 16)
+    const b = parseInt(expanded.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`
+}
+
 export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserData> } = {}) {
     const pathname = usePathname()
     const router = useRouter()
@@ -175,17 +190,28 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     function SortableProjectRow({ project }: { project: Project }) {
         const isActive = pathname === `/dashboard/projects/${project.id}`
         const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
-        const style = {
+        const projectColor = project.color || "#3b82f6"
+        const style: React.CSSProperties = {
             transform: CSS.Transform.toString(transform),
             transition,
             opacity: isDragging ? 0.6 : 1,
+            ["--project-hover-bg" as any]: hexToRgba(projectColor, 0.08),
+            ["--project-active-bg" as any]: hexToRgba(projectColor, 0.14),
         }
 
         return (
-            <div ref={setNodeRef} style={style} className="group flex items-center gap-1">
+            <div
+                ref={setNodeRef}
+                style={style}
+                className={cn(
+                    "group flex items-center gap-1 rounded-md transition-colors",
+                    isActive ? "bg-[var(--project-active-bg)]" : "hover:bg-[var(--project-hover-bg)]"
+                )}
+            >
                 <button
                     type="button"
-                    className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted cursor-grab active:cursor-grabbing"
+                    className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
+                    style={{ color: projectColor }}
                     onClick={(e) => e.preventDefault()}
                     {...attributes}
                     {...listeners}
@@ -196,14 +222,10 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 <Link
                     href={`/dashboard/projects/${project.id}`}
                     className={cn(
-                        "flex-1 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted truncate",
-                        isActive ? "bg-muted font-medium" : "text-muted-foreground"
+                        "flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
+                        isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                     )}
                 >
-                    <span
-                        className="h-2 w-2 rounded-full shrink-0 ring-1 ring-border/50"
-                        style={{ backgroundColor: project.color || "#3b82f6" }}
-                    />
                     <span className="truncate">{project.name}</span>
                 </Link>
                 <DropdownMenu>
