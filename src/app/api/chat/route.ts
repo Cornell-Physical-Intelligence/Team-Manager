@@ -77,10 +77,7 @@ export async function POST(request: Request) {
 
             const workspaceMembers = await prisma.user.findMany({
                 where: {
-                    OR: [
-                        { workspaceId: user.workspaceId },
-                        { memberships: { some: { workspaceId: user.workspaceId } } }
-                    ],
+                    memberships: { some: { workspaceId: user.workspaceId } },
                     discordId: { not: null }
                 },
                 select: { name: true, discordId: true }

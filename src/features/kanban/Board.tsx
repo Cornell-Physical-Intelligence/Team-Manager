@@ -760,7 +760,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                     {pushes.length === 0 && (
                         <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground border-2 border-dashed rounded-xl m-4 bg-muted/10">
                             <p className="text-lg font-medium">No pushes yet...</p>
-                            <p className="text-sm mt-1">Create a push to get started</p>
+                            <p className="text-sm mt-1">A push is a long term subproject</p>
                         </div>
                     )}
 
