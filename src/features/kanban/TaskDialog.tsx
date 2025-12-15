@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Plus, Trash2, ChevronDown, FileText, Upload, X } from "lucide-react"
 import { useState, useTransition, useEffect, useMemo, useRef } from "react"
 import { createTask, updateTaskDetails, deleteTask } from "@/app/actions/kanban"
+import { RemoveScroll } from "react-remove-scroll"
 
 type TaskType = {
     id: string
@@ -63,6 +64,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = externalOpen !== undefined
     const open = isControlled ? externalOpen : internalOpen
+    const dialogContentRef = useRef<HTMLDivElement | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -350,7 +352,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                         </Button>
                     </DialogTrigger>
                 )}
-                <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
+                <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] p-0">
                     <form
                         onSubmit={handleSubmit}
                         className="flex flex-col h-full max-h-[85vh]"
@@ -419,7 +421,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[260px] p-0" align="start">
-                                            <div className="max-h-[240px] overflow-y-auto p-1">
+                                            <RemoveScroll shards={[dialogContentRef]}>
+                                                <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
                                                 {users.filter(u => u.isProjectMember).map(u => (
                                                     <div
                                                         key={u.id}
@@ -428,13 +431,11 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                     >
                                                         <Checkbox
                                                             checked={assigneeIds.includes(u.id)}
-                                                            onCheckedChange={() => toggleAssignee(u.id)}
-                                                            id={`user-${u.id}`}
                                                         />
-                                                        <label htmlFor={`user-${u.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer flex justify-between">
+                                                        <div className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 flex justify-between">
                                                             <span>{u.name}</span>
                                                             <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Member</span>
-                                                        </label>
+                                                        </div>
                                                     </div>
                                                 ))}
 
@@ -450,17 +451,16 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                             >
                                                                 <Checkbox
                                                                     checked={assigneeIds.includes(u.id)}
-                                                                    onCheckedChange={() => toggleAssignee(u.id)}
-                                                                    id={`user-${u.id}`}
                                                                 />
-                                                                <label htmlFor={`user-${u.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer">
+                                                                <div className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1">
                                                                     {u.name}
-                                                                </label>
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </>
                                                 )}
-                                            </div>
+                                                </div>
+                                            </RemoveScroll>
                                         </PopoverContent>
                                     </Popover>
                                 </div>

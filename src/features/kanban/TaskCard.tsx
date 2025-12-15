@@ -167,6 +167,17 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
     )
     const canUpdateProgress = isAssignee || isAdmin
 
+    const assigneeUsers =
+        task.assignees && task.assignees.length > 0
+            ? task.assignees.map((a) => a.user)
+            : task.assignee?.name
+                ? [{ id: task.assignee.id ?? "legacy", name: task.assignee.name }]
+                : []
+
+    const maxVisibleAssignees = 3
+    const visibleAssignees = assigneeUsers.slice(0, maxVisibleAssignees)
+    const extraAssigneeCount = Math.max(assigneeUsers.length - visibleAssignees.length, 0)
+
     const getManualProgressColorClass = (val: number) => {
         if (val < 30) return "bg-red-500"
         if (val < 70) return "bg-yellow-500"
@@ -269,12 +280,42 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     )}
                 </div>
 
-                {/* Avatar */}
-                <Avatar className="h-6 w-6 border text-[10px] shrink-0">
-                    <AvatarFallback className="bg-primary/5 text-primary">
-                        {getInitials(task.assignee?.name)}
-                    </AvatarFallback>
-                </Avatar>
+                {/* Assignees */}
+                <div className="flex items-center justify-end">
+                    <div className="flex -space-x-[5px]">
+                        {visibleAssignees.map((u, index) => (
+                            <Avatar
+                                key={u.id ?? u.name}
+                                className="relative h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background"
+                                title={u.name}
+                                style={{ zIndex: 30 - index }}
+                            >
+                                <AvatarFallback className="bg-primary/5 text-primary">
+                                    {getInitials(u.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                        ))}
+                        {extraAssigneeCount > 0 && (
+                            <Avatar
+                                className="relative h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background"
+                                title={assigneeUsers
+                                    .slice(maxVisibleAssignees)
+                                    .map((u) => u.name)
+                                    .join(", ")}
+                                style={{ zIndex: 0 }}
+                            >
+                                <AvatarFallback className="bg-muted text-muted-foreground font-medium">
+                                    +{extraAssigneeCount}
+                                </AvatarFallback>
+                            </Avatar>
+                        )}
+                        {assigneeUsers.length === 0 && (
+                            <Avatar className="h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background" title="Unassigned">
+                                <AvatarFallback className="bg-muted text-muted-foreground">—</AvatarFallback>
+                            </Avatar>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Progress Bar (if active) */}

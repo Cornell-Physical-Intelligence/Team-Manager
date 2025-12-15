@@ -13,7 +13,7 @@ export async function GET() {
                 name: user.name,
                 role: user.role,
                 avatar: user.avatar,
-                workspaceName: user.workspaceName || 'CuPI Platform'
+                workspaceName: user.workspaceName
             })
         }
 

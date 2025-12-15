@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { RemoveScroll } from "react-remove-scroll"
 import {
     Dialog,
     DialogContent,
@@ -68,10 +69,16 @@ type UserData = {
     avatar?: string | null
 }
 
-export function Sidebar() {
+export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserData> } = {}) {
     const pathname = usePathname()
     const router = useRouter()
-    const [userData, setUserData] = React.useState<UserData>({ name: "User", role: "Member", id: null, avatar: null })
+    const [userData, setUserData] = React.useState<UserData>(() => ({
+        name: initialUserData?.name ?? "User",
+        role: initialUserData?.role ?? "Member",
+        id: initialUserData?.id ?? null,
+        workspaceName: initialUserData?.workspaceName,
+        avatar: initialUserData?.avatar ?? null,
+    }))
     const [projects, setProjects] = React.useState<Project[]>([])
     const [leadCandidates, setLeadCandidates] = React.useState<UserCandidate[]>([])
     const [allUsers, setAllUsers] = React.useState<UserCandidate[]>([])
@@ -82,6 +89,8 @@ export function Sidebar() {
     const [deleteConfirmName, setDeleteConfirmName] = React.useState<string>("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isChatExpanded, setIsChatExpanded] = React.useState(false)
+    const createProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
+    const editProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
 
     // Form state for editing
     const [newProjectLeadId, setNewProjectLeadId] = React.useState("none")
@@ -284,7 +293,7 @@ export function Sidebar() {
                 "flex items-center px-4 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
                 isChatExpanded ? "max-h-0 opacity-0 border-b-0" : "max-h-14 opacity-100"
             )}>
-                <h1 className="text-lg font-semibold">{userData.workspaceName || 'CuPI Platform'}</h1>
+                <h1 className="text-lg font-semibold">{userData.workspaceName ?? ""}</h1>
             </div>
 
             <div className={cn(
@@ -430,7 +439,7 @@ export function Sidebar() {
 
             {/* Create Project Dialog */}
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent ref={createProjectDialogContentRef} className="sm:max-w-md">
                     <form onSubmit={handleCreate}>
                         <DialogHeader>
                             <DialogTitle>New Project</DialogTitle>
@@ -481,7 +490,8 @@ export function Sidebar() {
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[200px] p-0" align="start">
-                                        <div className="max-h-[200px] overflow-y-auto p-1">
+                                        <RemoveScroll shards={[createProjectDialogContentRef]}>
+                                            <div className="max-h-[200px] overflow-y-auto overscroll-contain p-1">
                                             {allUsers.map(user => {
                                                 const isLead = user.id === newProjectLeadId
                                                 return (
@@ -495,17 +505,16 @@ export function Sidebar() {
                                                     >
                                                         <Checkbox
                                                             checked={isLead || selectedMemberIds.includes(user.id)}
-                                                            onCheckedChange={() => !isLead && toggleMember(user.id)}
-                                                            id={`create-member-${user.id}`}
                                                             disabled={isLead}
                                                         />
-                                                        <label htmlFor={`create-member-${user.id}`} className="text-sm cursor-pointer flex-1">
+                                                        <div className="text-sm flex-1">
                                                             {user.name} {isLead && <span className="text-xs text-muted-foreground ml-1">(Lead)</span>}
-                                                        </label>
+                                                        </div>
                                                     </div>
                                                 )
                                             })}
-                                        </div>
+                                            </div>
+                                        </RemoveScroll>
                                     </PopoverContent>
                                 </Popover>
                             </div>
@@ -521,7 +530,7 @@ export function Sidebar() {
 
             {/* Edit Project Dialog */}
             <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent ref={editProjectDialogContentRef} className="sm:max-w-md">
                     <form onSubmit={handleUpdate}>
                         <DialogHeader>
                             <DialogTitle>Edit Project</DialogTitle>
@@ -577,7 +586,8 @@ export function Sidebar() {
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-[200px] p-0" align="start">
-                                        <div className="max-h-[200px] overflow-y-auto p-1">
+                                        <RemoveScroll shards={[editProjectDialogContentRef]}>
+                                            <div className="max-h-[200px] overflow-y-auto overscroll-contain p-1">
                                             {allUsers.map(user => {
                                                 const isLead = user.id === editLeadId
                                                 return (
@@ -591,17 +601,16 @@ export function Sidebar() {
                                                     >
                                                         <Checkbox
                                                             checked={isLead || selectedMemberIds.includes(user.id)}
-                                                            onCheckedChange={() => !isLead && toggleMember(user.id)}
-                                                            id={`edit-member-${user.id}`}
                                                             disabled={isLead}
                                                         />
-                                                        <label htmlFor={`edit-member-${user.id}`} className="text-sm cursor-pointer flex-1">
+                                                        <div className="text-sm flex-1">
                                                             {user.name} {isLead && <span className="text-xs text-muted-foreground ml-1">(Lead)</span>}
-                                                        </label>
+                                                        </div>
                                                     </div>
                                                 )
                                             })}
-                                        </div>
+                                            </div>
+                                        </RemoveScroll>
                                     </PopoverContent>
                                 </Popover>
                             </div>

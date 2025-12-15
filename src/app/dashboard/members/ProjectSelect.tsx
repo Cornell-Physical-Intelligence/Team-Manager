@@ -87,7 +87,7 @@ export function ProjectSelect({
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[250px] p-0" align="end">
-                <div className="max-h-[300px] overflow-y-auto p-3 space-y-2">
+                <div className="max-h-[300px] overflow-y-auto overscroll-contain p-3 space-y-2">
                     {allProjects.map(project => (
                         <div
                             key={project.id}
@@ -96,7 +96,6 @@ export function ProjectSelect({
                         >
                             <Checkbox
                                 checked={selectedProjectIds.includes(project.id)}
-                                onCheckedChange={() => toggleProject(project.id)}
                             />
                             <Label className="text-sm font-normal cursor-pointer flex-1">
                                 {project.name}
@@ -123,6 +122,4 @@ export function ProjectSelect({
         </Popover>
     )
 }
-
-
 

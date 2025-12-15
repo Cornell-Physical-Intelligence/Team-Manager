@@ -27,7 +27,7 @@ export default async function DashboardLayout({
     return (
         <div className="flex min-h-screen w-full bg-background">
             <div className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 bg-background">
-                <Sidebar />
+                <Sidebar initialUserData={{ id: user.id, name: user.name, role: user.role, workspaceName: user.workspaceName, avatar: user.avatar }} />
             </div>
 
             <div className="flex flex-col flex-1 md:ml-64">
@@ -41,10 +41,10 @@ export default async function DashboardLayout({
                                 </Button>
                             </SheetTrigger>
                             <SheetContent side="left" className="p-0 w-64">
-                                <Sidebar />
+                                <Sidebar initialUserData={{ id: user.id, name: user.name, role: user.role, workspaceName: user.workspaceName, avatar: user.avatar }} />
                             </SheetContent>
                         </Sheet>
-                        <span className="text-sm font-semibold">CuPI Platform</span>
+                        <span className="text-sm font-semibold">{user.workspaceName}</span>
                     </div>
                     <NotificationBell />
                 </header>
