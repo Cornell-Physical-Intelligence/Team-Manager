@@ -11,61 +11,30 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
     const project = await prisma.project.findUnique({
         where: { id },
-        include: {
+        select: {
+            id: true,
+            name: true,
+            color: true,
+            workspaceId: true,
             lead: { select: { id: true, name: true } },
             members: { select: { userId: true } },
             pushes: {
-                include: {
-                    tasks: {
-                        select: {
-                            id: true,
-                            column: { select: { name: true } }
-                        }
-                    }
+                select: {
+                    id: true,
+                    name: true,
+                    startDate: true,
+                    endDate: true,
+                    status: true,
+                    color: true,
+                    projectId: true,
                 },
-                orderBy: { startDate: 'asc' }
+                orderBy: { startDate: "asc" }
             },
             boards: {
-                include: {
-                    columns: {
-                        include: {
-                            tasks: {
-                                include: {
-                                    assignee: true,
-                                    assignees: {
-                                        include: {
-                                            user: { select: { id: true, name: true } }
-                                        }
-                                    },
-                                    push: {
-                                        select: { id: true, name: true, color: true, status: true }
-                                    },
-                                    activityLogs: {
-                                        where: {
-                                            newValue: 'Done'
-                                        },
-                                        orderBy: { createdAt: 'desc' },
-                                        take: 1,
-                                        select: {
-                                            changedByName: true,
-                                            createdAt: true
-                                        }
-                                    },
-                                    comments: {
-                                        select: { createdAt: true },
-                                        orderBy: { createdAt: 'desc' },
-                                        take: 1
-                                    },
-                                    attachments: {
-                                        select: { id: true, createdAt: true },
-                                        orderBy: { createdAt: 'desc' }
-                                    }
-                                },
-                                orderBy: { updatedAt: 'desc' }
-                            }
-                        },
-                        orderBy: { order: 'asc' }
-                    }
+                select: {
+                    id: true,
+                    name: true,
+                    columns: { select: { id: true, name: true, order: true }, orderBy: { order: "asc" } }
                 }
             }
         }
@@ -77,39 +46,11 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
     const boardData = project.boards[0] || null
 
-    // Serialize board data to avoid Date object issues across Server/Client boundary
-    // Serialize board data to avoid Date object issues across Server/Client boundary
     const board = boardData ? {
         ...boardData,
         columns: boardData.columns.map(col => ({
             ...col,
-            tasks: col.tasks.map(task => ({
-                ...task,
-                startDate: task.startDate?.toISOString() || null,
-                endDate: task.endDate?.toISOString() || null,
-                dueDate: task.dueDate?.toISOString() || null,
-                createdAt: task.createdAt?.toISOString(),
-                updatedAt: task.updatedAt?.toISOString() || null,
-                assignee: task.assignee ? {
-                    id: task.assignee.id,
-                    name: task.assignee.name || 'Unknown'
-                } : null,
-                assignees: task.assignees.map(a => ({
-                    user: a.user ? { id: a.user.id, name: a.user.name || 'Unknown' } : { id: 'unknown', name: 'Unknown' }
-                })),
-                activityLogs: task.activityLogs.map(log => ({
-                    ...log,
-                    createdAt: log.createdAt.toISOString()
-                })),
-                comments: task.comments.map(comment => ({
-                    ...comment,
-                    createdAt: comment.createdAt.toISOString()
-                })),
-                attachments: task.attachments.map(attachment => ({
-                    ...attachment,
-                    createdAt: attachment.createdAt.toISOString()
-                }))
-            }))
+            tasks: []
         }))
     } : null
 
@@ -133,17 +74,41 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         isProjectMember: projectMemberIds.has(u.id)
     }))
 
-    // Add computed fields to pushes and serialize dates
-    const pushes = project.pushes.map(push => ({
+    const pushIds = project.pushes.map((p) => p.id)
+    const counts = pushIds.length > 0
+        ? await prisma.task.groupBy({
+            by: ["pushId"],
+            where: {
+                pushId: { in: pushIds },
+                column: { board: { projectId: project.id } }
+            },
+            _count: { _all: true }
+        })
+        : []
+    const doneCounts = pushIds.length > 0
+        ? await prisma.task.groupBy({
+            by: ["pushId"],
+            where: {
+                pushId: { in: pushIds },
+                column: { name: "Done", board: { projectId: project.id } }
+            },
+            _count: { _all: true }
+        })
+        : []
+
+    const totalByPushId = new Map(counts.map((c) => [c.pushId as string, c._count._all]))
+    const doneByPushId = new Map(doneCounts.map((c) => [c.pushId as string, c._count._all]))
+
+    const pushes = project.pushes.map((push) => ({
         id: push.id,
         name: push.name,
         startDate: push.startDate.toISOString(),
-        endDate: push.endDate ? push.endDate.toISOString() : '', // Handle optional endDate
+        endDate: push.endDate ? push.endDate.toISOString() : '',
         status: push.status,
         color: push.color,
         projectId: push.projectId,
-        taskCount: push.tasks.length,
-        completedCount: push.tasks.filter(t => t.column?.name === 'Done').length
+        taskCount: totalByPushId.get(push.id) ?? 0,
+        completedCount: doneByPushId.get(push.id) ?? 0
     }))
 
     return (

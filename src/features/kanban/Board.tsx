@@ -102,6 +102,8 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     const [collapsedPushes, setCollapsedPushes] = useState<Set<string>>(() =>
         new Set(pushes.map(p => p.id))
     )
+    const [loadingPushes, setLoadingPushes] = useState<Record<string, true>>({})
+    const [loadedPushes, setLoadedPushes] = useState<Record<string, true>>({})
     const { toast } = useToast()
 
     // Dialog States
@@ -154,6 +156,44 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
 
     const processedHighlightRef = useRef<string | null>(null)
 
+    const loadPushTasks = useCallback(async (pushId: string) => {
+        if (loadedPushes[pushId] || loadingPushes[pushId]) return
+        setLoadingPushes((prev) => ({ ...prev, [pushId]: true }))
+        try {
+            const res = await fetch(`/api/projects/${projectId}/tasks?pushId=${encodeURIComponent(pushId)}`)
+            const data = await res.json()
+            if (!res.ok) throw new Error(data?.error || "Failed to load tasks")
+
+            const tasks: Task[] = Array.isArray(data?.tasks) ? data.tasks : []
+            const byColumnId = new Map<string, Task[]>()
+            for (const task of tasks) {
+                const colId = task.columnId || ""
+                if (!colId) continue
+                const arr = byColumnId.get(colId) || []
+                arr.push(task)
+                byColumnId.set(colId, arr)
+            }
+
+            setColumns((prev) =>
+                prev.map((col) => {
+                    const kept = col.tasks.filter((t) => t.push?.id !== pushId)
+                    const incoming = byColumnId.get(col.id) || []
+                    return { ...col, tasks: [...kept, ...incoming] }
+                })
+            )
+
+            setLoadedPushes((prev) => ({ ...prev, [pushId]: true }))
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setLoadingPushes((prev) => {
+                const next = { ...prev }
+                delete next[pushId]
+                return next
+            })
+        }
+    }, [loadedPushes, loadingPushes, projectId])
+
     // Scroll to highlighted task
     useEffect(() => {
         if (!highlightTaskId || !mounted) return
@@ -161,7 +201,35 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
         if (processedHighlightRef.current === highlightTaskId) return
 
         const task = columns.flatMap(c => c.tasks).find(t => t.id === highlightTaskId)
-        if (!task) return
+        if (!task) {
+            // If tasks aren't loaded yet (pushes are collapsed by default), fetch the task meta
+            fetch(`/api/tasks/${highlightTaskId}`)
+                .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+                .then(async ({ ok, d }) => {
+                    if (!ok) return
+                    if (d?.projectId && d.projectId !== projectId) return
+                    const pushId = d?.pushId || null
+                    if (!pushId) return
+
+                    // Expand and load the push, then scroll
+                    setCollapsedPushes((prev) => {
+                        if (!prev.has(pushId)) return prev
+                        const next = new Set(prev)
+                        next.delete(pushId)
+                        return next
+                    })
+                    await loadPushTasks(pushId)
+                    setTimeout(() => {
+                        const el = document.getElementById(`task-card-${highlightTaskId}`)
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "center" })
+                            processedHighlightRef.current = highlightTaskId
+                        }
+                    }, 250)
+                })
+                .catch(() => { })
+            return
+        }
 
         // If task is in a push, check if it's collapsed
         // (For Kanban board, tasks have a push property)
@@ -180,6 +248,10 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
             return prev
         })
 
+        if (pushId && pushId !== "backlog") {
+            void loadPushTasks(pushId)
+        }
+
         // 2. Scroll into view
         // If we expanded, wait for animation. If not, scroll immediately (or short delay for safety)
         setTimeout(() => {
@@ -190,7 +262,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
             }
         }, didExpand ? 300 : 100)
 
-    }, [highlightTaskId, mounted, columns])
+    }, [highlightTaskId, mounted, columns, loadPushTasks, projectId])
 
     useEffect(() => {
         const handleFocus = () => fetchUserRole()
@@ -201,7 +273,11 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     // Sync from props when board data actually changes (from router.refresh)
     // This happens AFTER server operations complete
     useEffect(() => {
-        setColumns(board.columns)
+        // Preserve any already-loaded tasks; server payload omits tasks while pushes are collapsed
+        setColumns((prev) => {
+            const prevTasksByColId = new Map(prev.map((c) => [c.id, c.tasks]))
+            return board.columns.map((c) => ({ ...c, tasks: prevTasksByColId.get(c.id) || [] }))
+        })
     }, [board.columns])
 
     // Auto-refresh board data
@@ -592,12 +668,14 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     }
 
     const togglePushCollapse = (pushId: string) => {
+        const willOpen = collapsedPushes.has(pushId)
         setCollapsedPushes(prev => {
             const next = new Set(prev)
             if (next.has(pushId)) next.delete(pushId)
             else next.add(pushId)
             return next
         })
+        if (willOpen) void loadPushTasks(pushId)
     }
 
     const getPushTasks = (pushId: string | null) => {
@@ -615,7 +693,9 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
         const pushCols = getPushTasks(pushId)
         const doneCol = pushCols.find(c => c.name === 'Done')
         const totalTasks = pushCols.reduce((sum, c) => sum + c.tasks.length, 0)
-        return totalTasks > 0 && doneCol?.tasks.length === totalTasks
+        if (loadedPushes[pushId]) return totalTasks > 0 && doneCol?.tasks.length === totalTasks
+        const push = pushes.find((p) => p.id === pushId)
+        return !!push && push.taskCount > 0 && push.completedCount === push.taskCount
     }
 
     const handleDeletePush = (e: React.MouseEvent, pushId: string) => {
@@ -770,7 +850,11 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                     <div className={`min-h-0 ${isOpen ? "overflow-visible" : "overflow-hidden"}`}>
                                         <div className={`p-4 pt-0 border-t bg-muted/10 rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
                                             <div className="pt-4">
-                                                {renderPushBoard(pushColumns, push.id)}
+                                                {loadingPushes[push.id] ? (
+                                                    <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
+                                                ) : (
+                                                    renderPushBoard(pushColumns, push.id)
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -816,7 +900,12 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                     users={users}
                     task={editingTask}
                     open={true}
-                    onOpenChange={(open) => !open && setEditingTask(null)}
+                    onOpenChange={(open) => {
+                        if (open) return
+                        const pushId = editingTask.push?.id
+                        setEditingTask(null)
+                        if (pushId) void loadPushTasks(pushId)
+                    }}
                 />
             )}
 
@@ -828,7 +917,13 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                     columnId={creatingColumnId}
                     pushId={creatingPushId}
                     open={true}
-                    onOpenChange={(open) => !open && setCreatingColumnId(null)}
+                    onOpenChange={(open) => {
+                        if (open) return
+                        const pushId = creatingPushId
+                        setCreatingColumnId(null)
+                        setCreatingPushId(null)
+                        if (pushId) void loadPushTasks(pushId)
+                    }}
                 />
             )}
 

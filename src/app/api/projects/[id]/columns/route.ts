@@ -13,8 +13,8 @@ export async function GET(
             include: {
                 columns: {
                     orderBy: { order: 'asc' }
-    }
-}
+                }
+            }
         })
 
         // Get all columns from all boards
@@ -26,5 +26,4 @@ export async function GET(
         return NextResponse.json({ error: 'Failed to fetch columns' }, { status: 500 })
     }
 }
-
 
