@@ -642,8 +642,8 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     }
 
     const renderPushBoard = (pushColumns: ColumnData[], pushId: string | null) => (
-        <div className="overflow-x-auto pb-4">
-            <div className="flex flex-col gap-3 md:grid md:grid-flow-col md:auto-cols-[minmax(280px,1fr)] min-h-[200px] md:min-h-[300px] min-w-full">
+        <div className="w-full max-w-full overflow-x-auto pb-4 custom-scrollbar overscroll-x-contain">
+            <div className="min-w-full w-max flex flex-col gap-3 md:grid md:grid-flow-col md:auto-cols-[minmax(280px,1fr)] min-h-[200px] md:min-h-[300px]">
                 {pushColumns.sort((a, b) => a.order - b.order).map(col => (
                     <Column
                         key={`${pushId || 'backlog'}-${col.id}`}
@@ -670,7 +670,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
 
     return (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
-            <div className="flex flex-col h-full overflow-y-auto">
+            <div className="flex flex-col h-full min-w-0 overflow-y-auto overflow-x-hidden">
 
                 <div className="flex-1 p-4 space-y-4">
                     {pushes.length === 0 && (
@@ -702,7 +702,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                 onOpenChange={() => togglePushCollapse(push.id)}
                                 className="group"
                             >
-                                <div className="rounded-lg border bg-card transition-all duration-200 shadow-sm hover:shadow-md data-[state=open]:shadow-sm">
+                                <div className="w-full min-w-0 max-w-full rounded-lg border bg-card shadow-sm hover:shadow-md transition-shadow duration-200 data-[state=open]:shadow-sm">
                                     <CollapsibleTrigger asChild>
                                         <button className={`w-full flex items-center justify-between p-4 transition-colors rounded-t-lg group-data-[state=closed]:rounded-lg relative overflow-hidden ${isComplete ? 'bg-green-100 dark:bg-green-900/20 hover:bg-green-200/50 dark:hover:bg-green-900/30' : 'hover:bg-accent/50'}`}>
                                             <div className="flex items-center gap-4">
