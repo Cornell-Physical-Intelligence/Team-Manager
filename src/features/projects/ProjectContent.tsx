@@ -11,6 +11,21 @@ import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
 import { PushDialog } from "@/features/pushes/PushDialog"
 
+function hexToRgba(hex: string, alpha: number) {
+    const clampedAlpha = Math.max(0, Math.min(1, alpha))
+    const normalized = hex.trim().replace(/^#/, "")
+    const expanded = normalized.length === 3
+        ? normalized.split("").map((c) => c + c).join("")
+        : normalized
+
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) return `rgba(59, 130, 246, ${clampedAlpha})`
+
+    const r = parseInt(expanded.slice(0, 2), 16)
+    const g = parseInt(expanded.slice(2, 4), 16)
+    const b = parseInt(expanded.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`
+}
+
 // Dynamically import Board to prevent SSR hydration issues
 const Board = dynamic(() => import("@/features/kanban/Board").then(mod => ({ default: mod.Board })), {
     ssr: false,
@@ -98,6 +113,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
     }, [])
 
     const canManagePushes = userRole === 'Admin' || userRole === 'Team Lead'
+    const projectColor = project.color || "#3b82f6"
 
     // Get all tasks for Gantt chart with column and push info
     const allTasks = board?.columns.flatMap(col =>
@@ -152,17 +168,24 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
 	                        </Button>
 	                        <div
 	                            className="h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-border/50"
-	                            style={{ backgroundColor: project.color || "#3b82f6" }}
+	                            style={{ backgroundColor: projectColor }}
 	                        />
 	                        <h1 className="text-base md:text-lg font-semibold truncate">{project.name}</h1>
 	                        {canManagePushes && view === 'kanban' && (
 	                            <Button
 	                                variant="outline"
                                 size="sm"
-                                className="h-7 px-2 md:px-3 shrink-0"
+                                className="h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)]"
+                                style={{
+                                    ["--push-btn-bg" as any]: hexToRgba(projectColor, 0.10),
+                                    ["--push-btn-bg-hover" as any]: hexToRgba(projectColor, 0.16),
+                                    ["--push-btn-border" as any]: hexToRgba(projectColor, 0.22),
+                                    ["--push-btn-border-hover" as any]: hexToRgba(projectColor, 0.34),
+                                    ["--push-btn-icon" as any]: projectColor,
+                                }}
                                 onClick={() => setShowPushDialog(true)}
                             >
-                                <Plus className="w-3.5 h-3.5 md:mr-1.5" />
+                                <Plus className="w-3.5 h-3.5 md:mr-1.5 text-[color:var(--push-btn-icon)]" />
                                 <span className="hidden md:inline">Add Push</span>
                             </Button>
                         )}

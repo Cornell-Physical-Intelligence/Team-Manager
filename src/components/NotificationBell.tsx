@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Bell, Check, User, Clock, FileText, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
     Popover,
     PopoverContent,
@@ -24,6 +25,7 @@ type Notification = {
 export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [open, setOpen] = useState(false)
+    const [bellRingNonce, setBellRingNonce] = useState(0)
 
     const fetchNotifications = async () => {
         try {
@@ -117,8 +119,19 @@ export function NotificationBell() {
     return (
         <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative h-8 w-8">
-                    <Bell className="h-4 w-4" />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative h-8 w-8"
+                    onClick={() => setBellRingNonce((n) => n + 1)}
+                >
+                    <Bell
+                        key={bellRingNonce}
+                        className={cn(
+                            "h-4 w-4 origin-top",
+                            bellRingNonce > 0 && "motion-safe:animate-[cupi-bell-ring_900ms_cubic-bezier(0.16,1,0.3,1)_both]"
+                        )}
+                    />
                     {unreadCount > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center">
                             {unreadCount > 9 ? '9+' : unreadCount}

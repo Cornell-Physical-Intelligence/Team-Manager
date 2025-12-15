@@ -186,3 +186,37 @@
     transform: rotate(720deg);
   }
 }
+
+@keyframes cupi-bell-ring {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(-18deg);
+  }
+
+  22% {
+    transform: rotate(14deg);
+  }
+
+  34% {
+    transform: rotate(-10deg);
+  }
+
+  46% {
+    transform: rotate(7deg);
+  }
+
+  62% {
+    transform: rotate(-4deg);
+  }
+
+  78% {
+    transform: rotate(2deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
+}
