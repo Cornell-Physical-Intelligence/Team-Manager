@@ -111,7 +111,6 @@ const PROJECT_COLOR_OPTIONS = [
 export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserData> } = {}) {
     const pathname = usePathname()
     const router = useRouter()
-    const isProjectDetail = pathname.startsWith("/dashboard/projects/") && pathname !== "/dashboard/projects"
     const [userData, setUserData] = React.useState<UserData>(() => ({
         name: initialUserData?.name ?? "User",
         role: initialUserData?.role ?? "Member",
@@ -122,7 +121,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     const [projects, setProjects] = React.useState<Project[]>([])
     const [leadCandidates, setLeadCandidates] = React.useState<UserCandidate[]>([])
     const [allUsers, setAllUsers] = React.useState<UserCandidate[]>([])
-    const [projectsOpen, setProjectsOpen] = React.useState(() => !isProjectDetail)
+    const [projectsOpen, setProjectsOpen] = React.useState(true)
     const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
     const [editingProject, setEditingProject] = React.useState<Project | null>(null)
     const [deleteConfirm, setDeleteConfirm] = React.useState<Project | null>(null)
@@ -296,10 +295,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
         fetchProjects()
         fetchUsers()
     }, [fetchProjects, fetchUsers])
-
-    React.useEffect(() => {
-        if (isProjectDetail) setProjectsOpen(false)
-    }, [isProjectDetail])
 
     // When editing project changes, update the lead id state
     React.useEffect(() => {

@@ -101,7 +101,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     const [isPersisting, setIsPersisting] = useState(false)
     const [flashingColumnId, setFlashingColumnId] = useState<string | null>(null)
     const [collapsedPushes, setCollapsedPushes] = useState<Set<string>>(() =>
-        new Set(pushes.filter(p => p.status === 'Completed').map(p => p.id))
+        new Set(pushes.map(p => p.id))
     )
     const { toast } = useToast()
 
