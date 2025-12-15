@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { getCurrentUser } from "@/lib/auth";
+import { ThemeClient } from "@/components/ThemeClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,40 +25,15 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
-  const themePreference = (user as any)?.themePreference ?? "system";
-  const initialDarkClass = themePreference === "dark" ? "dark" : "";
-
   return (
-    <html lang="en" suppressHydrationWarning className={initialDarkClass}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){
-  var pref = ${JSON.stringify(themePreference)};
-  var root = document.documentElement;
-  root.dataset.theme = pref;
-  function apply(){
-    var dark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    root.classList.toggle('dark', !!dark);
-    root.style.colorScheme = dark ? 'dark' : 'light';
-  }
-  apply();
-  if(pref === 'system' && window.matchMedia){
-    try {
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
-    } catch(e) {}
-  }
-})();`,
-          }}
-        />
-      </head>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeClient />
         {children}
       </body>
     </html>

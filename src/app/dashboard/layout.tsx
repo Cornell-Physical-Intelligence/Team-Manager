@@ -5,6 +5,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
 import { NotificationBell } from "@/components/NotificationBell"
+import { ThemeClient } from "@/components/ThemeClient"
 
 import { Metadata } from 'next'
 
@@ -55,6 +56,7 @@ export default async function DashboardLayout({
                 </header>
 
                 <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30" style={{ scrollbarGutter: "stable" }}>
+                    <ThemeClient userId={user.id} />
                     {children}
                 </main>
             </div>

@@ -44,8 +44,7 @@ export async function getCurrentUser() {
                     discordId: dbUser.discordId,
                     hasOnboarded: dbUser.hasOnboarded,
                     skills: dbUser.skills,
-                    interests: dbUser.interests,
-                    themePreference: dbUser.themePreference ?? 'system'
+                    interests: dbUser.interests
                 }
             }
         }
