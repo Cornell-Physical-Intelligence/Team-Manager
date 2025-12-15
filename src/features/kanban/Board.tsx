@@ -15,7 +15,6 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { Plus, ChevronDown, CheckCircle2, Trash2, Pencil } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
 
 import { PushDialog } from "@/features/pushes/PushDialog"
 import { Button } from "@/components/ui/button"
@@ -642,27 +641,28 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     }
 
     const renderPushBoard = (pushColumns: ColumnData[], pushId: string | null) => (
-        <div className="w-full max-w-full overflow-x-auto pb-4 custom-scrollbar overscroll-x-contain">
-            <div className="min-w-full w-max flex flex-col gap-3 md:grid md:grid-flow-col md:auto-cols-[minmax(280px,1fr)] min-h-[200px] md:min-h-[300px]">
+        <div className="w-full min-w-0 overflow-x-auto pb-4 custom-scrollbar overscroll-x-contain">
+            <div className="flex flex-col gap-3 md:flex-row md:items-stretch md:min-w-max min-h-[200px] md:min-h-[300px]">
                 {pushColumns.sort((a, b) => a.order - b.order).map(col => (
-                    <Column
-                        key={`${pushId || 'backlog'}-${col.id}`}
-                        column={col}
-                        projectId={projectId}
-                        users={users}
-                        onEditTask={setPreviewingTask}
-                        onAddTask={(col.name === 'Todo' || col.name === 'To Do') ? () => {
-                            setCreatingColumnId(col.id)
-                            setCreatingPushId(pushId)
-                        } : undefined}
-                        isDoneColumn={col.name === 'Done'}
-                        isReviewColumn={col.name === 'Review'}
-                        userRole={userRole}
-                        isFlashing={flashingColumnId === `${pushId || 'backlog'}::${col.id}`}
-                        pushId={pushId}
-                        highlightTaskId={highlightTaskId}
-                        currentUserId={userId}
-                    />
+                    <div key={`${pushId || 'backlog'}-${col.id}`} className="w-full md:w-[320px] md:shrink-0 min-w-0">
+                        <Column
+                            column={col}
+                            projectId={projectId}
+                            users={users}
+                            onEditTask={setPreviewingTask}
+                            onAddTask={(col.name === 'Todo' || col.name === 'To Do') ? () => {
+                                setCreatingColumnId(col.id)
+                                setCreatingPushId(pushId)
+                            } : undefined}
+                            isDoneColumn={col.name === 'Done'}
+                            isReviewColumn={col.name === 'Review'}
+                            userRole={userRole}
+                            isFlashing={flashingColumnId === `${pushId || 'backlog'}::${col.id}`}
+                            pushId={pushId}
+                            highlightTaskId={highlightTaskId}
+                            currentUserId={userId}
+                        />
+                    </div>
                 ))}
             </div>
         </div>
@@ -670,7 +670,10 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
 
     return (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
-            <div className="flex flex-col h-full min-w-0 overflow-y-scroll overflow-x-hidden">
+            <div
+                className="flex flex-col h-full min-w-0 overflow-y-scroll overflow-x-hidden"
+                style={{ scrollbarGutter: "stable" }}
+            >
 
                 <div className="flex-1 p-4 space-y-4">
                     {pushes.length === 0 && (
@@ -758,24 +761,19 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                     </div>
                                 </button>
 
-                                <AnimatePresence initial={false}>
-                                    {isOpen && (
-                                        <motion.div
-                                            id={contentId}
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: "auto", opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                            style={{ overflow: "hidden" }}
-                                        >
-                                            <div className="p-4 pt-0 border-t bg-muted/10 rounded-b-lg">
-                                                <div className="pt-4">
-                                                    {renderPushBoard(pushColumns, push.id)}
-                                                </div>
+                                <div
+                                    id={contentId}
+                                    className="grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                                    style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+                                >
+                                    <div className="min-h-0 overflow-hidden">
+                                        <div className={`p-4 pt-0 border-t bg-muted/10 rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                                            <div className="pt-4">
+                                                {renderPushBoard(pushColumns, push.id)}
                                             </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )
                     })

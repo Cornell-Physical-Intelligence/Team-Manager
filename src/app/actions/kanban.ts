@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { sendDiscordNotification } from '@/lib/discord'
 import { getCurrentUser } from '@/lib/auth'
-import { appUrl } from '@/lib/appUrl'
 import { formatDistanceToNowStrict } from 'date-fns'
 
 function formatDueLine(due: Date | null) {
@@ -161,10 +160,14 @@ export async function createTask(input: CreateTaskInput) {
 
 	                    if (mentions) {
 	                        const dueDate = endDate ? new Date(endDate) : null
-	                        const shortUrl = appUrl(`/t/${task.id}`)
 	                        await sendDiscordNotification(
-	                            `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}: ${shortUrl}`,
-	                            undefined,
+	                            "",
+	                            [{
+	                                title: "📌 Task Assignment",
+	                                description: `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}`,
+	                                color: 0x5865F2,
+	                                timestamp: new Date().toISOString(),
+	                            }],
 	                            webhookUrl
 	                        )
 	                    }
@@ -288,8 +291,13 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
 	                const webhookUrl = workspace?.discordChannelId || null
 	                if (webhookUrl) {
 	                    await sendDiscordNotification(
-	                        `<@${project.lead.discordId}>, **${updatedTask.title}** needs review: ${appUrl(`/t/${taskId}`)}`,
-	                        undefined,
+	                        "",
+	                        [{
+	                            title: "🔍 Needs Review",
+	                            description: `<@${project.lead.discordId}>, **${updatedTask.title}** needs review`,
+	                            color: 0xFEE75C,
+	                            timestamp: new Date().toISOString(),
+	                        }],
 	                        webhookUrl
 	                    )
 	                }
@@ -496,10 +504,14 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
 	                            input.endDate !== undefined
 	                                ? (input.endDate ? new Date(input.endDate) : null)
 	                                : (task.endDate ?? null)
-	                        const shortUrl = appUrl(`/t/${taskId}`)
 	                        await sendDiscordNotification(
-	                            `${mentions}, you have been assigned **${task.title}** in project **${projectName}**\n${formatDueLine(dueDate)}: ${shortUrl}`,
-	                            undefined,
+	                            "",
+	                            [{
+	                                title: "📌 Task Assignment",
+	                                description: `${mentions}, you have been assigned **${task.title}** in project **${projectName}**\n${formatDueLine(dueDate)}`,
+	                                color: 0x5865F2,
+	                                timestamp: new Date().toISOString(),
+	                            }],
 	                            webhookUrl
 	                        )
 	                    }

@@ -2,7 +2,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { appUrl } from '@/lib/appUrl'
 
 export async function GET(request: Request) {
     try {
@@ -113,12 +112,20 @@ export async function POST(request: Request) {
             }
 
             // 3. Send to Discord
-            const shortUrl = appUrl('/w')
-            const finalMessage = `${discordContent} - ${shortUrl}`
+            const finalMessage = discordContent
 
             // Only send if it has mentions (User asked: "only bring chats to the discrod if they at somehting")
             if (hasMentions && workspace?.discordChannelId) {
-                await sendDiscordNotification(finalMessage, undefined, workspace.discordChannelId)
+                await sendDiscordNotification(
+                    "",
+                    [{
+                        title: "💬 Chat Mention",
+                        description: finalMessage,
+                        color: 0x5865F2,
+                        timestamp: new Date().toISOString(),
+                    }],
+                    workspace.discordChannelId
+                )
             }
 
         } catch (discordErr) {
