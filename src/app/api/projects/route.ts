@@ -46,12 +46,31 @@ export async function GET(request: Request) {
                 name: true,
                 description: true,
                 color: true,
+                createdAt: true,
                 leadId: includeLead,
                 lead: includeLead ? { select: { id: true, name: true } } : false,
                 members: { select: { userId: true, user: { select: { name: true } } } }
             }
         })
-        return NextResponse.json(projects)
+
+        const userOrders = await prisma.projectUserOrder.findMany({
+            where: { userId: user.id, projectId: { in: projects.map(p => p.id) } },
+            select: { projectId: true, order: true },
+        })
+        const orderMap = new Map(userOrders.map(o => [o.projectId, o.order]))
+
+        const sorted = [...projects].sort((a, b) => {
+            const aOrder = orderMap.get(a.id)
+            const bOrder = orderMap.get(b.id)
+            const aHas = aOrder !== undefined
+            const bHas = bOrder !== undefined
+            if (aHas && bHas) return aOrder! - bOrder!
+            if (aHas) return -1
+            if (bHas) return 1
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        })
+
+        return NextResponse.json(sorted)
     } catch (error) {
         console.error('Failed to fetch projects:', error)
         return NextResponse.json([], { status: 500 })

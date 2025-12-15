@@ -5,13 +5,23 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
-    Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User
+    Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical
 } from "lucide-react"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+    closestCenter,
+    DndContext,
+    type DragEndEvent,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from "@dnd-kit/core"
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import {
     Collapsible,
     CollapsibleContent,
@@ -132,6 +142,99 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
             })
             .catch(() => { })
     }, [])
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    )
+
+    const persistProjectOrder = React.useCallback(async (projectIds: string[]) => {
+        try {
+            await fetch('/api/projects/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectIds })
+            })
+        } catch {
+            // best-effort; sidebar will refresh order on next fetch
+        }
+    }, [])
+
+    const handleProjectDragEnd = React.useCallback((event: DragEndEvent) => {
+        const { active, over } = event
+        if (!active?.id || !over?.id || active.id === over.id) return
+        setProjects((current) => {
+            const oldIndex = current.findIndex((p) => p.id === active.id)
+            const newIndex = current.findIndex((p) => p.id === over.id)
+            if (oldIndex === -1 || newIndex === -1) return current
+            const next = arrayMove(current, oldIndex, newIndex)
+            void persistProjectOrder(next.map((p) => p.id))
+            return next
+        })
+    }, [persistProjectOrder])
+
+    function SortableProjectRow({ project }: { project: Project }) {
+        const isActive = pathname === `/dashboard/projects/${project.id}`
+        const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
+        const style = {
+            transform: CSS.Transform.toString(transform),
+            transition,
+            opacity: isDragging ? 0.6 : 1,
+        }
+
+        return (
+            <div ref={setNodeRef} style={style} className="group flex items-center gap-1">
+                <button
+                    type="button"
+                    className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted cursor-grab active:cursor-grabbing"
+                    onClick={(e) => e.preventDefault()}
+                    {...attributes}
+                    {...listeners}
+                    title="Reorder"
+                >
+                    <GripVertical className="h-4 w-4" />
+                </button>
+                <Link
+                    href={`/dashboard/projects/${project.id}`}
+                    className={cn(
+                        "flex-1 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted truncate",
+                        isActive ? "bg-muted font-medium" : "text-muted-foreground"
+                    )}
+                >
+                    <span
+                        className="h-2 w-2 rounded-full shrink-0 ring-1 ring-border/50"
+                        style={{ backgroundColor: project.color || "#3b82f6" }}
+                    />
+                    <span className="truncate">{project.name}</span>
+                </Link>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                        >
+                            <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" side="right" className="w-32 z-50">
+                        <DropdownMenuItem onSelect={() => setEditingProject(project)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                        </DropdownMenuItem>
+                        {isAdmin && (
+                            <DropdownMenuItem
+                                onSelect={() => setDeleteConfirm(project)}
+                                className="text-red-600"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+        )
+    }
 
     // Fetch lead candidates & all users
     const fetchUsers = React.useCallback(() => {
@@ -333,59 +436,24 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                                     <Plus className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <CollapsibleContent className="pl-6 mt-1 space-y-1">
-                                {projects.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground px-3 py-1">No projects yet</p>
-                                ) : (
-                                    projects.map(project => {
-                                        const isActive = pathname === `/dashboard/projects/${project.id}`
-                                        return (
-	                                            <div key={project.id} className="group flex items-center gap-1">
-	                                                <Link
-	                                                    href={`/dashboard/projects/${project.id}`}
-	                                                    className={cn(
-	                                                        "flex-1 flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted truncate",
-	                                                        isActive ? "bg-muted font-medium" : "text-muted-foreground"
-	                                                    )}
-	                                                >
-	                                                    <span
-	                                                        className="h-2 w-2 rounded-full shrink-0 ring-1 ring-border/50"
-	                                                        style={{ backgroundColor: project.color || "#3b82f6" }}
-	                                                    />
-	                                                    <span className="truncate">{project.name}</span>
-	                                                </Link>
-	                                                <DropdownMenu>
-	                                                    <DropdownMenuTrigger asChild>
-	                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
-                                                        >
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="start" side="right" className="w-32 z-50">
-                                                        <DropdownMenuItem onSelect={() => setEditingProject(project)}>
-                                                            <Pencil className="h-4 w-4 mr-2" />
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        {isAdmin && (
-                                                            <DropdownMenuItem
-                                                                onSelect={() => setDeleteConfirm(project)}
-                                                                className="text-red-600"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 mr-2" />
-                                                                Delete
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        )
-                                    })
-                                )}
-                            </CollapsibleContent>
-                        </Collapsible>
+	                            <CollapsibleContent className="pl-6 mt-1 space-y-1">
+	                                {projects.length === 0 ? (
+	                                    <p className="text-sm text-muted-foreground px-3 py-1">No projects yet</p>
+	                                ) : (
+	                                    <DndContext
+	                                        sensors={sensors}
+	                                        collisionDetection={closestCenter}
+	                                        onDragEnd={handleProjectDragEnd}
+	                                    >
+	                                        <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+	                                            {projects.map((project) => (
+	                                                <SortableProjectRow key={project.id} project={project} />
+	                                            ))}
+	                                        </SortableContext>
+	                                    </DndContext>
+	                                )}
+	                            </CollapsibleContent>
+	                        </Collapsible>
 
                         {/* Other Nav Items */}
                         <div className="mt-2 space-y-1">

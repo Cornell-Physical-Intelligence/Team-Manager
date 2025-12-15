@@ -21,6 +21,7 @@ model User {
   taskAssignments TaskAssignee[] @relation("TaskAssignments")
   projects  Project[] @relation("ProjectLead")
   projectMemberships ProjectMember[] @relation("ProjectMembers")
+  projectOrders ProjectUserOrder[]
   memberships WorkspaceMember[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -56,6 +57,7 @@ model Project {
   boards      Board[]
   whiteboards Whiteboard[]
   members     ProjectMember[] @relation("ProjectMembers")
+  userOrders  ProjectUserOrder[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -69,6 +71,19 @@ model ProjectMember {
   createdAt DateTime @default(now())
   
   @@unique([projectId, userId])
+}
+
+model ProjectUserOrder {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  order     Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@index([userId, order])
 }
 
 model Push {
