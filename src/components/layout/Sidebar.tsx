@@ -432,10 +432,22 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     return (
         <div className="flex h-full flex-col bg-background w-64 border-r overflow-hidden">
             <div className={cn(
-                "flex items-center px-4 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
-                isChatExpanded ? "max-h-0 opacity-0 border-b-0" : "max-h-14 opacity-100"
+                "flex items-center px-4 h-10 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
+                isChatExpanded ? "max-h-0 opacity-0 border-b-0" : "max-h-10 opacity-100"
             )}>
-                <h1 className="text-lg font-semibold">{userData.workspaceName ?? ""}</h1>
+                <div className="flex items-center justify-between w-full min-w-0">
+                    <h1 className="text-sm font-semibold truncate">{userData.workspaceName ?? ""}</h1>
+                    <Link
+                        href="/dashboard/settings"
+                        className="shrink-0"
+                        aria-label="Workspace settings"
+                        title="Settings"
+                    >
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Settings className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             <div className={cn(
@@ -493,18 +505,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
 	                        </Collapsible>
 
                         {/* Other Nav Items */}
-                        <div className="mt-2 space-y-1">
-                            <Link
-                                href="/dashboard/settings"
-                                className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted text-sm",
-                                    pathname.startsWith("/dashboard/settings") ? "bg-muted font-medium" : "text-muted-foreground"
-                                )}
-                            >
-                                <Settings className="h-5 w-5" />
-                                Settings
-                            </Link>
-                        </div>
                     </nav>
                 </ScrollArea>
             </div>

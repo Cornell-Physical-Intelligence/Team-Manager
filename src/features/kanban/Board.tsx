@@ -642,11 +642,11 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
 
     const renderPushBoard = (pushColumns: ColumnData[], pushId: string | null) => (
         <div className="w-full min-w-0 pb-2">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 items-stretch">
                 {pushColumns
                     .sort((a, b) => a.order - b.order)
                     .map((col) => (
-                        <div key={`${pushId || 'backlog'}-${col.id}`} className="min-w-0">
+                        <div key={`${pushId || 'backlog'}-${col.id}`} className="min-w-0 h-full">
                             <Column
                                 column={col}
                                 projectId={projectId}
