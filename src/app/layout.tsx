@@ -63,6 +63,10 @@ export default function RootLayout({
               html { background-color: #ffffff; }
               html.dark { background-color: #0f0f0f; }
               body { background-color: inherit; }
+              /* Prevent card flash */
+              html.dark [class*="bg-card"], 
+              html.dark [class*="bg-background"] { background-color: #1c1c1c; }
+              html.dark [class*="border-border"] { border-color: #383838; }
             `,
           }}
         />
