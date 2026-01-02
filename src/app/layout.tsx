@@ -56,20 +56,35 @@ export default function RootLayout({
             `,
           }}
         />
-        {/* Inline critical CSS to set backgrounds before external CSS loads */}
+        {/* Inline critical CSS - inject CSS variables for immediate use */}
         <style
           dangerouslySetInnerHTML={{
             __html: `
-              /* Light mode defaults */
-              html { background-color: #ffffff; color: #262626; }
-              
-              /* Dark mode overrides - must match globals.css .dark values */
-              html.dark { background-color: #0f0f0f; color: #ededed; }
-              html.dark [class*="bg-card"] { background-color: rgba(28, 28, 28, 0.8) !important; }
-              html.dark [class*="bg-background"] { background-color: #0f0f0f !important; }
-              html.dark [class*="bg-muted"] { background-color: #292929 !important; }
-              html.dark [class*="bg-accent"] { background-color: #2e2e2e !important; }
-              
+              /* Prevent flash by setting CSS variables before Tailwind loads */
+              html {
+                --background: oklch(1 0 0);
+                --foreground: oklch(0.145 0 0);
+                --card: oklch(1 0 0);
+                --card-foreground: oklch(0.145 0 0);
+                --muted: oklch(0.97 0 0);
+                --muted-foreground: oklch(0.556 0 0);
+                --accent: oklch(0.97 0 0);
+                --border: oklch(0.922 0 0);
+                background-color: #ffffff;
+                color: #262626;
+              }
+              html.dark {
+                --background: oklch(0.06 0 0);
+                --foreground: oklch(0.93 0 0);
+                --card: oklch(0.11 0 0);
+                --card-foreground: oklch(0.93 0 0);
+                --muted: oklch(0.16 0 0);
+                --muted-foreground: oklch(0.55 0 0);
+                --accent: oklch(0.18 0 0);
+                --border: oklch(0.22 0 0);
+                background-color: #0f0f0f;
+                color: #ededed;
+              }
               body { background-color: inherit; color: inherit; }
             `,
           }}
