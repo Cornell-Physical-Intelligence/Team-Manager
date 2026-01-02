@@ -137,7 +137,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         }
     }, [task, today, open])
 
-    const [isPending, startTransition] = useTransition()
+    const [isLoading, setIsLoading] = useState(false)
 
     // Validation - all fields required
     const isValid = useMemo(() => {
@@ -186,133 +186,139 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             return
         }
 
-        startTransition(async () => {
-            try {
-                if (task) {
-                    const result = await updateTaskDetails(task.id, {
-                        description: description.trim(),
-                        assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
-                        assigneeIds: assigneeIds,
-                        startDate,
-                        endDate,
-                        requireAttachment,
-                        enableProgress,
-                        projectId
-                    })
+        setIsLoading(true)
+        try {
+            if (task) {
+                const result = await updateTaskDetails(task.id, {
+                    description: description.trim(),
+                    assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
+                    assigneeIds: assigneeIds,
+                    startDate,
+                    endDate,
+                    requireAttachment,
+                    enableProgress,
+                    projectId
+                })
 
-                    if (result?.error) {
-                        setError(result.error)
-                        return
-                    }
-
-                    // Handle instructions file upload for existing task
-                    if (instructionsFile) {
-                        setIsUploadingInstructions(true)
-                        const formData = new FormData()
-                        formData.append('file', instructionsFile)
-
-                        const uploadRes = await fetch(`/api/tasks/${task.id}/instructions`, {
-                            method: 'POST',
-                            body: formData
-                        })
-
-                        if (!uploadRes.ok) {
-                            const err = await uploadRes.json().catch(() => ({}))
-                            setError(err.error || 'Failed to upload instructions file')
-                            setIsUploadingInstructions(false)
-                            return
-                        }
-                        setIsUploadingInstructions(false)
-                    } else if (!existingInstructionsFile && task.instructionsFileUrl) {
-                        // User removed the instructions file
-                        await fetch(`/api/tasks/${task.id}/instructions`, {
-                            method: 'DELETE'
-                        })
-                    }
-
-                    if (result.task && onTaskUpdated) {
-                        onTaskUpdated(result.task)
-                    }
-
-                    handleClose()
-                } else {
-                    const result = await createTask({
-                        title: title.trim(),
-                        description: description.trim(),
-                        assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
-                        assigneeIds: assigneeIds,
-                        startDate,
-                        endDate,
-                        requireAttachment,
-                        enableProgress,
-                        columnId: columnId!,
-                        projectId,
-                        pushId: pushId || undefined
-                    })
-
-                    if (result?.error) {
-                        setError(result.error)
-                        return
-                    }
-
-                    // Upload instructions file for new task
-                    if (instructionsFile && result.task?.id) {
-                        setIsUploadingInstructions(true)
-                        const formData = new FormData()
-                        formData.append('file', instructionsFile)
-
-                        const uploadRes = await fetch(`/api/tasks/${result.task.id}/instructions`, {
-                            method: 'POST',
-                            body: formData
-                        })
-
-                        if (!uploadRes.ok) {
-                            console.error('Failed to upload instructions file')
-                        }
-                        setIsUploadingInstructions(false)
-                    }
-
-                    // Reset form
-                    setTitle("")
-                    setDescription("")
-                    setAssigneeId("")
-                    setAssigneeIds([])
-                    setStartDate(today)
-                    setEndDate("")
-                    setInstructionsFile(null)
-                    if (result.task && onTaskCreated) {
-                        onTaskCreated(result.task)
-                    }
-
-                    handleClose()
+                if (result?.error) {
+                    setError(result.error)
+                    setIsLoading(false)
+                    return
                 }
-            } catch (err) {
-                console.error("Task submission error:", err)
-                setError("An unexpected error occurred")
+
+                // Handle instructions file upload for existing task
+                if (instructionsFile) {
+                    setIsUploadingInstructions(true)
+                    const formData = new FormData()
+                    formData.append('file', instructionsFile)
+
+                    const uploadRes = await fetch(`/api/tasks/${task.id}/instructions`, {
+                        method: 'POST',
+                        body: formData
+                    })
+
+                    if (!uploadRes.ok) {
+                        const err = await uploadRes.json().catch(() => ({}))
+                        setError(err.error || 'Failed to upload instructions file')
+                        setIsUploadingInstructions(false)
+                        setIsLoading(false)
+                        return
+                    }
+                    setIsUploadingInstructions(false)
+                } else if (!existingInstructionsFile && task.instructionsFileUrl) {
+                    // User removed the instructions file
+                    await fetch(`/api/tasks/${task.id}/instructions`, {
+                        method: 'DELETE'
+                    })
+                }
+
+                if (result.task && onTaskUpdated) {
+                    onTaskUpdated(result.task)
+                }
+
+                handleClose()
+            } else {
+                const result = await createTask({
+                    title: title.trim(),
+                    description: description.trim(),
+                    assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
+                    assigneeIds: assigneeIds,
+                    startDate,
+                    endDate,
+                    requireAttachment,
+                    enableProgress,
+                    columnId: columnId!,
+                    projectId,
+                    pushId: pushId || undefined
+                })
+
+                if (result?.error) {
+                    setError(result.error)
+                    setIsLoading(false)
+                    return
+                }
+
+                // Upload instructions file for new task
+                if (instructionsFile && result.task?.id) {
+                    setIsUploadingInstructions(true)
+                    const formData = new FormData()
+                    formData.append('file', instructionsFile)
+
+                    const uploadRes = await fetch(`/api/tasks/${result.task.id}/instructions`, {
+                        method: 'POST',
+                        body: formData
+                    })
+
+                    if (!uploadRes.ok) {
+                        console.error('Failed to upload instructions file')
+                    }
+                    setIsUploadingInstructions(false)
+                }
+
+                // Reset form
+                setTitle("")
+                setDescription("")
+                setAssigneeId("")
+                setAssigneeIds([])
+                setStartDate(today)
+                setEndDate("")
+                setInstructionsFile(null)
+
+                if (result.task && onTaskCreated) {
+                    onTaskCreated(result.task)
+                }
+
+                handleClose()
             }
-        })
+        } catch (err) {
+            console.error("Task submission error:", err)
+            setError("An unexpected error occurred")
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     async function handleConfirmDelete() {
         if (!task) return
 
-        startTransition(async () => {
-            try {
-                const result = await deleteTask(task.id, projectId)
-                if (result?.error) {
-                    setError(result.error)
-                } else {
-                    if (onTaskDeleted && task) {
-                        onTaskDeleted(task.id)
-                    }
-                    setShowDeleteConfirm(false)
-                    handleClose()
+        setIsLoading(true)
+        try {
+            const result = await deleteTask(task.id, projectId)
+            if (result?.error) {
+                setError(result.error)
+            } else {
+                if (onTaskDeleted) {
+                    onTaskDeleted(task.id)
                 }
-            } catch (err) {
-                console.error("Delete error:", err)
-                setError("Failed to delete task")
+                setShowDeleteConfirm(false)
+                handleClose()
             }
-        })
+        } catch (err) {
+            console.error("Delete error:", err)
+            setError("Failed to delete task")
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -637,7 +643,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                         variant="outline"
                                         size="icon"
                                         onClick={() => setShowDeleteConfirm(true)}
-                                        disabled={isPending}
+                                        disabled={isLoading}
                                         className="mr-auto text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20"
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -645,8 +651,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 )}
                                 <div className="flex gap-2 w-full sm:w-auto justify-end">
                                     <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-                                    <Button type="submit" disabled={isPending || !isValid}>
-                                        {isPending ? 'Saving...' : (task ? "Save Changes" : "Create Task")}
+                                    <Button type="submit" disabled={isLoading || !isValid}>
+                                        {isLoading ? 'Saving...' : (task ? "Save Changes" : "Create Task")}
                                     </Button>
                                 </div>
                             </DialogFooter>
