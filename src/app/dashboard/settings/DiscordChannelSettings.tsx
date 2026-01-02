@@ -86,8 +86,8 @@ export function DiscordChannelSettings({ initialChannelId, isAdmin }: DiscordCha
                 </div>
             ) : (
                 <div className="flex items-center gap-2 max-w-full">
-                    <div className="flex-1 bg-zinc-100 rounded px-3 py-2 min-w-0">
-                        <code className="block text-sm font-mono truncate">
+                    <div className="flex-1 bg-muted rounded px-3 py-2 min-w-0">
+                        <code className="block text-sm font-mono truncate text-foreground">
                             {savedChannelId || "Not set"}
                         </code>
                     </div>

@@ -35,12 +35,12 @@ export function DeleteWorkspace({ workspaceId, workspaceName }: { workspaceId: s
     }
 
     return (
-        <Card className="border-red-200 bg-red-50/50">
+        <Card className="border-destructive/30 bg-destructive/5 dark:bg-destructive/10 dark:border-destructive/20">
             <CardHeader>
-                <CardTitle className="text-base text-red-900 flex items-center gap-2">
+                <CardTitle className="text-base text-destructive flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4" /> Delete Workspace
                 </CardTitle>
-                <CardDescription className="text-red-700">
+                <CardDescription className="text-destructive/80">
                     Irreversible actions for this workspace.
                 </CardDescription>
             </CardHeader>
