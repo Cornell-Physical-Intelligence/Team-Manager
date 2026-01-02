@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 export function WorkspaceSelector({ user }: { user: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
+    const [isLoading, setIsLoading] = useState(false)
     const [createError, setCreateError] = useState<string | null>(null)
     const [joinError, setJoinError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
@@ -51,10 +52,16 @@ export function WorkspaceSelector({ user }: { user: any }) {
     }
 
     const handleSwitch = async (workspaceId: string) => {
+        setIsLoading(true)
         startTransition(async () => {
             const res = await switchWorkspace(workspaceId)
             if (res.success) {
-                window.location.href = '/dashboard'
+                // Small delay to allow animation to play
+                setTimeout(() => {
+                    window.location.href = '/dashboard'
+                }, 600)
+            } else {
+                setIsLoading(false)
             }
         })
     }
@@ -171,8 +178,8 @@ export function WorkspaceSelector({ user }: { user: any }) {
                     <div className="flex items-center gap-2">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground border border-border">
-                                    <Settings className="w-5 h-5" />
+                                <Button variant="ghost" size="icon" className="group/gear text-muted-foreground hover:text-foreground border border-border bg-card/50">
+                                    <Settings className="w-5 h-5 group-hover/gear:motion-safe:animate-[cupi-gear-impulse_1200ms_ease-out_both]" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
@@ -224,10 +231,10 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 </div>
 
                 <div className="flex flex-wrap gap-2 md:gap-3">
-                    <Button onClick={() => setCreateOpen(true)} variant="outline" className="gap-2 shadow-sm flex-1 md:flex-none text-sm text-foreground bg-background border-border hover:bg-accent hover:text-accent-foreground font-medium">
+                    <Button onClick={() => setCreateOpen(true)} variant="outline" className="gap-2 shadow-sm flex-1 md:flex-none text-sm text-foreground bg-card/80 border-border hover:bg-accent hover:text-accent-foreground font-medium">
                         <Plus className="w-4 h-4" /> Create
                     </Button>
-                    <Button onClick={() => setJoinOpen(true)} variant="outline" className="gap-2 shadow-sm flex-1 md:flex-none text-sm text-foreground bg-background border-border hover:bg-accent hover:text-accent-foreground font-medium">
+                    <Button onClick={() => setJoinOpen(true)} variant="outline" className="gap-2 shadow-sm flex-1 md:flex-none text-sm text-foreground bg-card/80 border-border hover:bg-accent hover:text-accent-foreground font-medium">
                         <Users className="w-4 h-4" /> Join
                     </Button>
                 </div>
@@ -239,10 +246,10 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 {user.memberships?.map((m: any) => (
                     <Card
                         key={m.workspaceId}
-                        className={`group cursor-pointer transition-all hover:shadow-xl border-2 border-transparent hover:border-border bg-card relative overflow-hidden`}
+                        className={`group cursor-pointer transition-all hover:shadow-xl border border-border/50 hover:border-border bg-card/80 relative overflow-hidden`}
                         onClick={() => handleSwitch(m.workspaceId)}
                     >
-                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-accent/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-accent/30 opacity-0 group-hover:opacity-100 transition-opacity" />
                         <CardContent className="p-6 relative">
                             <div className="flex items-start justify-between mb-4">
                                 <div className={`p-3 rounded-xl bg-accent text-accent-foreground transition-transform group-hover:scale-110`}>
@@ -438,9 +445,28 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 </DialogContent>
             </Dialog>
 
-            {isPending && (
+            {isPending && !isLoading && (
                 <div className="fixed inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                </div>
+            )}
+
+            {/* Creative workspace loading animation */}
+            {isLoading && (
+                <div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
+                    {/* Expanding circles */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-[200vmax] h-[200vmax] rounded-full bg-card animate-[ping_800ms_ease-out_forwards] opacity-0" style={{ animationDelay: '0ms' }} />
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-[200vmax] h-[200vmax] rounded-full bg-background animate-[ping_800ms_ease-out_forwards] opacity-0" style={{ animationDelay: '100ms' }} />
+                    </div>
+                    {/* Center loader */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="bg-card p-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-50 duration-300">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
