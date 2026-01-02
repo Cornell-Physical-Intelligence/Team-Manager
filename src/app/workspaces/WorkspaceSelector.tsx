@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 export function WorkspaceSelector({ user }: { user: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
-    const [isLoading, setIsLoading] = useState(false)
+    const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(null)
     const [createError, setCreateError] = useState<string | null>(null)
     const [joinError, setJoinError] = useState<string | null>(null)
     const [createOpen, setCreateOpen] = useState(false)
@@ -52,16 +52,16 @@ export function WorkspaceSelector({ user }: { user: any }) {
     }
 
     const handleSwitch = async (workspaceId: string) => {
-        setIsLoading(true)
+        setLoadingWorkspaceId(workspaceId)
         startTransition(async () => {
             const res = await switchWorkspace(workspaceId)
             if (res.success) {
                 // Small delay to allow animation to play
                 setTimeout(() => {
                     window.location.href = '/dashboard'
-                }, 600)
+                }, 400)
             } else {
-                setIsLoading(false)
+                setLoadingWorkspaceId(null)
             }
         })
     }
@@ -243,37 +243,44 @@ export function WorkspaceSelector({ user }: { user: any }) {
             {/* Grid */}
             {/* Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                {user.memberships?.map((m: any) => (
-                    <Card
-                        key={m.workspaceId}
-                        className={`group cursor-pointer transition-all hover:shadow-xl border border-border/50 hover:border-border bg-card/80 relative overflow-hidden`}
-                        onClick={() => handleSwitch(m.workspaceId)}
-                    >
-                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-accent/30 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <CardContent className="p-6 relative">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className={`p-3 rounded-xl bg-accent text-accent-foreground transition-transform group-hover:scale-110`}>
-                                    {m.role === 'Admin' ? <Building2 className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+                {user.memberships?.map((m: any) => {
+                    const isCardLoading = loadingWorkspaceId === m.workspaceId
+                    return (
+                        <Card
+                            key={m.workspaceId}
+                            className={`group cursor-pointer transition-all hover:shadow-xl border border-border/50 hover:border-border bg-card/80 relative overflow-hidden ${isCardLoading ? 'ring-2 ring-primary/50' : ''}`}
+                            onClick={() => !loadingWorkspaceId && handleSwitch(m.workspaceId)}
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-transparent to-accent/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <CardContent className="p-6 relative">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className={`p-3 rounded-xl bg-accent text-accent-foreground transition-transform group-hover:scale-110`}>
+                                        {m.role === 'Admin' ? <Building2 className="w-6 h-6" /> : <Users className="w-6 h-6" />}
+                                    </div>
+                                    {isCardLoading ? (
+                                        <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                                    ) : (
+                                        <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground -translate-x-2 group-hover:translate-x-0 opacity-0 group-hover:opacity-100 transition-all" />
+                                    )}
                                 </div>
-                                <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground -translate-x-2 group-hover:translate-x-0 opacity-0 group-hover:opacity-100 transition-all" />
-                            </div>
 
-                            <CardTitle className="text-xl font-bold text-card-foreground mb-1">{m.workspace.name}</CardTitle>
-                            <p className="text-sm text-muted-foreground mb-6 font-medium">{m.role}</p>
+                                <CardTitle className="text-xl font-bold text-card-foreground mb-1">{m.workspace.name}</CardTitle>
+                                <p className="text-sm text-muted-foreground mb-6 font-medium">{m.role}</p>
 
-                            <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground/70 border-t border-border pt-4">
-                                <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
-                                    <Users className="w-3.5 h-3.5" />
-                                    {m.workspace._count?.members || 1} Members
-                                </span>
-                                <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
-                                    <FolderKanban className="w-3.5 h-3.5" />
-                                    {m.workspace._count?.projects || 0} Projects
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                                <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground/70 border-t border-border pt-4">
+                                    <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
+                                        <Users className="w-3.5 h-3.5" />
+                                        {m.workspace._count?.members || 1} Members
+                                    </span>
+                                    <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
+                                        <FolderKanban className="w-3.5 h-3.5" />
+                                        {m.workspace._count?.projects || 0} Projects
+                                    </span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )
+                })}
 
                 {(!user.memberships || user.memberships.length === 0) && (
                     <div className="col-span-full py-12 text-center text-muted-foreground border-2 border-dashed border-border rounded-xl">
@@ -445,29 +452,15 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 </DialogContent>
             </Dialog>
 
-            {isPending && !isLoading && (
+            {isPending && !loadingWorkspaceId && (
                 <div className="fixed inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 </div>
             )}
 
-            {/* Creative workspace loading animation */}
-            {isLoading && (
-                <div className="fixed inset-0 z-[100] pointer-events-none overflow-hidden">
-                    {/* Expanding circles */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-[200vmax] h-[200vmax] rounded-full bg-card animate-[ping_800ms_ease-out_forwards] opacity-0" style={{ animationDelay: '0ms' }} />
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-[200vmax] h-[200vmax] rounded-full bg-background animate-[ping_800ms_ease-out_forwards] opacity-0" style={{ animationDelay: '100ms' }} />
-                    </div>
-                    {/* Center loader */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-card p-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-50 duration-300">
-                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                        </div>
-                    </div>
-                </div>
+            {/* Full screen transition overlay */}
+            {loadingWorkspaceId && (
+                <div className="fixed inset-0 z-[100] bg-background animate-in fade-in duration-300 pointer-events-none" />
             )}
         </div>
     )

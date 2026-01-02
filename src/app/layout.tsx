@@ -39,9 +39,13 @@ export default function RootLayout({
               (function() {
                 try {
                   var theme = localStorage.getItem('cupi_theme');
-                  if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  var isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                  if (isDark) {
                     document.documentElement.classList.add('dark');
                     document.documentElement.style.colorScheme = 'dark';
+                    document.documentElement.style.backgroundColor = '#0f0f0f';
+                  } else {
+                    document.documentElement.style.backgroundColor = '#ffffff';
                   }
                 } catch (e) {}
               })();
