@@ -449,7 +449,10 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 </h1>
                 <button
                     type="button"
-                    className="absolute right-0 top-0 h-10 w-10 flex items-center justify-center hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none"
+                    className={cn(
+                        "absolute right-0.5 top-0.5 h-9 w-9 flex items-center justify-center rounded-md focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none transition-colors",
+                        pathname === '/dashboard/settings' ? "bg-muted" : "hover:bg-muted/50"
+                    )}
                     aria-label="Workspace settings"
                     title="Settings"
                     onClick={(e) => {
@@ -466,7 +469,8 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                     <Settings
                         key={settingsSpinNonce}
                         className={cn(
-                            "h-4 w-4 text-muted-foreground hover:text-foreground transition-colors",
+                            "h-4 w-4 transition-colors",
+                            pathname === '/dashboard/settings' ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                             settingsSpinNonce > 0 && "motion-safe:animate-[cupi-gear-impulse_1200ms_ease-out_both]"
                         )}
                     />
