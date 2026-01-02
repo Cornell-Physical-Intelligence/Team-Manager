@@ -679,11 +679,14 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
     const getPushTasks = (pushId: string | null) => {
         return columns.map(col => ({
             ...col,
-            tasks: col.tasks.filter(task =>
-                pushId === null
-                    ? !task.push
-                    : task.push?.id === pushId
-            )
+            tasks: col.tasks.filter(task => {
+                if (pushId === null) {
+                    // Backlog: show tasks with no push or push object is null
+                    return !task.push || task.push === null
+                }
+                // Specific push: show tasks where push.id matches
+                return task.push?.id === pushId
+            })
         }))
     }
 
