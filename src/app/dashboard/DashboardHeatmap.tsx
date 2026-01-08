@@ -686,11 +686,6 @@ export function DashboardHeatmap({
                     <div className="w-2.5 h-2.5 rounded border-2 border-blue-400" />
                     <span>Available</span>
                 </div>
-                <div className="flex items-center gap-1 ml-auto">
-                    <span className="text-muted-foreground">Hover card + click</span>
-                    <Plus className="h-2.5 w-2.5" />
-                    <span>to assign</span>
-                </div>
             </div>
 
             {/* Unassigned Tasks Quick View */}

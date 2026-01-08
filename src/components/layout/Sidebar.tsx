@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
     Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical,
-    Kanban
+    Kanban, Loader2
 } from "lucide-react"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { cn } from "@/lib/utils"
@@ -128,6 +128,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
     const [deleteConfirm, setDeleteConfirm] = React.useState<Project | null>(null)
     const [deleteConfirmName, setDeleteConfirmName] = React.useState<string>("")
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const [navigatingTo, setNavigatingTo] = React.useState<string | null>(null)
     const [isChatExpanded, setIsChatExpanded] = React.useState(false)
     const createProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
     const editProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
@@ -139,6 +140,11 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
         if (pathname !== '/dashboard/settings') {
             previousPathRef.current = pathname
         }
+    }, [pathname])
+
+    // Clear navigation loading state when path changes
+    React.useEffect(() => {
+        setNavigatingTo(null)
     }, [pathname])
 
     // Form state for editing
@@ -487,6 +493,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         {/* Dashboard Link */}
                         <Link
                             href="/dashboard"
+                            onClick={() => pathname !== "/dashboard" && setNavigatingTo("/dashboard")}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -494,11 +501,13 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         >
                             <LayoutDashboard className="h-5 w-5" />
                             Dashboard
+                            {navigatingTo === "/dashboard" && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
                         </Link>
 
                         {/* My Board Link */}
                         <Link
                             href="/dashboard/my-board"
+                            onClick={() => pathname !== "/dashboard/my-board" && setNavigatingTo("/dashboard/my-board")}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard/my-board" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -506,6 +515,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         >
                             <Kanban className="h-5 w-5" />
                             My Board
+                            {navigatingTo === "/dashboard/my-board" && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
                         </Link>
 
                         {/* Projects Section */}
