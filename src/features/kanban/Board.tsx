@@ -1130,7 +1130,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                         <AlertDialogCancel onClick={() => setDeletePushId(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={confirmDeletePush}
-                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            className="bg-destructive hover:bg-destructive/90 text-white"
                         >
                             Delete Push
                         </AlertDialogAction>

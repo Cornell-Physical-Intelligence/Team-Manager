@@ -110,7 +110,7 @@ export function MemberActions({ userId, isCurrentUser, canRemove }: MemberAction
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleAction}
-                            className={isCurrentUser ? "" : "bg-destructive hover:bg-destructive/90"}
+                            className={isCurrentUser ? "" : "bg-destructive hover:bg-destructive/90 text-white"}
                         >
                             {isLoading ? "Processing..." : "Confirm"}
                         </AlertDialogAction>

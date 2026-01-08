@@ -671,7 +671,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive hover:bg-destructive/90 text-white">
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
