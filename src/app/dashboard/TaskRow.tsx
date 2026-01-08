@@ -40,14 +40,14 @@ export function TaskRow({ task }: TaskRowProps) {
             disabled={isLoading}
             className="w-full flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/30 transition-colors group text-left"
         >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Status indicator */}
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-                    {task.columnName}
-                </span>
-
+            <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Task title */}
                 <span className="text-sm truncate">{task.title}</span>
+
+                {/* Status indicator - subtle, right of title */}
+                <span className="text-[9px] px-1 py-px rounded text-muted-foreground/60 shrink-0">
+                    {task.columnName}
+                </span>
 
                 {/* Project badge - muted color */}
                 {task.projectName && (
