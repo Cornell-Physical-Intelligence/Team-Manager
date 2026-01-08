@@ -486,57 +486,34 @@ export function DashboardHeatmap({
     return (
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium flex items-center gap-1.5">
-                    <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-                    Work Distribution
-                </h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-medium flex items-center gap-1.5">
+                        <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                        Work Distribution
+                    </h2>
+                    {criticalIssues.filter(i => i.type === 'overdue').map((issue, idx) => (
+                        <button
+                            key={`overdue-${idx}`}
+                            onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
+                            className="text-xs text-red-600 underline hover:text-red-700"
+                        >
+                            {issue.count} overdue
+                        </button>
+                    ))}
+                    {criticalIssues.filter(i => i.type === 'stuck').map((issue, idx) => (
+                        <button
+                            key={`stuck-${idx}`}
+                            onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
+                            className="text-xs text-amber-600 underline hover:text-amber-700"
+                        >
+                            {issue.count} stuck
+                        </button>
+                    ))}
+                </div>
                 <span className="text-[10px] text-muted-foreground">
                     {totalActiveTasks} active tasks
                 </span>
             </div>
-
-            {/* Critical Issues Alert Cards */}
-            {criticalIssues.length > 0 && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
-                    {criticalIssues.slice(0, 4).map((issue, i) => (
-                        <button
-                            key={i}
-                            onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
-                            className={cn(
-                                "p-2 rounded-md border text-left transition-colors",
-                                issue.severity === 'critical' && "bg-red-50 border-red-200 hover:bg-red-100 dark:bg-red-950/30 dark:border-red-900/50",
-                                issue.severity === 'warning' && "bg-amber-50 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:border-amber-900/50",
-                                issue.severity === 'info' && "bg-blue-50 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/30 dark:border-blue-900/50"
-                            )}
-                        >
-                            <div className="flex items-center gap-1.5">
-                                {issue.type === 'overdue' && <Clock className="h-3.5 w-3.5 text-red-500" />}
-                                {issue.type === 'stuck' && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
-                                {issue.type === 'help' && <HelpCircle className="h-3.5 w-3.5 text-amber-500" />}
-                                {issue.type === 'unassigned' && <UserX className="h-3.5 w-3.5 text-blue-500" />}
-                                {issue.type === 'review_queue' && <Target className="h-3.5 w-3.5 text-amber-500" />}
-                                {issue.type === 'overloaded' && <Zap className="h-3.5 w-3.5 text-amber-500" />}
-                                <span className={cn(
-                                    "text-sm font-bold",
-                                    issue.severity === 'critical' && "text-red-600",
-                                    issue.severity === 'warning' && "text-amber-600",
-                                    issue.severity === 'info' && "text-blue-600"
-                                )}>
-                                    {issue.count}
-                                </span>
-                            </div>
-                            <p className="text-[9px] text-muted-foreground mt-0.5 line-clamp-1">
-                                {issue.type === 'overdue' && 'overdue tasks'}
-                                {issue.type === 'stuck' && 'stuck (3+ days)'}
-                                {issue.type === 'help' && 'need help'}
-                                {issue.type === 'unassigned' && 'unassigned'}
-                                {issue.type === 'review_queue' && 'in review'}
-                                {issue.type === 'overloaded' && 'overloaded'}
-                            </p>
-                        </button>
-                    ))}
-                </div>
-            )}
 
             {/* Workload Distribution Grid */}
             <div className="mb-4">

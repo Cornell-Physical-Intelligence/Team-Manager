@@ -251,14 +251,12 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 </button>
                 <Link
                     href={`/dashboard/projects/${project.id}`}
-                    onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
                     className={cn(
                         "flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
                         isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                     )}
                 >
                     <span className="truncate">{project.name}</span>
-                    {navigatingTo === `/dashboard/projects/${project.id}` && <Loader2 className="h-3 w-3 ml-auto animate-spin shrink-0 text-white" />}
                 </Link>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -495,7 +493,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         {/* Dashboard Link */}
                         <Link
                             href="/dashboard"
-                            onClick={() => pathname !== "/dashboard" && setNavigatingTo("/dashboard")}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -503,13 +500,11 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         >
                             <LayoutDashboard className="h-5 w-5" />
                             Dashboard
-                            {navigatingTo === "/dashboard" && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
                         </Link>
 
                         {/* My Board Link */}
                         <Link
                             href="/dashboard/my-board"
-                            onClick={() => pathname !== "/dashboard/my-board" && setNavigatingTo("/dashboard/my-board")}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard/my-board" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -517,7 +512,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         >
                             <Kanban className="h-5 w-5" />
                             My Board
-                            {navigatingTo === "/dashboard/my-board" && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
                         </Link>
 
                         {/* Projects Section */}
