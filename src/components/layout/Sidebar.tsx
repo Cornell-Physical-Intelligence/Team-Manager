@@ -251,12 +251,14 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 </button>
                 <Link
                     href={`/dashboard/projects/${project.id}`}
+                    onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
                     className={cn(
                         "flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
                         isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                     )}
                 >
                     <span className="truncate">{project.name}</span>
+                    {navigatingTo === `/dashboard/projects/${project.id}` && <Loader2 className="h-3 w-3 ml-auto animate-spin shrink-0" />}
                 </Link>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -591,10 +593,14 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                     variant="ghost"
                     className="w-full justify-start gap-2 h-9 text-sm"
                     size="sm"
-                    onClick={() => window.location.href = '/workspaces'}
+                    onClick={() => {
+                        setNavigatingTo('/workspaces')
+                        window.location.href = '/workspaces'
+                    }}
                 >
                     <FolderKanban className="h-4 w-4" />
                     Back to Workspaces
+                    {navigatingTo === '/workspaces' && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
                 </Button>
             </div>
 

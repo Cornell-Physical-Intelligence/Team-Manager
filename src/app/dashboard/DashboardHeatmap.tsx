@@ -628,21 +628,6 @@ export function DashboardHeatmap({
                                             </span>
                                         )}
                                     </div>
-
-                                    {/* Workload bar */}
-                                    <div className="mt-1.5">
-                                        <div className="h-1 bg-background rounded-full overflow-hidden">
-                                            <div
-                                                className={cn(
-                                                    "h-full rounded-full transition-all",
-                                                    user.workloadScore / maxWorkload < 0.5 ? "bg-green-500" :
-                                                        user.workloadScore / maxWorkload < 0.75 ? "bg-yellow-500" :
-                                                            user.workloadScore / maxWorkload < 0.9 ? "bg-orange-500" : "bg-red-500"
-                                                )}
-                                                style={{ width: `${Math.min((user.workloadScore / maxWorkload) * 100, 100)}%` }}
-                                            />
-                                        </div>
-                                    </div>
                                 </button>
 
                                 {/* Assign button - appears on hover */}
