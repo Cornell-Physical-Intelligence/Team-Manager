@@ -15,7 +15,7 @@ export default function MyBoardLoading() {
                     {[0, 1, 2, 3].map((colIndex) => (
                         <div
                             key={colIndex}
-                            className="w-72 flex flex-col bg-muted/20 rounded-lg shrink-0"
+                            className="w-72 flex flex-col bg-muted/30 rounded-lg shrink-0"
                         >
                             {/* Column Header */}
                             <div className="p-3 flex items-center justify-between">
@@ -28,7 +28,7 @@ export default function MyBoardLoading() {
                                 {Array.from({ length: Math.max(1, 3 - colIndex % 2) }).map((_, cardIndex) => (
                                     <div
                                         key={cardIndex}
-                                        className="h-16 bg-muted/40 rounded-lg animate-pulse"
+                                        className="h-16 bg-muted rounded-lg animate-pulse"
                                         style={{ animationDelay: `${(colIndex * 3 + cardIndex) * 40}ms` }}
                                     />
                                 ))}

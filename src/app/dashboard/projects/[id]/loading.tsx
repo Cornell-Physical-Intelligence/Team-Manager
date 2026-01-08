@@ -21,14 +21,14 @@ export default function ProjectLoading() {
                 {[0, 1, 2].map((i) => (
                     <div
                         key={i}
-                        className="rounded-lg overflow-hidden bg-muted/20 animate-pulse"
+                        className="rounded-lg overflow-hidden bg-muted/30 animate-pulse"
                         style={{ animationDelay: `${i * 100}ms` }}
                     >
                         <div className="flex items-center justify-between p-3">
                             <div className="flex items-center gap-3">
                                 <div className="w-3 h-3 bg-muted rounded" />
                                 <div className="h-4 w-24 bg-muted rounded" />
-                                <div className="h-3 w-16 bg-muted/60 rounded" />
+                                <div className="h-3 w-16 bg-muted rounded" />
                             </div>
                             <div className="flex items-center gap-2">
                                 <div className="h-3 w-12 bg-muted rounded" />
@@ -39,7 +39,7 @@ export default function ProjectLoading() {
                 ))}
 
                 {/* Unassigned section */}
-                <div className="rounded-lg overflow-hidden bg-muted/10 animate-pulse delay-300">
+                <div className="rounded-lg overflow-hidden bg-muted/20 animate-pulse delay-300">
                     <div className="flex items-center justify-between p-3">
                         <div className="flex items-center gap-3">
                             <div className="w-3 h-3 bg-muted rounded" />

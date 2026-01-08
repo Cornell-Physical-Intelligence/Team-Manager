@@ -9,7 +9,7 @@ export default function MembersLoading() {
                     <div className="h-9 w-24 bg-muted rounded animate-pulse" />
                 </div>
 
-                <div className="rounded-lg overflow-hidden bg-muted/10">
+                <div className="rounded-lg overflow-hidden bg-muted/30">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                         <div
                             key={i}
@@ -20,11 +20,11 @@ export default function MembersLoading() {
                                 style={{ animationDelay: `${i * 40}ms` }}
                             />
                             <div
-                                className="h-4 flex-1 bg-muted/60 rounded animate-pulse"
+                                className="h-4 flex-1 bg-muted rounded animate-pulse"
                                 style={{ animationDelay: `${i * 40 + 20}ms` }}
                             />
                             <div
-                                className="h-5 w-16 bg-muted/50 rounded-full animate-pulse"
+                                className="h-5 w-16 bg-muted rounded-full animate-pulse"
                                 style={{ animationDelay: `${i * 40 + 40}ms` }}
                             />
                         </div>
