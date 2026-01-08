@@ -161,11 +161,11 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3">
 	                    <div className="flex items-center gap-2 md:gap-3">
 	                        <h1 className="text-base md:text-lg font-semibold truncate">{project.name}</h1>
-	                        {canManagePushes && view === 'kanban' && (
+	                        {view === 'kanban' && (
 	                            <Button
 	                                variant="outline"
                                 size="sm"
-                                className="h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)]"
+                                className={`h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)] transition-opacity ${canManagePushes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                                 style={{
                                     ["--push-btn-bg" as any]: hexToRgba(projectColor, 0.10),
                                     ["--push-btn-bg-hover" as any]: hexToRgba(projectColor, 0.16),

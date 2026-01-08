@@ -930,24 +930,23 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                 >
                                     <div className="flex items-center gap-3">
                                         <span className="font-semibold text-lg tracking-tight">{push.name}</span>
-                                        {isAdmin && (
-                                            <div
-                                                role="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
-                                                    if (todoColumn) {
-                                                        setCreatingColumnId(todoColumn.id)
-                                                        setCreatingPushId(push.id)
-                                                    }
-                                                }}
-                                                className="h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-border hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors relative z-10 text-xs font-medium text-muted-foreground"
-                                                title="Add Task"
-                                            >
-                                                <span>Add Task</span>
-                                                <Plus className="h-3.5 w-3.5" />
-                                            </div>
-                                        )}
+                                        <div
+                                            role="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (!isAdmin) return
+                                                const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
+                                                if (todoColumn) {
+                                                    setCreatingColumnId(todoColumn.id)
+                                                    setCreatingPushId(push.id)
+                                                }
+                                            }}
+                                            className={`h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-border hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all relative z-10 text-xs font-medium text-muted-foreground ${isAdmin ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                            title="Add Task"
+                                        >
+                                            <span>Add Task</span>
+                                            <Plus className="h-3.5 w-3.5" />
+                                        </div>
                                         {isComplete && (
                                             <span className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2.5 py-0.5 rounded-full ring-1 ring-inset ring-green-600/20 dark:ring-green-400/20">
                                                 <CheckCircle2 className="w-3.5 h-3.5" />
