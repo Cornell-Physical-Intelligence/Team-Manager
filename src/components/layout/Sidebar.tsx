@@ -272,16 +272,18 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                             className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
                         >
                             {navigatingTo === `/dashboard/projects/${project.id}` ? (
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    className="animate-[spin_1.2s_linear_infinite]"
-                                >
-                                    <circle cx="12" cy="4" r="2" fill="currentColor" opacity="1" />
-                                    <circle cx="18.93" cy="16" r="2" fill="currentColor" opacity="0.6" />
-                                    <circle cx="5.07" cy="16" r="2" fill="currentColor" opacity="0.3" />
-                                </svg>
+                                <div className="flex items-center gap-[3px]">
+                                    {[0, 1, 2].map((i) => (
+                                        <span
+                                            key={i}
+                                            className="w-[3px] h-[3px] rounded-full bg-current animate-bounce"
+                                            style={{
+                                                animationDuration: '0.6s',
+                                                animationDelay: `${i * 0.1}s`,
+                                            }}
+                                        />
+                                    ))}
+                                </div>
                             ) : (
                                 <MoreHorizontal className="h-4 w-4" />
                             )}
