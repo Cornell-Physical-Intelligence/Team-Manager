@@ -393,7 +393,6 @@ export default async function DashboardPage() {
                         <section className="border border-border rounded-lg p-4">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-sm font-medium">My Tasks</h2>
-                                <span className="text-xs text-muted-foreground">{pendingTasks.length} pending</span>
                             </div>
 
                             {pendingTasks.length > 0 ? (
@@ -440,7 +439,6 @@ export default async function DashboardPage() {
                             <section className="border border-border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-sm font-medium">Pending Approval</h2>
-                                    <span className="text-xs text-muted-foreground">{pendingApproval.length} waiting</span>
                                 </div>
 
                                 {pendingApproval.length > 0 ? (

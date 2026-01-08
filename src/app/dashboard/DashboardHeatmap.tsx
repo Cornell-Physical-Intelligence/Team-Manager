@@ -68,11 +68,11 @@ type DashboardHeatmapProps = {
 
 function getWorkloadColor(score: number, maxScore: number): string {
     const ratio = score / Math.max(maxScore, 1)
-    if (ratio < 0.3) return 'bg-green-100 dark:bg-green-900/30'
-    if (ratio < 0.5) return 'bg-green-200 dark:bg-green-800/40'
-    if (ratio < 0.7) return 'bg-yellow-100 dark:bg-yellow-900/30'
-    if (ratio < 0.85) return 'bg-orange-100 dark:bg-orange-900/30'
-    return 'bg-red-100 dark:bg-red-900/30'
+    if (ratio < 0.3) return 'bg-green-50/70 dark:bg-green-900/15'
+    if (ratio < 0.5) return 'bg-green-100/60 dark:bg-green-800/20'
+    if (ratio < 0.7) return 'bg-yellow-50/70 dark:bg-yellow-900/15'
+    if (ratio < 0.85) return 'bg-orange-50/70 dark:bg-orange-900/15'
+    return 'bg-red-50/70 dark:bg-red-900/15'
 }
 
 function TaskListDialog({
@@ -495,7 +495,7 @@ export function DashboardHeatmap({
                         <button
                             key={`overdue-${idx}`}
                             onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
-                            className="text-xs text-red-600 underline hover:text-red-700"
+                            className="text-[10px] text-red-600 underline hover:text-red-700"
                         >
                             {issue.count} overdue
                         </button>
@@ -504,7 +504,7 @@ export function DashboardHeatmap({
                         <button
                             key={`stuck-${idx}`}
                             onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
-                            className="text-xs text-amber-600 underline hover:text-amber-700"
+                            className="text-[10px] text-amber-600 underline hover:text-amber-700"
                         >
                             {issue.count} stuck
                         </button>
