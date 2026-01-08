@@ -9,11 +9,11 @@ export default function MembersLoading() {
                     <div className="h-9 w-24 bg-muted rounded animate-pulse" />
                 </div>
 
-                <div className="rounded-lg overflow-hidden bg-muted/10">
+                <div className="rounded-lg overflow-hidden border border-border">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                         <div
                             key={i}
-                            className="flex items-center gap-3 p-3"
+                            className="flex items-center gap-3 p-3 border-b last:border-b-0"
                         >
                             <div
                                 className="w-8 h-8 rounded-full bg-muted animate-pulse"

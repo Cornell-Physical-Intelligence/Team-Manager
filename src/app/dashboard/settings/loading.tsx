@@ -9,7 +9,7 @@ export default function SettingsLoading() {
                 {[0, 1, 2].map((i) => (
                     <section
                         key={i}
-                        className="rounded-lg p-4 space-y-3 bg-muted/10"
+                        className="rounded-lg p-4 space-y-3 border border-border"
                     >
                         <div
                             className="h-4 w-32 bg-muted rounded animate-pulse"
