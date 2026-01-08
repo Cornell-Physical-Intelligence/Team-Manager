@@ -139,21 +139,12 @@ function CompactTaskCard({ task, onClick }: { task: Task; onClick: () => void })
 
 function KanbanColumn({
     column,
-    maxVisible = 5,
     onTaskClick
 }: {
     column: Column
-    maxVisible?: number
     onTaskClick: (task: Task) => void
 }) {
-    const [isExpanded, setIsExpanded] = useState(false)
     const isDoneColumn = column.name === 'Done'
-
-    // For done column, default to collapsed with fewer visible
-    const effectiveMaxVisible = isDoneColumn ? 3 : maxVisible
-    const shouldCollapse = column.tasks.length > effectiveMaxVisible
-    const visibleTasks = isExpanded ? column.tasks : column.tasks.slice(0, effectiveMaxVisible)
-    const hiddenCount = column.tasks.length - effectiveMaxVisible
 
     return (
         <div className={cn(
@@ -174,42 +165,15 @@ function KanbanColumn({
             </div>
 
             {/* Tasks */}
-            <div className="flex-1 p-2 space-y-1.5 max-h-[400px] overflow-y-auto">
-                {visibleTasks.length > 0 ? (
-                    <>
-                        {visibleTasks.map(task => (
-                            <CompactTaskCard
-                                key={task.id}
-                                task={task}
-                                onClick={() => onTaskClick(task)}
-                            />
-                        ))}
-
-                        {/* Collapse/Expand button */}
-                        {shouldCollapse && (
-                            <button
-                                onClick={() => setIsExpanded(!isExpanded)}
-                                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                {isExpanded ? (
-                                    <>
-                                        <ChevronDown className="h-3 w-3 rotate-180" />
-                                        Show less
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex gap-0.5">
-                                            <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
-                                            <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
-                                            <span className="w-1 h-1 rounded-full bg-muted-foreground/50" />
-                                        </div>
-                                        <span>+{hiddenCount} more</span>
-                                        <ChevronDown className="h-3 w-3" />
-                                    </>
-                                )}
-                            </button>
-                        )}
-                    </>
+            <div className="flex-1 p-2 space-y-1.5">
+                {column.tasks.length > 0 ? (
+                    column.tasks.map(task => (
+                        <CompactTaskCard
+                            key={task.id}
+                            task={task}
+                            onClick={() => onTaskClick(task)}
+                        />
+                    ))
                 ) : (
                     <div className="text-center py-6 text-[10px] text-muted-foreground">
                         No tasks
@@ -374,7 +338,6 @@ export function PersonalKanban({ columns, projects, userName }: PersonalKanbanPr
                         <KanbanColumn
                             key={column.id}
                             column={column}
-                            maxVisible={column.name === 'Done' ? 3 : 6}
                             onTaskClick={handleTaskClick}
                         />
                     ))}

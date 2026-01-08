@@ -487,8 +487,7 @@ export function DashboardHeatmap({
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-medium flex items-center gap-1.5">
-                        <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                    <h2 className="text-sm font-medium">
                         Work Distribution
                     </h2>
                     {criticalIssues.filter(i => i.type === 'overdue').map((issue, idx) => (

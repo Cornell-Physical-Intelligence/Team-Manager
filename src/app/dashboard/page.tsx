@@ -397,7 +397,7 @@ export default async function DashboardPage() {
 
                             {pendingTasks.length > 0 ? (
                                 <div className="space-y-2">
-                                    {pendingTasks.slice(0, 12).map(task => {
+                                    {pendingTasks.map(task => {
                                         const project = task.column?.board?.project
                                         const projectColor = project?.color || '#6b7280'
                                         const dueDate = task.dueDate || task.endDate
@@ -423,11 +423,7 @@ export default async function DashboardPage() {
                                         )
                                     })}
 
-                                    {pendingTasks.length > 12 && (
-                                        <p className="text-xs text-muted-foreground text-center pt-2">
-                                            +{pendingTasks.length - 12} more tasks
-                                        </p>
-                                    )}
+                                    {/* Removed more tasks indicator */}
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground text-center py-8">No pending tasks</p>
@@ -493,8 +489,7 @@ export default async function DashboardPage() {
                             {teamStats && (
                                 <section className="border border-border rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-sm font-medium flex items-center gap-1.5">
-                                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <h2 className="text-sm font-medium">
                                             Team
                                         </h2>
                                         <TeamPopup members={teamStats.users} totalTasks={teamStats.totalTasks}>
