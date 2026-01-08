@@ -517,17 +517,6 @@ export function DashboardHeatmap({
 
             {/* Workload Distribution Grid */}
             <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                    {sortedUsers.length > 8 && (
-                        <button
-                            onClick={() => setShowAllMembers(!showAllMembers)}
-                            className="text-[10px] text-primary hover:underline flex items-center gap-0.5 ml-auto"
-                        >
-                            {showAllMembers ? 'Show less' : `Show all (${sortedUsers.length})`}
-                            <ChevronDown className={cn("h-3 w-3 transition-transform", showAllMembers && "rotate-180")} />
-                        </button>
-                    )}
-                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {displayedUsers.map(user => {
                         const isOverloaded = overloadedUsers.includes(user.id)
@@ -619,6 +608,16 @@ export function DashboardHeatmap({
                         )
                     })}
                 </div>
+
+                {/* More members button */}
+                {sortedUsers.length > 8 && (
+                    <button
+                        onClick={() => setShowAllMembers(!showAllMembers)}
+                        className="w-full mt-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
+                    >
+                        {showAllMembers ? 'Show less' : `+${sortedUsers.length - 8} more members`}
+                    </button>
+                )}
             </div>
 
             {/* Legend */}
