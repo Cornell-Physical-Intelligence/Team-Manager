@@ -69,11 +69,18 @@ export async function POST(
         }
 
         // Upload to Vercel Blob
+        const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+        if (!blobToken) {
+            console.error('BLOB_READ_WRITE_TOKEN is not configured')
+            return NextResponse.json({ error: 'File storage not configured. Please add BLOB_READ_WRITE_TOKEN to environment.' }, { status: 500 })
+        }
+
         const filename = `instructions/${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
         const fileBuffer = await file.arrayBuffer()
         const blob = await put(filename, fileBuffer, {
             access: 'public',
             contentType: file.type || 'application/octet-stream',
+            token: blobToken,
         })
 
         // Update task with instructions file

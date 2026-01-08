@@ -364,7 +364,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     return (
         <>
             <Dialog open={open} onOpenChange={isControlled ? onOpenChange : setInternalOpen}>
-                {!task && (
+                {!task && !isControlled && (
                     <DialogTrigger asChild>
                         <Button variant="ghost" className="w-full justify-start text-muted-foreground">
                             <Plus className="h-4 w-4 mr-2" />

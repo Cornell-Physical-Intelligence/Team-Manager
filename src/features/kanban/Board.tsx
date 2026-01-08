@@ -837,10 +837,6 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                 projectId={projectId}
                                 users={users}
                                 onEditTask={setPreviewingTask}
-                                onAddTask={(col.name === 'Todo' || col.name === 'To Do') ? () => {
-                                    setCreatingColumnId(col.id)
-                                    setCreatingPushId(pushId)
-                                } : undefined}
                                 isDoneColumn={col.name === 'Done'}
                                 isReviewColumn={col.name === 'Review'}
                                 userRole={userRole}
@@ -945,10 +941,11 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
                                                         setCreatingPushId(push.id)
                                                     }
                                                 }}
-                                                className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors relative z-10"
+                                                className="h-7 flex items-center gap-1.5 px-2.5 rounded-md border border-border hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-colors relative z-10 text-xs font-medium text-muted-foreground"
                                                 title="Add Task"
                                             >
-                                                <Plus className="h-4 w-4" />
+                                                <Plus className="h-3.5 w-3.5" />
+                                                <span>Add Task</span>
                                             </div>
                                         )}
                                         {isComplete && (
