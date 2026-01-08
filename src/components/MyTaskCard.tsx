@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Clock } from "lucide-react"
-import Link from "next/link"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 
 type MyTaskCardProps = {
@@ -41,20 +40,19 @@ function getTimeUntilDue(dueDate: Date | string | null): { text: string; isOverd
     if (diffMs < 0) {
         const overdueDays = Math.abs(diffDays)
         if (overdueDays === 0) return { text: 'Due today', isOverdue: true, isUrgent: true }
-        if (overdueDays === 1) return { text: '1 day overdue', isOverdue: true, isUrgent: true }
-        return { text: `${overdueDays} days overdue`, isOverdue: true, isUrgent: true }
+        if (overdueDays === 1) return { text: '1d overdue', isOverdue: true, isUrgent: true }
+        return { text: `${overdueDays}d overdue`, isOverdue: true, isUrgent: true }
     }
 
     if (diffHours <= 24) {
-        if (diffHours <= 1) return { text: 'Due in <1h', isOverdue: false, isUrgent: true }
-        return { text: `Due in ${diffHours}h`, isOverdue: false, isUrgent: true }
+        if (diffHours <= 1) return { text: '<1h left', isOverdue: false, isUrgent: true }
+        return { text: `${diffHours}h left`, isOverdue: false, isUrgent: true }
     }
 
-    if (diffDays === 1) return { text: 'Due tomorrow', isOverdue: false, isUrgent: true }
-    if (diffDays <= 3) return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: true }
-    if (diffDays <= 7) return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: false }
+    if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false, isUrgent: true }
+    if (diffDays <= 7) return { text: `${diffDays}d left`, isOverdue: false, isUrgent: diffDays <= 3 }
 
-    return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: false }
+    return { text: `${diffDays}d left`, isOverdue: false, isUrgent: false }
 }
 
 export function MyTaskCard({ task }: MyTaskCardProps) {
@@ -72,43 +70,47 @@ export function MyTaskCard({ task }: MyTaskCardProps) {
                 onClick={() => setShowTaskPreview(true)}
                 className="group cursor-pointer rounded-lg p-3 transition-all border border-border bg-card hover:bg-accent/50"
             >
-                {/* Top row: Title on left, Due time on right */}
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                            {task.title}
-                        </h4>
-                        {task.description && (
-                            <p className="text-xs text-muted-foreground/70 truncate mt-1">
-                                {task.description}
-                            </p>
-                        )}
-                    </div>
+                {/* Row 1: Title + Due Date */}
+                <div className="flex justify-between items-start gap-4">
+                    {/* Left: Title */}
+                    <h4 className="flex-1 text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                        {task.title}
+                    </h4>
 
+                    {/* Right: Due Date */}
                     {dueText && (
-                        <span className={`
-                            text-xs flex items-center gap-1 shrink-0 whitespace-nowrap
-                            ${isOverdue ? 'text-red-500 dark:text-red-400 font-medium' : ''}
-                            ${isUrgent && !isOverdue ? 'text-amber-500 dark:text-amber-400' : ''}
+                        <div className={`
+                            text-xs font-medium flex items-center gap-1 shrink-0
+                            ${isOverdue ? 'text-red-500' : ''}
+                            ${isUrgent && !isOverdue ? 'text-amber-500' : ''}
                             ${!isUrgent && !isOverdue ? 'text-muted-foreground' : ''}
                         `}>
-                            <Clock className="h-3.5 w-3.5" />
-                            {dueText}
-                        </span>
+                            <Clock className="h-3 w-3" />
+                            <span>{dueText}</span>
+                        </div>
                     )}
                 </div>
 
-                {/* Project badge underneath */}
+                {/* Row 2: Description (if exists) */}
+                {task.description && (
+                    <p className="text-xs text-muted-foreground/60 truncate mt-1.5">
+                        {task.description}
+                    </p>
+                )}
+
+                {/* Row 3: Project Badge */}
                 {project && (
-                    <span
-                        className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] mt-2"
-                        style={{
-                            backgroundColor: `${projectColor}15`,
-                            color: projectColor
-                        }}
-                    >
-                        {project.name}
-                    </span>
+                    <div className="mt-2">
+                        <span
+                            className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded"
+                            style={{
+                                backgroundColor: `${projectColor}20`,
+                                color: projectColor
+                            }}
+                        >
+                            {project.name}
+                        </span>
+                    </div>
                 )}
             </div>
 
