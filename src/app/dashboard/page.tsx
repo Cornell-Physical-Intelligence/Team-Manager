@@ -71,7 +71,7 @@ export default async function DashboardPage() {
                 column: {
                     include: {
                         board: {
-                            include: { project: { select: { id: true, name: true } } }
+                            include: { project: { select: { id: true, name: true, color: true } } }
                         }
                     }
                 }
@@ -92,7 +92,7 @@ export default async function DashboardPage() {
             where,
             include: {
                 assignee: { select: { id: true, name: true } },
-                column: { include: { board: { include: { project: { select: { id: true, name: true } } } } } }
+                column: { include: { board: { include: { project: { select: { id: true, name: true, color: true } } } } } }
             },
             orderBy: { createdAt: 'desc' },
             take: 10
@@ -167,7 +167,7 @@ export default async function DashboardPage() {
         return prisma.task.findMany({
             where,
             include: {
-                column: { include: { board: { include: { project: { select: { id: true, name: true } } } } } },
+                column: { include: { board: { include: { project: { select: { id: true, name: true, color: true } } } } } },
                 push: { select: { id: true, name: true, color: true } }
             },
             orderBy: { startDate: 'asc' },

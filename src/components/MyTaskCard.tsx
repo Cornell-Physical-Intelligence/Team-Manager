@@ -1,9 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { FileText, Eye, Clock, ArrowUpRight } from "lucide-react"
+import { Clock } from "lucide-react"
 import Link from "next/link"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 
@@ -22,6 +20,7 @@ type MyTaskCardProps = {
                 project: {
                     id: string
                     name: string
+                    color?: string | null
                 }
             }
         } | null
@@ -30,87 +29,90 @@ type MyTaskCardProps = {
     }
 }
 
+function getTimeUntilDue(dueDate: Date | string | null): { text: string; isOverdue: boolean; isUrgent: boolean } {
+    if (!dueDate) return { text: '', isOverdue: false, isUrgent: false }
+
+    const now = new Date()
+    const due = new Date(dueDate)
+    const diffMs = due.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60))
+
+    if (diffMs < 0) {
+        const overdueDays = Math.abs(diffDays)
+        if (overdueDays === 0) return { text: 'Due today', isOverdue: true, isUrgent: true }
+        if (overdueDays === 1) return { text: '1 day overdue', isOverdue: true, isUrgent: true }
+        return { text: `${overdueDays} days overdue`, isOverdue: true, isUrgent: true }
+    }
+
+    if (diffHours <= 24) {
+        if (diffHours <= 1) return { text: 'Due in <1h', isOverdue: false, isUrgent: true }
+        return { text: `Due in ${diffHours}h`, isOverdue: false, isUrgent: true }
+    }
+
+    if (diffDays === 1) return { text: 'Due tomorrow', isOverdue: false, isUrgent: true }
+    if (diffDays <= 3) return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: true }
+    if (diffDays <= 7) return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: false }
+
+    return { text: `Due in ${diffDays} days`, isOverdue: false, isUrgent: false }
+}
+
 export function MyTaskCard({ task }: MyTaskCardProps) {
     const [showTaskPreview, setShowTaskPreview] = useState(false)
 
-    const getStatusColor = (columnName: string | undefined) => {
-        switch (columnName) {
-            case 'In Progress': return 'bg-blue-500'
-            case 'Review': return 'bg-orange-500'
-            case 'Done': return 'bg-emerald-500'
-            default: return 'bg-gray-400'
-        }
-    }
-
-    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.column?.name !== 'Done'
+    const project = task.column?.board?.project
+    const projectColor = project?.color || '#6b7280'
+    const { text: dueText, isOverdue, isUrgent } = task.column?.name !== 'Done'
+        ? getTimeUntilDue(task.dueDate)
+        : { text: '', isOverdue: false, isUrgent: false }
 
     return (
         <>
-            <div className={`border rounded-lg bg-card hover:bg-accent/50 transition-colors ${isOverdue ? 'border-red-300 bg-red-50/50 dark:border-red-900/50 dark:bg-red-900/10' : ''}`}>
-                {/* Header with title */}
-                <div className="p-3 pb-2 flex items-start gap-2">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium leading-tight line-clamp-2">{task.title}</h4>
-                    </div>
-                </div>
+            <div
+                onClick={() => setShowTaskPreview(true)}
+                className={`
+                    group cursor-pointer rounded-lg p-3 transition-all
+                    border-l-[3px] bg-card hover:bg-accent/50
+                    ${isOverdue ? 'border-l-red-500 bg-red-50/30 dark:bg-red-950/10' : ''}
+                    ${isUrgent && !isOverdue ? 'border-l-amber-500' : ''}
+                    ${!isUrgent && !isOverdue ? 'border-l-transparent hover:border-l-primary/50' : ''}
+                `}
+                style={{
+                    borderLeftColor: !isOverdue && !isUrgent ? projectColor : undefined
+                }}
+            >
+                {/* Title */}
+                <h4 className="text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                    {task.title}
+                </h4>
 
-                {/* Description */}
-                {task.description && (
-                    <div className="px-3 pb-2 pl-8">
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                            {task.description}
-                        </p>
-                    </div>
-                )}
-
-                {/* Footer with project and status */}
-                <div className="px-3 pb-2 pl-8 flex flex-wrap items-center justify-between gap-y-1 gap-x-2 text-[10px]">
-                    <div className="flex items-center gap-2 text-muted-foreground min-w-0 max-w-full">
-                        {task.column?.board?.project && (
-                            <span className="truncate shrink-1">{task.column.board.project.name}</span>
-                        )}
-                        <div className="flex items-center gap-1 shrink-0">
-                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(task.column?.name)}`} />
-                            <span className="whitespace-nowrap">{task.column?.name || 'Todo'}</span>
-                        </div>
-                    </div>
-                    {isOverdue && (
-                        <Badge variant="destructive" className="text-[9px] h-4 px-1 shrink-0 ml-auto dark:bg-red-900/30 dark:text-red-200 dark:hover:bg-red-900/50">
-                            <Clock className="w-2.5 h-2.5 mr-0.5" />
-                            Overdue
-                        </Badge>
-                    )}
-                </div>
-
-                {/* Action buttons */}
-                <div className="px-3 pb-3 pt-1 border-t flex items-center gap-2">
-                    <Button
-                        onClick={() => setShowTaskPreview(true)}
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 h-7 text-xs"
-                    >
-                        <Eye className="h-3 w-3 mr-1.5" />
-                        Details
-                    </Button>
-                    {task.column?.board?.project && (
-                        <Button
-                            asChild
-                            size="sm"
-                            variant="outline"
-                            className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-foreground"
-                            title="Go to Tasks Board"
+                {/* Project & Due Date */}
+                <div className="flex items-center justify-between gap-2 mt-2">
+                    {project && (
+                        <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                            style={{
+                                backgroundColor: `${projectColor}15`,
+                                color: projectColor
+                            }}
                         >
-                            <Link
-                                href={`/dashboard/projects/${task.column.board.project.id}?highlight=${task.id}`}
-                            >
-                                <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                        </Button>
+                            {project.name}
+                        </span>
+                    )}
+
+                    {dueText && (
+                        <span className={`
+                            text-[10px] flex items-center gap-1 shrink-0
+                            ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : ''}
+                            ${isUrgent && !isOverdue ? 'text-amber-600 dark:text-amber-400' : ''}
+                            ${!isUrgent && !isOverdue ? 'text-muted-foreground' : ''}
+                        `}>
+                            <Clock className="h-3 w-3" />
+                            {dueText}
+                        </span>
                     )}
                 </div>
-            </div >
+            </div>
 
             {showTaskPreview && (
                 <TaskPreview
@@ -134,8 +136,7 @@ export function MyTaskCard({ task }: MyTaskCardProps) {
                     onEdit={() => { }}
                     projectId={task.column?.board?.project?.id || ''}
                 />
-            )
-            }
+            )}
         </>
     )
 }

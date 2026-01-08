@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { User, LayoutGrid, Calendar, Plus } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
@@ -162,22 +163,31 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
 	                    <div className="flex items-center gap-2 md:gap-3">
 	                        <h1 className="text-base md:text-lg font-semibold truncate">{project.name}</h1>
 	                        {view === 'kanban' && (
-	                            <Button
-	                                variant="outline"
-                                size="sm"
-                                className={`h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)] transition-opacity ${canManagePushes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                                style={{
-                                    ["--push-btn-bg" as any]: hexToRgba(projectColor, 0.10),
-                                    ["--push-btn-bg-hover" as any]: hexToRgba(projectColor, 0.16),
-                                    ["--push-btn-border" as any]: hexToRgba(projectColor, 0.22),
-                                    ["--push-btn-border-hover" as any]: hexToRgba(projectColor, 0.34),
-                                    ["--push-btn-icon" as any]: projectColor,
-                                }}
-                                onClick={() => setShowPushDialog(true)}
-                            >
-                                <span className="hidden md:inline">Add Push</span>
-                                <Plus className="w-3.5 h-3.5 md:ml-1.5 text-[color:var(--push-btn-icon)]" />
-                            </Button>
+                            <TooltipProvider delayDuration={300}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className={`h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)] transition-opacity ${canManagePushes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                            style={{
+                                                ["--push-btn-bg" as any]: hexToRgba(projectColor, 0.10),
+                                                ["--push-btn-bg-hover" as any]: hexToRgba(projectColor, 0.16),
+                                                ["--push-btn-border" as any]: hexToRgba(projectColor, 0.22),
+                                                ["--push-btn-border-hover" as any]: hexToRgba(projectColor, 0.34),
+                                                ["--push-btn-icon" as any]: projectColor,
+                                            }}
+                                            onClick={() => setShowPushDialog(true)}
+                                        >
+                                            <span className="hidden md:inline">Add Push</span>
+                                            <Plus className="w-3.5 h-3.5 md:ml-1.5 text-[color:var(--push-btn-icon)]" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="max-w-[200px] text-center">
+                                        <p className="text-xs">A push is a time-boxed sprint to group related tasks together</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         )}
                     </div>
                     <div className="flex items-center gap-2 overflow-x-auto">
