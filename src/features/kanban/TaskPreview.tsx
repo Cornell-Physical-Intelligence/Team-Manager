@@ -790,9 +790,9 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                     <DialogTitle className="text-sm font-semibold">{task.title}</DialogTitle>
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                    {task.column?.name && <Badge variant="outline" className="text-[9px] h-4">{task.column.name}</Badge>}
+                                    {task.column?.name && (
+                                        <span className="text-[9px] text-muted-foreground/50 shrink-0">{task.column.name}</span>
+                                    )}
                                     {isOverdue && <Badge variant="destructive" className="text-[9px] h-4">Overdue</Badge>}
                                 </div>
                             </div>
