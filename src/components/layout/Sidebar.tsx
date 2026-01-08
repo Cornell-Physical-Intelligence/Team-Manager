@@ -258,7 +258,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                     )}
                 >
                     <span className="truncate">{project.name}</span>
-                    {navigatingTo === `/dashboard/projects/${project.id}` && <Loader2 className="h-3 w-3 ml-auto animate-spin shrink-0 text-foreground" />}
+                    {navigatingTo === `/dashboard/projects/${project.id}` && <Loader2 className="h-3 w-3 ml-auto animate-spin shrink-0 text-white" />}
                 </Link>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
