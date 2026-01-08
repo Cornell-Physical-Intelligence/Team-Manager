@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
     Clock, MessageSquare, Paperclip, CheckSquare, HelpCircle,
     Filter, ChevronRight, AlertTriangle, Calendar
@@ -89,7 +88,11 @@ function getDueInfo(dueDate: string | null): { text: string; isOverdue: boolean;
 function TaskCard({ task }: { task: Task }) {
     const router = useRouter()
     const [isNavigating, setIsNavigating] = useState(false)
-    const { text: dueText, isOverdue, isUrgent } = getDueInfo(task.dueDate)
+    const isDone = task.columnName === 'Done'
+    // Don't show overdue for completed tasks
+    const { text: dueText, isOverdue: rawOverdue, isUrgent: rawUrgent } = getDueInfo(task.dueDate)
+    const isOverdue = isDone ? false : rawOverdue
+    const isUrgent = isDone ? false : rawUrgent
 
     const handleClick = () => {
         setIsNavigating(true)
@@ -242,7 +245,8 @@ export function PersonalKanban({ columns, projects, userName }: PersonalKanbanPr
 
     const totalTasks = columns.reduce((acc, col) => acc + col.tasks.length, 0)
     const filteredTotalTasks = filteredColumns.reduce((acc, col) => acc + col.tasks.length, 0)
-    const overdueCount = columns.flatMap(c => c.tasks).filter(t => getDueInfo(t.dueDate).isOverdue).length
+    // Exclude Done tasks from overdue count
+    const overdueCount = columns.flatMap(c => c.tasks).filter(t => t.columnName !== 'Done' && getDueInfo(t.dueDate).isOverdue).length
     const helpRequestCount = columns.flatMap(c => c.tasks).filter(t => t.hasHelpRequest).length
 
     const toggleProject = (projectId: string) => {
@@ -283,87 +287,79 @@ export function PersonalKanban({ columns, projects, userName }: PersonalKanbanPr
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {/* Filter Dropdown */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className={cn(
-                                        "h-8 text-xs",
-                                        hasActiveFilters && "border-primary text-primary"
-                                    )}
-                                >
-                                    <Filter className="h-3.5 w-3.5 mr-1.5" />
-                                    Filter
-                                    {hasActiveFilters && (
-                                        <span className="ml-1.5 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-[10px]">
-                                            {selectedProjects.size + (showOverdueOnly ? 1 : 0) + (showHelpRequests ? 1 : 0)}
-                                        </span>
-                                    )}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel className="text-xs">Quick Filters</DropdownMenuLabel>
-                                <DropdownMenuCheckboxItem
-                                    checked={showOverdueOnly}
-                                    onCheckedChange={setShowOverdueOnly}
-                                    className="text-xs"
-                                >
-                                    <Clock className="h-3 w-3 mr-2 text-red-500" />
-                                    Overdue only ({overdueCount})
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                    checked={showHelpRequests}
-                                    onCheckedChange={setShowHelpRequests}
-                                    className="text-xs"
-                                >
-                                    <HelpCircle className="h-3 w-3 mr-2 text-amber-500" />
-                                    Needs help ({helpRequestCount})
-                                </DropdownMenuCheckboxItem>
-
-                                {projects.length > 0 && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuLabel className="text-xs">Projects</DropdownMenuLabel>
-                                        {projects.map(project => (
-                                            <DropdownMenuCheckboxItem
-                                                key={project.id}
-                                                checked={selectedProjects.has(project.id)}
-                                                onCheckedChange={() => toggleProject(project.id)}
-                                                className="text-xs"
-                                            >
-                                                <div
-                                                    className="w-2 h-2 rounded-full mr-2"
-                                                    style={{ backgroundColor: project.color }}
-                                                />
-                                                {project.name}
-                                            </DropdownMenuCheckboxItem>
-                                        ))}
-                                    </>
+                    {/* Filter Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className={cn(
+                                    "h-8 text-xs",
+                                    hasActiveFilters && "border-primary text-primary"
                                 )}
-
+                            >
+                                <Filter className="h-3.5 w-3.5 mr-1.5" />
+                                Filter
                                 {hasActiveFilters && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <button
-                                            onClick={clearFilters}
-                                            className="w-full text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 text-left"
-                                        >
-                                            Clear all filters
-                                        </button>
-                                    </>
+                                    <span className="ml-1.5 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-[10px]">
+                                        {selectedProjects.size + (showOverdueOnly ? 1 : 0) + (showHelpRequests ? 1 : 0)}
+                                    </span>
                                 )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        <Link href="/dashboard">
-                            <Button variant="ghost" size="sm" className="h-8 text-xs">
-                                Back to Dashboard
                             </Button>
-                        </Link>
-                    </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuLabel className="text-xs">Quick Filters</DropdownMenuLabel>
+                            <DropdownMenuCheckboxItem
+                                checked={showOverdueOnly}
+                                onCheckedChange={setShowOverdueOnly}
+                                className="text-xs"
+                            >
+                                <Clock className="h-3 w-3 mr-2 text-red-500" />
+                                Overdue only ({overdueCount})
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem
+                                checked={showHelpRequests}
+                                onCheckedChange={setShowHelpRequests}
+                                className="text-xs"
+                            >
+                                <HelpCircle className="h-3 w-3 mr-2 text-amber-500" />
+                                Needs help ({helpRequestCount})
+                            </DropdownMenuCheckboxItem>
+
+                            {projects.length > 0 && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="text-xs">Projects</DropdownMenuLabel>
+                                    {projects.map(project => (
+                                        <DropdownMenuCheckboxItem
+                                            key={project.id}
+                                            checked={selectedProjects.has(project.id)}
+                                            onCheckedChange={() => toggleProject(project.id)}
+                                            className="text-xs"
+                                        >
+                                            <div
+                                                className="w-2 h-2 rounded-full mr-2"
+                                                style={{ backgroundColor: project.color }}
+                                            />
+                                            {project.name}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                                </>
+                            )}
+
+                            {hasActiveFilters && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <button
+                                        onClick={clearFilters}
+                                        className="w-full text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 text-left"
+                                    >
+                                        Clear all filters
+                                    </button>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 

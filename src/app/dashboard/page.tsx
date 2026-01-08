@@ -4,6 +4,7 @@ import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock } from "lucide
 import { DashboardClient } from "./DashboardClient"
 import { TeamPopup } from "./TeamPopup"
 import { TaskRow, ApprovalRow } from "./TaskRow"
+import { DashboardHeatmap } from "./DashboardHeatmap"
 
 export const dynamic = 'force-dynamic'
 
@@ -160,11 +161,158 @@ export default async function DashboardPage() {
         })
     }
 
-    const [myTasks, pendingApproval, teamStats, recentActivity] = await Promise.all([
+    const fetchHeatmapData = async () => {
+        if (!isLeadership) return null
+
+        const [users, tasks] = await Promise.all([
+            prisma.user.findMany({
+                where: { workspaceId: dbUser.workspaceId },
+                select: { id: true, name: true }
+            }),
+            prisma.task.findMany({
+                where: {
+                    column: { board: { project: { workspaceId: dbUser.workspaceId } } }
+                },
+                include: {
+                    assignee: { select: { id: true } },
+                    assignees: { select: { userId: true } },
+                    column: {
+                        include: {
+                            board: { include: { project: { select: { id: true, color: true } } } }
+                        }
+                    },
+                    push: { select: { id: true } },
+                    helpRequests: {
+                        where: { status: { in: ['open', 'acknowledged'] } },
+                        select: { id: true }
+                    },
+                    activityLogs: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 1,
+                        select: { createdAt: true }
+                    }
+                }
+            })
+        ])
+
+        const now = new Date()
+
+        // Transform tasks
+        const transformedTasks = tasks.map(task => {
+            const allAssigneeIds = [
+                task.assigneeId,
+                ...task.assignees.map(a => a.userId)
+            ].filter(Boolean) as string[]
+            const uniqueAssigneeIds = [...new Set(allAssigneeIds)]
+
+            const lastActivity = task.activityLogs[0]?.createdAt
+            const daysSinceActivity = lastActivity
+                ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24))
+                : null
+
+            const dueDate = task.dueDate || task.endDate
+            const isOverdue = dueDate && task.column?.name !== 'Done' ? new Date(dueDate) < now : false
+            const isStuck = task.column?.name === 'In Progress' && daysSinceActivity !== null && daysSinceActivity >= 3
+            const isBlockedByHelp = task.helpRequests.length > 0
+            const isUnassigned = uniqueAssigneeIds.length === 0 && task.column?.name !== 'Done'
+
+            return {
+                id: task.id,
+                title: task.title,
+                columnName: task.column?.name || 'Unknown',
+                projectId: task.column?.board?.project?.id || '',
+                projectColor: task.column?.board?.project?.color || '#6b7280',
+                pushId: task.push?.id || null,
+                assigneeIds: uniqueAssigneeIds,
+                isOverdue,
+                isStuck,
+                isBlockedByHelp,
+                isUnassigned
+            }
+        })
+
+        // User stats
+        const userStats = users.map(u => {
+            const userTasks = transformedTasks.filter(t => t.assigneeIds.includes(u.id))
+            const activeTasks = userTasks.filter(t => t.columnName !== 'Done').length
+            const overdueTasks = userTasks.filter(t => t.isOverdue).length
+            const stuckTasks = userTasks.filter(t => t.isStuck).length
+            const helpRequestTasks = userTasks.filter(t => t.isBlockedByHelp).length
+            const workloadScore = activeTasks + (overdueTasks * 2) + (stuckTasks * 1.5) + (helpRequestTasks * 1)
+
+            return {
+                id: u.id,
+                name: u.name,
+                activeTasks,
+                overdueTasks,
+                stuckTasks,
+                helpRequestTasks,
+                workloadScore
+            }
+        })
+
+        // Critical issues
+        const criticalIssues: { type: string; severity: 'critical' | 'warning' | 'info'; message: string; count: number; tasks: typeof transformedTasks }[] = []
+
+        const totalOverdue = transformedTasks.filter(t => t.isOverdue).length
+        const totalStuck = transformedTasks.filter(t => t.isStuck).length
+        const totalHelpRequests = transformedTasks.filter(t => t.isBlockedByHelp).length
+        const totalUnassigned = transformedTasks.filter(t => t.isUnassigned).length
+
+        if (totalOverdue > 0) {
+            criticalIssues.push({
+                type: 'overdue',
+                severity: 'critical',
+                message: `${totalOverdue} tasks are overdue`,
+                count: totalOverdue,
+                tasks: transformedTasks.filter(t => t.isOverdue)
+            })
+        }
+
+        if (totalStuck > 0) {
+            criticalIssues.push({
+                type: 'stuck',
+                severity: 'warning',
+                message: `${totalStuck} tasks stuck (3+ days)`,
+                count: totalStuck,
+                tasks: transformedTasks.filter(t => t.isStuck)
+            })
+        }
+
+        if (totalHelpRequests > 0) {
+            criticalIssues.push({
+                type: 'help',
+                severity: 'warning',
+                message: `${totalHelpRequests} tasks need help`,
+                count: totalHelpRequests,
+                tasks: transformedTasks.filter(t => t.isBlockedByHelp)
+            })
+        }
+
+        if (totalUnassigned > 0) {
+            criticalIssues.push({
+                type: 'unassigned',
+                severity: 'info',
+                message: `${totalUnassigned} tasks unassigned`,
+                count: totalUnassigned,
+                tasks: transformedTasks.filter(t => t.isUnassigned)
+            })
+        }
+
+        // Find overloaded and idle users
+        const avgWorkload = userStats.reduce((acc, u) => acc + u.workloadScore, 0) / userStats.length
+        const overloadedUsers = userStats.filter(u => u.workloadScore > avgWorkload * 1.5 && u.activeTasks > 3).map(u => u.id)
+        const idleUsers = userStats.filter(u => u.activeTasks === 0).map(u => u.id)
+
+        return { userStats, criticalIssues, overloadedUsers, idleUsers }
+    }
+
+    const [myTasks, pendingApproval, teamStats, recentActivity, heatmapData] = await Promise.all([
         fetchMyTasks(),
         fetchPendingApproval(),
         fetchTeamStats(),
-        fetchRecentActivity()
+        fetchRecentActivity(),
+        fetchHeatmapData()
     ])
 
     // Process tasks
@@ -314,6 +462,16 @@ export default async function DashboardPage() {
                                     <p className="text-sm text-muted-foreground text-center py-6">No tasks pending approval</p>
                                 )}
                             </section>
+                        )}
+
+                        {/* Team Heatmap - Leadership Only */}
+                        {isLeadership && heatmapData && (
+                            <DashboardHeatmap
+                                userStats={heatmapData.userStats}
+                                criticalIssues={heatmapData.criticalIssues}
+                                overloadedUsers={heatmapData.overloadedUsers}
+                                idleUsers={heatmapData.idleUsers}
+                            />
                         )}
                     </div>
 

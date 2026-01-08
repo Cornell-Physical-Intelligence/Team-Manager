@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
     Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical,
-    Kanban, Grid3X3
+    Kanban
 } from "lucide-react"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { cn } from "@/lib/utils"
@@ -507,20 +507,6 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                             <Kanban className="h-5 w-5" />
                             My Board
                         </Link>
-
-                        {/* Heatmap Link - Admin/Team Lead only */}
-                        {isAdmin && (
-                            <Link
-                                href="/dashboard/heatmap"
-                                className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:bg-muted hover:translate-x-0.5 text-sm",
-                                    pathname === "/dashboard/heatmap" ? "bg-muted font-medium" : "text-muted-foreground"
-                                )}
-                            >
-                                <Grid3X3 className="h-5 w-5" />
-                                Team Heatmap
-                            </Link>
-                        )}
 
                         {/* Projects Section */}
                         <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen} className="mt-2">
