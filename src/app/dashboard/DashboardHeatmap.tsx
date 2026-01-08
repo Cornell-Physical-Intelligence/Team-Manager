@@ -328,6 +328,7 @@ function UserKanbanDialog({
                         />
                     </div>
                 </div>
+
             </DialogContent>
         </Dialog>
     )

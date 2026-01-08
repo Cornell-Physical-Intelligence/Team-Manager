@@ -446,28 +446,3 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
-
-/* Opacity sweep loading animation for navigation links */
-@keyframes opacity-sweep {
-  0% {
-    background-position: -100% 0;
-  }
-
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.animate-opacity-sweep {
-  background: linear-gradient(90deg,
-      currentColor 0%,
-      currentColor 40%,
-      rgba(128, 128, 128, 0.3) 50%,
-      currentColor 60%,
-      currentColor 100%);
-  background-size: 200% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: opacity-sweep 1s ease-in-out infinite;
-}
