@@ -295,6 +295,11 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
         }
     }, [open])
 
+    // Track last comment time for incremental polling
+    const lastCommentTime = useRef<string | null>(null)
+    const commentCount = useRef<number>(0)
+
+    // Full fetch - get all comments
     const fetchComments = async () => {
         if (!task.id) return
         setIsLoadingComments(true)
@@ -303,9 +308,11 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
             const res = await fetch(`/api/tasks/${task.id}/comments`)
             if (res.ok) {
                 const data = await res.json()
-                const newComments = Array.isArray(data) ? data : []
-                if (JSON.stringify(newComments) !== JSON.stringify(comments)) {
-                    setComments(newComments)
+                const newComments = Array.isArray(data.comments) ? data.comments : (Array.isArray(data) ? data : [])
+                setComments(newComments)
+                commentCount.current = newComments.length
+                if (newComments.length > 0) {
+                    lastCommentTime.current = newComments[newComments.length - 1].createdAt
                 }
             } else {
                 setCommentError('Failed to load comments')
@@ -315,6 +322,35 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
             setCommentError('Failed to load comments')
         } finally {
             setIsLoadingComments(false)
+        }
+    }
+
+    // Lightweight poll - check for new comments
+    const checkNewComments = async () => {
+        if (!task.id || !lastCommentTime.current) return
+        try {
+            const since = encodeURIComponent(lastCommentTime.current)
+            const res = await fetch(`/api/tasks/${task.id}/comments?since=${since}`)
+            if (res.ok) {
+                const data = await res.json()
+                if (data.hasNew && data.comments?.length > 0) {
+                    // Append new comments
+                    setComments(prev => {
+                        const newOnes = data.comments.filter(
+                            (c: any) => !prev.some(p => p.id === c.id)
+                        )
+                        if (newOnes.length > 0) {
+                            const updated = [...prev, ...newOnes]
+                            lastCommentTime.current = updated[updated.length - 1].createdAt
+                            commentCount.current = updated.length
+                            return updated
+                        }
+                        return prev
+                    })
+                }
+            }
+        } catch (err) {
+            // Silent fail
         }
     }
 
@@ -350,14 +386,15 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
 
     useEffect(() => {
         if (open && task.id) {
+            // Initial full fetch
             fetchComments()
             fetchAttachments()
             fetchInstructions()
 
-            // Set up polling to refresh comments every 10 seconds
+            // Smart polling - check for new comments every 3 seconds (lightweight)
             const interval = setInterval(() => {
-                fetchComments()
-            }, 10000)
+                checkNewComments()
+            }, 3000)
 
             return () => clearInterval(interval)
         } else {
@@ -369,8 +406,10 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
             setReplyingTo(null)
             setInstructionsFile(null)
             setShowInstructionsFullscreen(false)
+            lastCommentTime.current = null
+            commentCount.current = 0
         }
-    }, [open, task.id]) // Removed 'comments' to prevent infinite re-fetching
+    }, [open, task.id])
 
     const handleAddComment = async () => {
         if (!newComment.trim() || isSubmitting) return

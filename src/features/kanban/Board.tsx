@@ -280,17 +280,121 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId }:
         })
     }, [board.columns])
 
-    // Auto-refresh board data (15 seconds - reduced frequency to save network)
-    useEffect(() => {
-        const interval = setInterval(() => {
-            // Only refresh if user is not currently interacting with critical UI elements
-            if (!isDragging && !reviewDialog && !doneMoveDialog && !editingTask && !previewingTask && !creatingColumnId && !editingPush && !deletePushId) {
-                router.refresh()
-            }
-        }, 15000)
+    // Smart real-time sync - poll for changes every 1.5 seconds
+    const lastSyncTime = useRef<string>(new Date().toISOString())
+    const isTabVisible = useRef(true)
 
+    // Track tab visibility
+    useEffect(() => {
+        const handleVisibility = () => {
+            isTabVisible.current = document.visibilityState === 'visible'
+            // Reset sync time when tab becomes visible to catch up on changes
+            if (isTabVisible.current) {
+                lastSyncTime.current = new Date(Date.now() - 30000).toISOString() // Last 30 seconds
+            }
+        }
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
+    }, [])
+
+    // Smart polling - only fetch changes, update state directly
+    useEffect(() => {
+        const syncChanges = async () => {
+            // Skip if tab hidden or user is interacting
+            if (!isTabVisible.current || isDragging || reviewDialog || doneMoveDialog || editingTask || previewingTask) {
+                return
+            }
+
+            try {
+                const since = encodeURIComponent(lastSyncTime.current)
+                const res = await fetch(`/api/projects/${projectId}/sync?since=${since}`)
+                if (!res.ok) return
+
+                const data = await res.json()
+
+                if (data.hasChanges && data.tasks?.length > 0) {
+                    // Update local state with changed tasks
+                    setColumns(prev => {
+                        const newColumns = prev.map(col => ({
+                            ...col,
+                            tasks: col.tasks.map(task => {
+                                const updated = data.tasks.find((t: any) => t.id === task.id)
+                                if (updated) {
+                                    // Task was updated - merge changes
+                                    return {
+                                        ...task,
+                                        ...updated,
+                                        // Preserve full data that sync doesn't return
+                                        activityLogs: task.activityLogs,
+                                        comments: task.comments,
+                                        attachments: updated.hasAttachment ? task.attachments : []
+                                    }
+                                }
+                                return task
+                            })
+                        }))
+
+                        // Handle tasks that moved columns
+                        for (const changedTask of data.tasks) {
+                            const currentCol = newColumns.find(c =>
+                                c.tasks.some(t => t.id === changedTask.id)
+                            )
+
+                            if (currentCol && currentCol.id !== changedTask.columnId) {
+                                // Task moved to different column - relocate it
+                                const task = currentCol.tasks.find(t => t.id === changedTask.id)
+                                if (task && changedTask.columnId) {
+                                    // Remove from current column
+                                    currentCol.tasks = currentCol.tasks.filter(t => t.id !== changedTask.id)
+                                    // Add to new column
+                                    const targetCol = newColumns.find(c => c.id === changedTask.columnId)
+                                    if (targetCol) {
+                                        targetCol.tasks.push({ ...task, columnId: changedTask.columnId })
+                                    }
+                                }
+                            }
+                        }
+
+                        // Handle new tasks (not in any column yet)
+                        for (const changedTask of data.tasks) {
+                            const existsInAnyColumn = newColumns.some(c =>
+                                c.tasks.some(t => t.id === changedTask.id)
+                            )
+                            if (!existsInAnyColumn && changedTask.columnId) {
+                                const targetCol = newColumns.find(c => c.id === changedTask.columnId)
+                                if (targetCol) {
+                                    targetCol.tasks.push({
+                                        id: changedTask.id,
+                                        title: changedTask.title,
+                                        columnId: changedTask.columnId,
+                                        assignee: changedTask.assignee,
+                                        assignees: changedTask.assignees,
+                                        push: changedTask.push,
+                                        startDate: changedTask.startDate,
+                                        endDate: changedTask.endDate,
+                                        requireAttachment: changedTask.requireAttachment,
+                                        updatedAt: changedTask.updatedAt
+                                    })
+                                }
+                            }
+                        }
+
+                        return newColumns
+                    })
+                }
+
+                // Update sync timestamp
+                if (data.lastUpdate) {
+                    lastSyncTime.current = data.lastUpdate
+                }
+            } catch (error) {
+                // Silent fail - will retry on next poll
+            }
+        }
+
+        const interval = setInterval(syncChanges, 1500) // Poll every 1.5 seconds
         return () => clearInterval(interval)
-    }, [isDragging, reviewDialog, doneMoveDialog, editingTask, previewingTask, creatingColumnId, editingPush, deletePushId, router])
+    }, [projectId, isDragging, reviewDialog, doneMoveDialog, editingTask, previewingTask])
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })

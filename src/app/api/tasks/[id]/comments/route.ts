@@ -8,8 +8,27 @@ export async function GET(
 ) {
     try {
         const { id } = await params
+        const { searchParams } = new URL(request.url)
+        const since = searchParams.get('since') // ISO timestamp for incremental updates
+        const countOnly = searchParams.get('countOnly') === 'true'
+
+        // If countOnly, just return the count for quick polling
+        if (countOnly) {
+            const count = await prisma.comment.count({
+                where: { taskId: id }
+            })
+            return NextResponse.json({ count })
+        }
+
+        const where: any = { taskId: id }
+
+        // If since is provided, only fetch newer comments
+        if (since) {
+            where.createdAt = { gt: new Date(since) }
+        }
+
         const comments = await prisma.comment.findMany({
-            where: { taskId: id },
+            where,
             orderBy: { createdAt: 'asc' },
             include: {
                 replyTo: {
@@ -21,9 +40,14 @@ export async function GET(
                 }
             }
         })
-        return NextResponse.json(comments)
+
+        return NextResponse.json({
+            comments,
+            hasNew: comments.length > 0,
+            lastCheck: new Date().toISOString()
+        })
     } catch (error) {
-        return NextResponse.json([], { status: 200 })
+        return NextResponse.json({ comments: [], hasNew: false }, { status: 200 })
     }
 }
 

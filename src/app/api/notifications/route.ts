@@ -2,31 +2,53 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const user = await getCurrentUser()
 
         if (!user || !user.id || user.id === 'pending' || !user.workspaceId) {
-            return NextResponse.json([])
+            return NextResponse.json({ notifications: [], hasNew: false })
         }
 
-        // Get notifications for this user or broadcast to all
+        const { searchParams } = new URL(request.url)
+        const since = searchParams.get('since') // ISO timestamp for incremental updates
+        const countOnly = searchParams.get('countOnly') === 'true' // Just check for new ones
+
+        const where: any = {
+            workspaceId: user.workspaceId,
+            OR: [
+                { userId: user.id },
+                { userId: null }
+            ]
+        }
+
+        // If countOnly, just check if there are unread notifications
+        if (countOnly) {
+            const unreadCount = await prisma.notification.count({
+                where: { ...where, read: false }
+            })
+            return NextResponse.json({ unreadCount, hasNew: unreadCount > 0 })
+        }
+
+        // If since is provided, only fetch newer notifications
+        if (since) {
+            where.createdAt = { gt: new Date(since) }
+        }
+
         const notifications = await prisma.notification.findMany({
-            where: {
-                workspaceId: user.workspaceId,
-                OR: [
-                    { userId: user.id },
-                    { userId: null }
-                ]
-            },
+            where,
             orderBy: { createdAt: 'desc' },
             take: 20
         })
 
-        return NextResponse.json(notifications)
+        return NextResponse.json({
+            notifications,
+            hasNew: notifications.length > 0,
+            lastCheck: new Date().toISOString()
+        })
     } catch (error) {
         console.error('Failed to fetch notifications:', error)
-        return NextResponse.json([])
+        return NextResponse.json({ notifications: [], hasNew: false })
     }
 }
 

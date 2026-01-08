@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Bell, Check, User, Clock, FileText, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -26,27 +26,80 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [open, setOpen] = useState(false)
     const [bellRingNonce, setBellRingNonce] = useState(0)
+    const [unreadCount, setUnreadCount] = useState(0)
+    const lastCheckTime = useRef<string>(new Date().toISOString())
+    const isTabVisible = useRef(true)
+    const hasFetchedFull = useRef(false)
 
-    const fetchNotifications = async () => {
+    // Full fetch - get all notifications
+    const fetchAllNotifications = async () => {
         try {
             const res = await fetch('/api/notifications')
             if (res.ok) {
                 const data = await res.json()
-                setNotifications(data)
+                setNotifications(data.notifications || [])
+                setUnreadCount((data.notifications || []).filter((n: Notification) => !n.read).length)
+                lastCheckTime.current = data.lastCheck || new Date().toISOString()
+                hasFetchedFull.current = true
             }
         } catch (e) {
             console.error('Failed to fetch notifications', e)
         }
     }
 
+    // Lightweight poll - just check count
+    const checkForNew = async () => {
+        if (!isTabVisible.current) return
+
+        try {
+            const res = await fetch('/api/notifications?countOnly=true')
+            if (res.ok) {
+                const data = await res.json()
+                const newCount = data.unreadCount || 0
+                if (newCount !== unreadCount) {
+                    setUnreadCount(newCount)
+                    // If count increased, ring the bell
+                    if (newCount > unreadCount) {
+                        setBellRingNonce(n => n + 1)
+                    }
+                }
+            }
+        } catch (e) {
+            // Silent fail
+        }
+    }
+
+    // Track tab visibility
     useEffect(() => {
-        fetchNotifications()
-        // Poll every 30 seconds
-        const interval = setInterval(fetchNotifications, 30000)
-        return () => clearInterval(interval)
+        const handleVisibility = () => {
+            isTabVisible.current = document.visibilityState === 'visible'
+        }
+        document.addEventListener('visibilitychange', handleVisibility)
+        return () => document.removeEventListener('visibilitychange', handleVisibility)
     }, [])
 
-    const unreadCount = notifications.filter(n => !n.read).length
+    // Initial fetch
+    useEffect(() => {
+        fetchAllNotifications()
+    }, [])
+
+    // Smart polling - lightweight check every 5 seconds
+    useEffect(() => {
+        const interval = setInterval(checkForNew, 5000)
+        return () => clearInterval(interval)
+    }, [unreadCount])
+
+    // Fetch full data when popover opens
+    const handleOpenChange = (isOpen: boolean) => {
+        setOpen(isOpen)
+        if (isOpen) {
+            // Refresh notifications when opening
+            fetchAllNotifications()
+            if (unreadCount > 0) {
+                markAllAsRead()
+            }
+        }
+    }
 
     const markAsRead = async (notificationId: string) => {
         try {
@@ -71,6 +124,7 @@ export function NotificationBell() {
                 body: JSON.stringify({ markAllRead: true })
             })
             setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+            setUnreadCount(0)
         } catch (e) {
             console.error('Failed to mark all as read', e)
         }
@@ -107,13 +161,6 @@ export function NotificationBell() {
             window.location.href = notification.link
         }
         setOpen(false)
-    }
-
-    const handleOpenChange = (isOpen: boolean) => {
-        setOpen(isOpen)
-        if (isOpen && unreadCount > 0) {
-            markAllAsRead()
-        }
     }
 
     return (
