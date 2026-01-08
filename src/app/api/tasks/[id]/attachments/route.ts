@@ -39,6 +39,25 @@ export async function POST(
             return NextResponse.json({ error: 'File is required' }, { status: 400 })
         }
 
+        // File size validation (max 50MB)
+        const MAX_FILE_SIZE = 50 * 1024 * 1024
+        if (file.size > MAX_FILE_SIZE) {
+            return NextResponse.json({ error: 'File too large. Maximum size is 50MB' }, { status: 400 })
+        }
+
+        // File type validation - allow common file types
+        const ALLOWED_TYPES = [
+            'image/', 'video/', 'audio/', 'application/pdf',
+            'application/msword', 'application/vnd.openxmlformats',
+            'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+            'text/', 'application/zip', 'application/x-zip',
+            'application/json', 'application/xml'
+        ]
+        const isAllowedType = ALLOWED_TYPES.some(type => file.type.startsWith(type))
+        if (!isAllowedType && file.type !== 'application/octet-stream') {
+            return NextResponse.json({ error: 'File type not allowed' }, { status: 400 })
+        }
+
         // Verify task exists
         const task = await prisma.task.findUnique({
             where: { id }

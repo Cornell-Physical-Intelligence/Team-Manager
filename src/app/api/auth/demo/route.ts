@@ -2,7 +2,14 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import prisma from '@/lib/prisma'
 
-export async function GET() {
+export async function GET(request: Request) {
+    // Disable demo mode in production
+    if (process.env.NODE_ENV === 'production' && !process.env.ENABLE_DEMO_MODE) {
+        return NextResponse.json({ error: 'Demo mode disabled' }, { status: 403 })
+    }
+
+    const url = new URL(request.url)
+
     try {
         const cookieStore = await cookies()
 
@@ -49,9 +56,9 @@ export async function GET() {
             path: '/',
         })
 
-        return NextResponse.redirect(new URL('/dashboard', 'http://localhost:3000'))
+        return NextResponse.redirect(new URL('/dashboard', url.origin))
     } catch (error) {
         console.error('Demo login error:', error)
-        return NextResponse.redirect(new URL('/?error=demo_failed', 'http://localhost:3000'))
+        return NextResponse.redirect(new URL('/?error=demo_failed', url.origin))
     }
 }

@@ -26,23 +26,41 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
-        const cookieStore = await cookies()
-        const userId = cookieStore.get('user_id')
+        const currentUser = await getCurrentUser()
 
-        if (!userId) {
+        if (!currentUser || !currentUser.id || currentUser.id === 'pending') {
             return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
         }
 
+        // Only admins can change roles
+        if (currentUser.role !== 'Admin') {
+            return NextResponse.json({ error: 'Only admins can change roles' }, { status: 403 })
+        }
+
         const body = await request.json()
-        const { role } = body
+        const { userId, role } = body
+
+        if (!userId) {
+            return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+        }
 
         if (!['Admin', 'Team Lead', 'Member'].includes(role)) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
         }
 
+        // Verify target user is in the same workspace
+        const targetUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { workspaceId: true }
+        })
+
+        if (!targetUser || targetUser.workspaceId !== currentUser.workspaceId) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 })
+        }
+
         // Update user role in database
         await prisma.user.update({
-            where: { id: userId.value },
+            where: { id: userId },
             data: { role }
         })
 

@@ -11,7 +11,8 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url)
-        const limit = parseInt(searchParams.get('limit') || '50')
+        const rawLimit = parseInt(searchParams.get('limit') || '50')
+        const limit = Math.min(Math.max(1, rawLimit), 200) // Clamp between 1 and 200
         const since = searchParams.get('since') // ISO timestamp for incremental updates
 
         const where: any = {

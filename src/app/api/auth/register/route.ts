@@ -52,22 +52,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: true, userId: existingUser.id })
         }
 
-        // Create new user
+        // Create new user in a transaction to prevent race condition
         // First user is Admin, others are Members
-        const userCount = await prisma.user.count()
-        let role = userCount === 0 ? 'Admin' : 'Member'
+        const user = await prisma.$transaction(async (tx) => {
+            const userCount = await tx.user.count()
+            const role = userCount === 0 ? 'Admin' : 'Member'
 
-        const user = await prisma.user.create({
-            data: {
-                name: name.trim(),
-                email: `discord_${discordUser.id}@discord.user`,
-                avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null,
-                discordId: discordUser.id,
-                role: role,
-                skills: skills || [],
-                interests: interests || null,
-                hasOnboarded: true
-            }
+            return tx.user.create({
+                data: {
+                    name: name.trim(),
+                    email: `discord_${discordUser.id}@discord.user`,
+                    avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null,
+                    discordId: discordUser.id,
+                    role: role,
+                    skills: skills || [],
+                    interests: interests || null,
+                    hasOnboarded: true
+                }
+            })
         })
 
         // Store user ID in cookie

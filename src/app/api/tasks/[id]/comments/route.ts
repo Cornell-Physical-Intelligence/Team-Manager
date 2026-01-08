@@ -95,11 +95,28 @@ export async function POST(
             return NextResponse.json({ error: 'Content is required' }, { status: 400 })
         }
 
+        // Verify task exists AND belongs to user's workspace
         const task = await prisma.task.findUnique({
-            where: { id: taskId }
+            where: { id: taskId },
+            include: {
+                column: {
+                    include: {
+                        board: {
+                            include: {
+                                project: { select: { workspaceId: true } }
+                            }
+                        }
+                    }
+                }
+            }
         })
 
         if (!task) {
+            return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+        }
+
+        // Workspace validation - prevent cross-workspace comments
+        if (task.column?.board?.project?.workspaceId !== user.workspaceId) {
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
