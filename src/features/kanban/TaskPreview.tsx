@@ -502,8 +502,8 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     }
 
     const uploadFile = async (file: File) => {
-        if (file.size > 100 * 1024 * 1024) {
-            setCommentError("File size exceeds 100MB limit.")
+        if (file.size > 50 * 1024 * 1024) {
+            setCommentError("File size exceeds 50MB limit.")
             return
         }
         setIsSubmitting(true)

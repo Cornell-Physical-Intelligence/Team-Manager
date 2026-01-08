@@ -4,8 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, User, LayoutGrid, Calendar, Plus } from "lucide-react"
-import Link from "next/link"
+import { User, LayoutGrid, Calendar, Plus } from "lucide-react"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
@@ -161,21 +160,12 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
             <div className="shrink-0 border-b bg-background">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3">
 	                    <div className="flex items-center gap-2 md:gap-3">
-	                        <Button variant="ghost" size="icon" asChild className="h-7 w-7 shrink-0">
-	                            <Link href="/dashboard">
-	                                <ArrowLeft className="w-4 h-4" />
-	                            </Link>
-	                        </Button>
-	                        <div
-	                            className="h-2.5 w-2.5 rounded-full shrink-0 ring-1 ring-border/50"
-	                            style={{ backgroundColor: projectColor }}
-	                        />
 	                        <h1 className="text-base md:text-lg font-semibold truncate">{project.name}</h1>
 	                        {canManagePushes && view === 'kanban' && (
 	                            <Button
 	                                variant="outline"
                                 size="sm"
-                                className="h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)]"
+                                className="h-7 px-2 md:px-3 shrink-0 border-[color:var(--push-btn-border)] bg-[color:var(--push-btn-bg)] hover:bg-[color:var(--push-btn-bg-hover)] hover:border-[color:var(--push-btn-border-hover)] animate-fade-in-up"
                                 style={{
                                     ["--push-btn-bg" as any]: hexToRgba(projectColor, 0.10),
                                     ["--push-btn-bg-hover" as any]: hexToRgba(projectColor, 0.16),

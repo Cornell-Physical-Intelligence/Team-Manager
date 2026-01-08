@@ -46,15 +46,30 @@ export async function POST(
         }
 
         // File type validation - allow common file types
-        const ALLOWED_TYPES = [
+        // Check by MIME type prefix OR by file extension for better compatibility
+        const ALLOWED_MIME_PREFIXES = [
             'image/', 'video/', 'audio/', 'application/pdf',
             'application/msword', 'application/vnd.openxmlformats',
             'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
             'text/', 'application/zip', 'application/x-zip',
             'application/json', 'application/xml'
         ]
-        const isAllowedType = ALLOWED_TYPES.some(type => file.type.startsWith(type))
-        if (!isAllowedType && file.type !== 'application/octet-stream') {
+        const ALLOWED_EXTENSIONS = [
+            'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico',
+            'mp4', 'webm', 'mov', 'avi', 'mkv',
+            'mp3', 'wav', 'ogg', 'flac',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+            'txt', 'md', 'json', 'xml', 'csv',
+            'zip', 'rar', '7z', 'tar', 'gz'
+        ]
+
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || ''
+        const isAllowedByMime = file.type && ALLOWED_MIME_PREFIXES.some(type => file.type.startsWith(type))
+        const isAllowedByExtension = ALLOWED_EXTENSIONS.includes(fileExtension)
+        const isGenericBinary = !file.type || file.type === 'application/octet-stream'
+
+        // Allow if: valid MIME type OR valid extension OR generic binary with valid extension
+        if (!isAllowedByMime && !isAllowedByExtension && !isGenericBinary) {
             return NextResponse.json({ error: 'File type not allowed' }, { status: 400 })
         }
 
