@@ -1088,8 +1088,8 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {reviewDialog?.isResubmit
-                                ? "This task will be sent back for another review cycle."
-                                : "This task will need approval from an Admin or Team Lead before it can be marked as Done."
+                                ? "Send back for another review cycle."
+                                : "Requires admin approval to mark as Done."
                             }
                         </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -1107,7 +1107,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                     <AlertDialogHeader>
                         <AlertDialogTitle>Move Completed Task?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This task is already marked as Done. Are you sure you want to move it back to {doneMoveDialog?.toColumnName}? This will mark it as incomplete.
+                            Move back to {doneMoveDialog?.toColumnName}?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1124,7 +1124,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Push</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to delete this push? All tasks in this push will be moved to the backlog (unassigned). This action cannot be undone.
+                            Tasks will be moved to backlog.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1144,7 +1144,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                     <AlertDialogHeader>
                         <AlertDialogTitle>File Upload Required</AlertDialogTitle>
                         <AlertDialogDescription>
-                            The task "{attachmentWarningDialog?.taskTitle}" requires a file upload before it can be moved to Review. Please upload a file in the task details first.
+                            Please upload a file before moving to Review.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

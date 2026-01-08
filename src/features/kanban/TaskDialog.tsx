@@ -417,9 +417,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                             <DialogTitle className="text-xl font-semibold tracking-tight">
                                 {task ? "Edit Task" : "Create New Task"}
                             </DialogTitle>
-                            <DialogDescription className="text-muted-foreground mt-1.5">
-                                {task ? "Make changes to the task details below." : "Fill in the details to create a new task."}
-                            </DialogDescription>
                         </DialogHeader>
 
                         <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6">

@@ -29,9 +29,6 @@ export function ProofOfWorkDialog({ open, onOpenChange, onConfirm, onCancel }: P
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Submit Proof of Work</DialogTitle>
-                    <DialogDescription>
-                        Please provide a URL to photos or files showing that you finished the task.
-                    </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">

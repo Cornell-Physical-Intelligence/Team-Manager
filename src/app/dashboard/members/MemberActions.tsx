@@ -72,7 +72,7 @@ export function MemberActions({ userId, isCurrentUser, canRemove }: MemberAction
             variant: "outline" as const,
             title: "Leave Workspace",
             confirmTitle: "Leave Workspace?",
-            confirmDesc: "Are you sure you want to leave this workspace? You will lose access to all projects and tasks."
+            confirmDesc: "You'll lose access to all projects."
         }
         : {
             icon: Trash2,
@@ -80,7 +80,7 @@ export function MemberActions({ userId, isCurrentUser, canRemove }: MemberAction
             variant: "destructive" as const,
             title: "Remove Member",
             confirmTitle: "Remove Member?",
-            confirmDesc: "Are you sure you want to remove this member? They will lose access to the workspace immediately."
+            confirmDesc: "They'll lose workspace access immediately."
         }
 
     const Icon = buttonProps.icon

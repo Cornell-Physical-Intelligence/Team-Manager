@@ -298,7 +298,6 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Create Workspace</DialogTitle>
-                        <DialogDescription>Start a new team workspace. You will be the Admin.</DialogDescription>
                     </DialogHeader>
                     <form action={handleCreate} className="space-y-4 pt-4">
                         <div className="space-y-2">
@@ -321,7 +320,6 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Join Workspace</DialogTitle>
-                        <DialogDescription>Enter the invite code shared with you.</DialogDescription>
                     </DialogHeader>
                     <form action={handleJoin} className="space-y-4 pt-4">
                         <div className="space-y-2">
@@ -344,7 +342,6 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Edit Profile</DialogTitle>
-                        <DialogDescription>Make changes to your profile here. Click save when you're done.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="grid gap-2">
@@ -394,10 +391,6 @@ export function WorkspaceSelector({ user }: { user: any }) {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="text-red-600">Delete Account</DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. This will permanently delete your account and remove your data from our servers.
-                            Your messages and activity logs will be anonymized.
-                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 pt-4">
                         <Label>Type <span className="font-bold text-red-600">DELETE</span> to confirm</Label>

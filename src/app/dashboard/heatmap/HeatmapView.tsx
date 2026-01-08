@@ -207,7 +207,7 @@ export function HeatmapView({
                     <div>
                         <h1 className="text-lg font-semibold flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-primary" />
-                            Team Heatmap
+                            Work Distribution
                         </h1>
                         <p className="text-xs text-muted-foreground mt-0.5">
                             {totalActiveTasks} active tasks across {userStats.length} team members
@@ -262,11 +262,7 @@ export function HeatmapView({
                 )}
 
                 {/* Workload Heatmap Grid */}
-                <div className="border rounded-lg p-4">
-                    <h2 className="text-sm font-medium mb-4 flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        Workload Distribution
-                    </h2>
+                <div className="border rounded-lg p-3">
 
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                         {sortedUsers.map(user => {

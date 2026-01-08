@@ -798,14 +798,9 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                     {isOverdue && <Badge variant="destructive" className="text-[9px] h-4">Overdue</Badge>}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                                <Button variant="ghost" size="icon" onClick={onEdit} className="shrink-0 h-6 w-6 border-0">
-                                    <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="shrink-0 h-6 w-6 border-0">
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
+                            <Button variant="ghost" size="icon" onClick={onEdit} className="shrink-0 h-6 w-6 border-0">
+                                <Pencil className="h-3 w-3" />
+                            </Button>
                         </div>
                     </DialogHeader>
 

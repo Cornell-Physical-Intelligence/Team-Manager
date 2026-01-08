@@ -40,9 +40,6 @@ export function DeleteWorkspace({ workspaceId, workspaceName }: { workspaceId: s
                 <CardTitle className="text-base text-destructive flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4" /> Delete Workspace
                 </CardTitle>
-                <CardDescription className="text-destructive/80">
-                    Irreversible actions for this workspace.
-                </CardDescription>
             </CardHeader>
             <CardContent>
                 <Dialog open={open} onOpenChange={setOpen}>
@@ -55,9 +52,7 @@ export function DeleteWorkspace({ workspaceId, workspaceName }: { workspaceId: s
                         <DialogHeader>
                             <DialogTitle>Delete Workspace</DialogTitle>
                             <DialogDescription>
-                                This action cannot be undone. This will permanently delete the
-                                <span className="font-bold text-foreground"> {workspaceName} </span>
-                                workspace and remove all associated data (projects, tasks, members).
+                                Delete <span className="font-bold text-foreground">{workspaceName}</span> and all its data.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -92,6 +87,6 @@ export function DeleteWorkspace({ workspaceId, workspaceName }: { workspaceId: s
                     </DialogContent>
                 </Dialog>
             </CardContent>
-        </Card>
+        </Card >
     )
 }

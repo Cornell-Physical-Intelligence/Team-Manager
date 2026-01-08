@@ -73,7 +73,6 @@ export function CreateProjectDialog({ users }: Props) {
                 }}>
                     <DialogHeader>
                         <DialogTitle>Create Project</DialogTitle>
-                        <DialogDescription>Add a new project to the workspace.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">

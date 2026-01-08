@@ -59,10 +59,7 @@ export function TeamPopup({ members, totalTasks, children }: TeamPopupProps) {
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="text-base font-medium">
-                        Team Overview
-                        <span className="text-xs font-normal text-muted-foreground ml-2">
-                            {members.length} members · {totalTasks} total tasks
-                        </span>
+                        {members.length} Members · {totalTasks} Tasks
                     </DialogTitle>
                 </DialogHeader>
                 <div className="flex-1 overflow-y-auto -mx-6 px-6">

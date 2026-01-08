@@ -801,12 +801,10 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 }
             }}>
                 <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Delete Project</DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. To confirm, please type the project name: <strong>{deleteConfirm?.name}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
+                    <DialogTitle>Delete Project</DialogTitle>
+                    <DialogDescription>
+                        Type <strong>{deleteConfirm?.name}</strong> to confirm.
+                    </DialogDescription>
                     <div className="py-4">
                         <Input
                             placeholder=""
