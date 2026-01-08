@@ -73,25 +73,32 @@ export function MyTaskCard({ task }: MyTaskCardProps) {
                 className="group cursor-pointer rounded-lg p-3 transition-all border border-border bg-card hover:bg-accent/50"
             >
                 {/* Top row: Title on left, Due time on right */}
-                <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                        {task.title}
-                    </h4>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                            {task.title}
+                        </h4>
+                        {task.description && (
+                            <p className="text-xs text-muted-foreground/70 truncate mt-1">
+                                {task.description}
+                            </p>
+                        )}
+                    </div>
 
                     {dueText && (
                         <span className={`
-                            text-[10px] flex items-center gap-1 shrink-0 mt-0.5
-                            ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : ''}
-                            ${isUrgent && !isOverdue ? 'text-amber-600 dark:text-amber-400' : ''}
+                            text-xs flex items-center gap-1 shrink-0 whitespace-nowrap
+                            ${isOverdue ? 'text-red-500 dark:text-red-400 font-medium' : ''}
+                            ${isUrgent && !isOverdue ? 'text-amber-500 dark:text-amber-400' : ''}
                             ${!isUrgent && !isOverdue ? 'text-muted-foreground' : ''}
                         `}>
-                            <Clock className="h-3 w-3" />
+                            <Clock className="h-3.5 w-3.5" />
                             {dueText}
                         </span>
                     )}
                 </div>
 
-                {/* Project badge underneath title */}
+                {/* Project badge underneath */}
                 {project && (
                     <span
                         className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded truncate max-w-[120px] mt-2"
