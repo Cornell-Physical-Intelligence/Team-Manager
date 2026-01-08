@@ -9,7 +9,6 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
@@ -223,33 +222,25 @@ export function HelpRequest({ taskId, taskTitle, currentUserId, userRole }: Help
             <Button
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950"
+                className="h-6 text-[10px] px-2 border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950"
                 onClick={() => setShowAskDialog(true)}
             >
-                <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
+                <HelpCircle className="h-3 w-3 mr-1" />
                 Ask for Help
             </Button>
 
             <Dialog open={showAskDialog} onOpenChange={setShowAskDialog}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-base">Ask for Help</DialogTitle>
-                        <DialogDescription className="text-xs">
-                            Request help on "{taskTitle}". Your team lead and admins will be notified.
-                        </DialogDescription>
+                        <DialogTitle className="text-sm">Ask for Help</DialogTitle>
                     </DialogHeader>
 
-                    <div className="space-y-3">
-                        <Textarea
-                            placeholder="What do you need help with? (optional)"
-                            value={message}
-                            onChange={(e) => setMessage(e.target.value)}
-                            className="min-h-[80px] text-sm resize-none"
-                        />
-                        <p className="text-[10px] text-muted-foreground">
-                            Your team lead will receive a notification about this request.
-                        </p>
-                    </div>
+                    <Textarea
+                        placeholder="What do you need help with? (optional)"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        className="min-h-[80px] text-sm resize-none"
+                    />
 
                     <DialogFooter className="gap-2 sm:gap-0">
                         <Button
@@ -270,7 +261,7 @@ export function HelpRequest({ taskId, taskTitle, currentUserId, userRole }: Help
                             ) : (
                                 <HelpCircle className="h-3.5 w-3.5 mr-1.5" />
                             )}
-                            Send Request
+                            Send
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -1093,21 +1093,14 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                         <ListChecks className="h-3 w-3" />
                                         Checklist
                                     </span>
+                                    <HelpRequest
+                                        taskId={task.id}
+                                        taskTitle={task.title}
+                                        currentUserId={currentUser?.id}
+                                        userRole={userRole}
+                                    />
                                 </div>
                                 <TaskChecklist taskId={task.id} isEditable={true} />
-                            </div>
-
-                            {/* Help Request Section */}
-                            <div className="border-t pt-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-medium mb-2">Need Help?</span>
-                                </div>
-                                <HelpRequest
-                                    taskId={task.id}
-                                    taskTitle={task.title}
-                                    currentUserId={currentUser?.id}
-                                    userRole={userRole}
-                                />
                             </div>
 
                             {/* Comments Section */}
