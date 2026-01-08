@@ -488,7 +488,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         <Link
                             href="/dashboard"
                             className={cn(
-                                "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:bg-muted hover:translate-x-0.5 text-sm",
+                                "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard" ? "bg-muted font-medium" : "text-muted-foreground"
                             )}
                         >
@@ -500,7 +500,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         <Link
                             href="/dashboard/my-board"
                             className={cn(
-                                "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:bg-muted hover:translate-x-0.5 text-sm",
+                                "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard/my-board" ? "bg-muted font-medium" : "text-muted-foreground"
                             )}
                         >
@@ -511,7 +511,7 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                         {/* Projects Section */}
                         <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen} className="mt-2">
                             <div className="flex items-center">
-                                <CollapsibleTrigger className="flex-1 flex items-center gap-3 rounded-md px-3 py-2 text-muted-foreground hover:bg-muted transition-all hover:translate-x-0.5 text-sm">
+                                <CollapsibleTrigger className="flex-1 flex items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-all hover:translate-x-0.5 text-sm">
                                     <ChevronDown className={cn("h-5 w-5 transition-transform", !projectsOpen && "-rotate-90")} />
                                     <FolderKanban className="h-5 w-5" />
                                     <span>Projects</span>
