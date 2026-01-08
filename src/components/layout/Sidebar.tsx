@@ -272,24 +272,16 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                             className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
                         >
                             {navigatingTo === `/dashboard/projects/${project.id}` ? (
-                                <div className="relative w-4 h-4 flex items-center justify-center">
-                                    {[0, 1, 2].map((i) => (
-                                        <span
-                                            key={i}
-                                            className="absolute w-1 h-1 rounded-full bg-current"
-                                            style={{
-                                                animation: `orbitDot 0.8s ease-in-out infinite`,
-                                                animationDelay: `${i * -0.266}s`,
-                                            }}
-                                        />
-                                    ))}
-                                    <style jsx>{`
-                                        @keyframes orbitDot {
-                                            0% { transform: rotate(0deg) translateX(5px); }
-                                            100% { transform: rotate(360deg) translateX(5px); }
-                                        }
-                                    `}</style>
-                                </div>
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    className="animate-[spin_1.2s_linear_infinite]"
+                                >
+                                    <circle cx="12" cy="4" r="2" fill="currentColor" opacity="1" />
+                                    <circle cx="18.93" cy="16" r="2" fill="currentColor" opacity="0.6" />
+                                    <circle cx="5.07" cy="16" r="2" fill="currentColor" opacity="0.3" />
+                                </svg>
                             ) : (
                                 <MoreHorizontal className="h-4 w-4" />
                             )}
