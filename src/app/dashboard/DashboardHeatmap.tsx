@@ -262,30 +262,31 @@ function UserKanbanDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogContent className="max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
                 <DialogHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                         <DialogTitle className="text-sm flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">
                                 {user.name.charAt(0).toUpperCase()}
                             </div>
-                            {user.name}'s Board
+                            <span className="truncate">{user.name}'s Board</span>
                         </DialogTitle>
                         {unassignedTasks.length > 0 && (
                             <Button
                                 size="sm"
                                 onClick={onAssignClick}
-                                className="h-7 text-xs"
+                                className="h-7 text-xs shrink-0"
                             >
                                 <Plus className="h-3 w-3 mr-1" />
-                                Assign Task
+                                <span className="hidden sm:inline">Assign Task</span>
+                                <span className="sm:hidden">Assign</span>
                             </Button>
                         )}
                     </div>
                 </DialogHeader>
 
                 {/* Stats row */}
-                <div className="flex items-center gap-4 py-2 text-[10px] text-muted-foreground border-b">
+                <div className="flex items-center gap-2 sm:gap-4 py-2 text-[10px] text-muted-foreground border-b flex-wrap">
                     <span>{user.activeTasks} active</span>
                     {user.overdueTasks > 0 && (
                         <span className="text-red-500">{user.overdueTasks} overdue</span>
@@ -301,7 +302,7 @@ function UserKanbanDialog({
 
                 {/* Mini Kanban Grid */}
                 <div className="flex-1 overflow-auto py-3">
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <MiniKanbanColumn
                             name="To Do"
                             tasks={todoTasks}

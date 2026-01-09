@@ -42,7 +42,7 @@ export default async function DashboardLayout({
                                 </Button>
                             </SheetTrigger>
                             <SheetContent side="left" className="p-0 w-64">
-                                <Sidebar initialUserData={{ id: user.id, name: user.name, role: user.role, workspaceName: user.workspaceName, avatar: user.avatar }} />
+                                <Sidebar initialUserData={{ id: user.id, name: user.name, role: user.role, workspaceName: user.workspaceName, avatar: user.avatar }} isMobileSheet />
                             </SheetContent>
                         </Sheet>
                         <span className="text-sm font-semibold">{user.workspaceName}</span>

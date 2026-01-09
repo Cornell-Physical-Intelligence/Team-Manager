@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Plus, Users, Building2, Loader2, ArrowRight, FolderKanban, CheckCircle, Info, LogOut, Settings, User as UserIcon, X } from "lucide-react"
+import { Plus, Users, Building2, Loader2, ArrowRight, FolderKanban, Check, CheckCircle, Info, LogOut, Settings, User as UserIcon, X } from "lucide-react"
 import { createWorkspace, joinWorkspace, switchWorkspace } from "@/app/actions/setup"
 import { updateDisplayName, deleteAccount, updateUserDeepDetails } from "@/app/actions/user-settings"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
@@ -35,6 +35,14 @@ export function WorkspaceSelector({ user }: { user: any }) {
     // Delete Account State
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
     const [deleteConfirmation, setDeleteConfirmation] = useState("")
+
+    // Theme State
+    const [theme, setTheme] = useState<'light' | 'dark'>('light')
+
+    // Initialize theme from DOM on mount
+    useEffect(() => {
+        setTheme(document.documentElement.classList.contains('dark') ? 'dark' : 'light')
+    }, [])
 
     // Custom notification state
     const [notification, setNotification] = useState<{
@@ -194,22 +202,22 @@ export function WorkspaceSelector({ user }: { user: any }) {
                                 <DropdownMenuItem onClick={() => {
                                     document.documentElement.classList.remove('dark')
                                     document.documentElement.style.colorScheme = 'light'
-                                    // Save to both global and user-specific keys for sync
                                     localStorage.setItem('cupi_theme', 'light')
                                     if (user.id) localStorage.setItem(`cupi_theme:${user.id}`, 'light')
+                                    setTheme('light')
                                 }}>
                                     Light
-                                    {(!document.documentElement.classList.contains('dark')) && <CheckCircle className="w-3 h-3 ml-auto opacity-50" />}
+                                    {theme === 'light' && <Check className="w-4 h-4 ml-auto" />}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => {
                                     document.documentElement.classList.add('dark')
                                     document.documentElement.style.colorScheme = 'dark'
-                                    // Save to both global and user-specific keys for sync
                                     localStorage.setItem('cupi_theme', 'dark')
                                     if (user.id) localStorage.setItem(`cupi_theme:${user.id}`, 'dark')
+                                    setTheme('dark')
                                 }}>
                                     Dark
-                                    {(document.documentElement.classList.contains('dark')) && <CheckCircle className="w-3 h-3 ml-auto opacity-50" />}
+                                    {theme === 'dark' && <Check className="w-4 h-4 ml-auto" />}
                                 </DropdownMenuItem>
 
                                 <DropdownMenuSeparator />

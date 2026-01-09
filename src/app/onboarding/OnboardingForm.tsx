@@ -110,12 +110,12 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
 
             {/* Progress Indicator */}
-            <div className="flex gap-2 mb-6 justify-center">
+            <div className="flex gap-2 mb-4 sm:mb-6 justify-center">
                 {[1, 2, 3].map(i => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full bg-muted overflow-hidden`}>
+                    <div key={i} className={`h-1 sm:h-1.5 flex-1 rounded-full bg-muted overflow-hidden`}>
                         <div className={`h-full bg-primary transition-all duration-500 ease-out ${i <= step ? 'w-full' : 'w-0'}`} />
                     </div>
                 ))}
@@ -190,7 +190,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
             <Button
                 type="button"
                 onClick={step === 3 ? handleSubmit : handleNext}
-                className="w-full h-11 text-base font-medium shadow-sm transition-all hover:translate-y-[-1px]"
+                className="w-full h-10 sm:h-11 text-sm sm:text-base font-medium shadow-sm transition-all hover:translate-y-[-1px]"
                 disabled={isSubmitting}
             >
                 {isSubmitting ? (

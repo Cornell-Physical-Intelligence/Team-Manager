@@ -110,7 +110,7 @@ const PROJECT_COLOR_OPTIONS = [
     "#ec4899", // pink
 ] as const
 
-export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserData> } = {}) {
+export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUserData?: Partial<UserData>; isMobileSheet?: boolean } = {}) {
     const pathname = usePathname()
     const router = useRouter()
     const [userData, setUserData] = React.useState<UserData>(() => ({
@@ -475,34 +475,36 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                 <h1 className="text-sm font-semibold truncate pl-4 pr-12 w-full min-w-0">
                     {userData.workspaceName ?? ""}
                 </h1>
-                <button
-                    type="button"
-                    className={cn(
-                        "absolute right-1 top-1 h-8 w-8 flex items-center justify-center rounded-md focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none transition-colors",
-                        pathname === '/dashboard/settings' ? "bg-muted" : "hover:bg-muted/50"
-                    )}
-                    aria-label="Workspace settings"
-                    title="Settings"
-                    onClick={(e) => {
-                        e.preventDefault()
-                        setSettingsSpinNonce((n) => n + 1)
-                        if (pathname === '/dashboard/settings') {
-                            // Toggle back to previous page
-                            router.push(previousPathRef.current)
-                        } else {
-                            router.push('/dashboard/settings')
-                        }
-                    }}
-                >
-                    <Settings
-                        key={settingsSpinNonce}
+                {!isMobileSheet && (
+                    <button
+                        type="button"
                         className={cn(
-                            "h-4 w-4 transition-colors",
-                            pathname === '/dashboard/settings' ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-                            settingsSpinNonce > 0 && "motion-safe:animate-[cupi-gear-impulse_1200ms_ease-out_both]"
+                            "absolute right-1 top-1 h-8 w-8 flex items-center justify-center rounded-md focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none transition-colors",
+                            pathname === '/dashboard/settings' ? "bg-muted" : "hover:bg-muted/50"
                         )}
-                    />
-                </button>
+                        aria-label="Workspace settings"
+                        title="Settings"
+                        onClick={(e) => {
+                            e.preventDefault()
+                            setSettingsSpinNonce((n) => n + 1)
+                            if (pathname === '/dashboard/settings') {
+                                // Toggle back to previous page
+                                router.push(previousPathRef.current)
+                            } else {
+                                router.push('/dashboard/settings')
+                            }
+                        }}
+                    >
+                        <Settings
+                            key={settingsSpinNonce}
+                            className={cn(
+                                "h-4 w-4 transition-colors",
+                                pathname === '/dashboard/settings' ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                                settingsSpinNonce > 0 && "motion-safe:animate-[cupi-gear-impulse_1200ms_ease-out_both]"
+                            )}
+                        />
+                    </button>
+                )}
             </div>
 
             <div className={cn(
@@ -575,7 +577,21 @@ export function Sidebar({ initialUserData }: { initialUserData?: Partial<UserDat
                             </CollapsibleContent>
                         </Collapsible>
 
-                        {/* Other Nav Items */}
+                        {/* Settings Link (Mobile only) */}
+                        {isMobileSheet && (
+                            <Link
+                                href="/dashboard/settings"
+                                onClick={() => pathname !== "/dashboard/settings" && setNavigatingTo("/dashboard/settings")}
+                                className={cn(
+                                    "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm mt-2",
+                                    pathname === "/dashboard/settings" ? "bg-muted font-medium" : "text-muted-foreground"
+                                )}
+                            >
+                                <Settings className="h-5 w-5" />
+                                Settings
+                                {navigatingTo === "/dashboard/settings" && <Loader2 className="h-4 w-4 ml-auto animate-spin" />}
+                            </Link>
+                        )}
                     </nav>
                 </ScrollArea>
             </div>
