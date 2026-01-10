@@ -169,27 +169,42 @@
 @keyframes highlight-bulge {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
   }
 
-  15% {
-    transform: scale(1.03);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  10% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5), 0 8px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  20% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.4), 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  35% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.35), 0 6px 25px rgba(0, 0, 0, 0.18);
   }
 
   50% {
+    transform: scale(0.98);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25), 0 4px 16px rgba(0, 0, 0, 0.1);
+  }
+
+  65% {
     transform: scale(1.02);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15), 0 2px 10px rgba(0, 0, 0, 0.08);
   }
 
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
   }
 }
 
 .animate-highlight-bulge {
-  animation: highlight-bulge 1.5s ease-out forwards;
+  animation: highlight-bulge 1s ease-out forwards;
 }
 
 @keyframes cupi-gear-impulse {

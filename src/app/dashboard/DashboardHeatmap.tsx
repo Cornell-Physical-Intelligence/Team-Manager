@@ -274,20 +274,20 @@ function UserDetailDialog({
                     </div>
 
                     {/* Quick stats */}
-                    <div className="grid grid-cols-4 gap-3 mt-4">
-                        <div className="bg-background rounded-lg p-3 border">
+                    <div className="flex items-center gap-6 mt-4">
+                        <div>
                             <p className="text-2xl font-bold">{user.activeTasks}</p>
-                            <p className="text-[10px] text-muted-foreground">Active Tasks</p>
+                            <p className="text-[10px] text-muted-foreground">Active</p>
                         </div>
-                        <div className="bg-background rounded-lg p-3 border">
+                        <div>
                             <p className="text-2xl font-bold">{doneTasks.length}</p>
                             <p className="text-[10px] text-muted-foreground">Completed</p>
                         </div>
-                        <div className="bg-background rounded-lg p-3 border">
+                        <div>
                             <p className="text-2xl font-bold">{completionRate}%</p>
-                            <p className="text-[10px] text-muted-foreground">Completion Rate</p>
+                            <p className="text-[10px] text-muted-foreground">Rate</p>
                         </div>
-                        <div className="bg-background rounded-lg p-3 border">
+                        <div>
                             {user.overdueTasks > 0 ? (
                                 <>
                                     <p className="text-2xl font-bold">{user.overdueTasks}</p>
