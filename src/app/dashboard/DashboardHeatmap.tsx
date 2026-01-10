@@ -72,36 +72,30 @@ type WorkloadHistory = {
     approved: number
 }
 
-// Stacked task cards visual indicator - subtle count display
+// Stacked task cards visual indicator
 function TaskStack({ count }: { count: number }) {
     if (count === 0) {
         return (
             <div className="h-4 flex items-center">
-                <span className="text-[9px] text-muted-foreground/50">—</span>
+                <span className="text-[8px] text-muted-foreground">No tasks</span>
             </div>
         )
     }
 
-    const displayCount = Math.min(count, 6)
+    const displayCount = Math.min(count, 8)
 
     return (
         <div className="relative h-4 flex items-center">
             {Array.from({ length: displayCount }).map((_, idx) => (
                 <div
                     key={idx}
-                    className="absolute h-3 w-4 rounded-sm bg-muted-foreground/20 border border-muted-foreground/10"
+                    className="absolute h-3 w-5 rounded bg-muted-foreground/30"
                     style={{
-                        left: `${idx * 6}px`,
+                        left: `${idx * 5}px`,
                         zIndex: displayCount - idx
                     }}
                 />
             ))}
-            <span
-                className="text-[9px] font-medium text-muted-foreground ml-1"
-                style={{ marginLeft: `${displayCount * 6 + 4}px` }}
-            >
-                {count}
-            </span>
         </div>
     )
 }
