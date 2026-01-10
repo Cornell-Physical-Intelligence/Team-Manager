@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
-    AlertTriangle, Clock, HelpCircle, UserX, ChevronRight, Loader2,
-    Users, Zap, Target, CheckCircle2, BarChart3, ChevronDown, Plus
+    ChevronRight, Loader2, Plus, UserX, TrendingUp, TrendingDown,
+    Calendar, Clock, CheckCircle2, AlertCircle, HelpCircle, X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -66,185 +66,192 @@ type DashboardHeatmapProps = {
     allTasks: Task[]
 }
 
-function getWorkloadColor(score: number, maxScore: number): string {
-    const ratio = score / Math.max(maxScore, 1)
-    if (ratio < 0.3) return 'bg-green-50/70 dark:bg-green-900/15'
-    if (ratio < 0.5) return 'bg-green-100/60 dark:bg-green-800/20'
-    if (ratio < 0.7) return 'bg-yellow-50/70 dark:bg-yellow-900/15'
-    if (ratio < 0.85) return 'bg-orange-50/70 dark:bg-orange-900/15'
-    return 'bg-red-50/70 dark:bg-red-900/15'
+type WorkloadHistory = {
+    date: string
+    submitted: number
+    approved: number
 }
 
-function TaskListDialog({
-    open,
-    onOpenChange,
-    title,
-    tasks
-}: {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    title: string
-    tasks: Task[]
-}) {
-    const router = useRouter()
-    const [navigating, setNavigating] = useState<string | null>(null)
+// Stacked task cards visual indicator
+function TaskStack({ tasks, maxVisible = 5 }: { tasks: Task[], maxVisible?: number }) {
+    const activeTasks = tasks.filter(t => t.columnName !== 'Done')
+    const displayTasks = activeTasks.slice(0, maxVisible)
+    const overflow = activeTasks.length - maxVisible
 
-    const handleClick = (task: Task) => {
-        setNavigating(task.id)
-        let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
-        if (task.pushId) url += `&push=${task.pushId}`
-        router.push(url)
+    if (activeTasks.length === 0) {
+        return (
+            <div className="h-8 flex items-center justify-center">
+                <span className="text-[9px] text-muted-foreground italic">No active tasks</span>
+            </div>
+        )
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[70vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                    <DialogTitle className="text-sm">{title}</DialogTitle>
-                </DialogHeader>
-                <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-1">
-                    {tasks.map(task => (
-                        <button
-                            key={task.id}
-                            onClick={() => handleClick(task)}
-                            disabled={navigating === task.id}
-                            className="w-full flex items-center justify-between p-2 rounded-md border hover:bg-muted/50 transition-colors text-left"
-                        >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span
-                                    className="w-2 h-2 rounded-full shrink-0"
-                                    style={{ backgroundColor: task.projectColor }}
-                                />
-                                <span className="text-xs truncate">{task.title}</span>
-                                <span className="text-[9px] text-muted-foreground shrink-0">
-                                    {task.columnName}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                                {task.isOverdue && (
-                                    <span className="text-[9px] text-red-500">Overdue</span>
-                                )}
-                                {task.isStuck && (
-                                    <span className="text-[9px] text-amber-500">Stuck</span>
-                                )}
-                                {task.isBlockedByHelp && (
-                                    <HelpCircle className="h-3 w-3 text-amber-500" />
-                                )}
-                                {navigating === task.id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                                ) : (
-                                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                                )}
-                            </div>
-                        </button>
-                    ))}
-                    {tasks.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-4">No tasks</p>
-                    )}
-                </div>
-            </DialogContent>
-        </Dialog>
-    )
-}
+        <div className="relative h-8 flex items-end">
+            {displayTasks.map((task, idx) => {
+                const columnColors: Record<string, string> = {
+                    'To Do': 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600',
+                    'In Progress': 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
+                    'Review': 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
+                }
+                const colorClass = columnColors[task.columnName] || 'bg-muted border-border'
 
-// Mini Kanban Column for user view
-function MiniKanbanColumn({
-    name,
-    tasks,
-    onTaskClick,
-    maxVisible = 3
-}: {
-    name: string
-    tasks: Task[]
-    onTaskClick: (task: Task) => void
-    maxVisible?: number
-}) {
-    const [isExpanded, setIsExpanded] = useState(false)
-    const isDone = name === 'Done'
-    const shouldCollapse = tasks.length > maxVisible
-    const visibleTasks = isExpanded ? tasks : tasks.slice(0, maxVisible)
-    const hiddenCount = tasks.length - maxVisible
-
-    return (
-        <div className={cn(
-            "flex-1 min-w-0 rounded-md border p-2",
-            isDone ? "bg-green-50/50 dark:bg-green-950/20" : "bg-muted/30"
-        )}>
-            <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-medium">{name}</span>
-                <span className={cn(
-                    "text-[9px] px-1 py-0.5 rounded",
-                    isDone ? "bg-green-100 text-green-700 dark:bg-green-900/50" : "bg-muted text-muted-foreground"
-                )}>
-                    {tasks.length}
-                </span>
-            </div>
-            <div className="space-y-1">
-                {visibleTasks.map(task => (
-                    <button
+                return (
+                    <div
                         key={task.id}
-                        onClick={() => onTaskClick(task)}
                         className={cn(
-                            "w-full text-left p-1.5 rounded text-[10px] border transition-colors",
-                            isDone
-                                ? "bg-green-50 border-green-200 hover:bg-green-100 dark:bg-green-950/30 dark:border-green-900/50"
-                                : "bg-background hover:bg-muted/50"
+                            "absolute bottom-0 h-6 rounded border shadow-sm transition-transform hover:translate-y-[-2px]",
+                            colorClass,
+                            task.isOverdue && "ring-1 ring-red-400"
                         )}
+                        style={{
+                            left: `${idx * 14}px`,
+                            width: '32px',
+                            zIndex: maxVisible - idx
+                        }}
+                        title={task.title}
                     >
-                        <div className="flex items-center gap-1.5">
-                            <span
-                                className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: task.projectColor }}
-                            />
-                            <span className="truncate">{task.title}</span>
-                            {task.isOverdue && !isDone && (
-                                <span className="text-[8px] text-red-500 shrink-0">!</span>
-                            )}
-                        </div>
-                    </button>
-                ))}
-                {shouldCollapse && (
-                    <button
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className="w-full flex items-center justify-center gap-1 py-1 text-[9px] text-muted-foreground hover:text-foreground"
-                    >
-                        {isExpanded ? (
-                            <>Show less</>
-                        ) : (
-                            <>
-                                <span className="flex gap-0.5">
-                                    <span className="w-1 h-1 rounded-full bg-current opacity-50" />
-                                    <span className="w-1 h-1 rounded-full bg-current opacity-50" />
-                                    <span className="w-1 h-1 rounded-full bg-current opacity-50" />
-                                </span>
-                                +{hiddenCount}
-                            </>
-                        )}
-                    </button>
-                )}
-                {tasks.length === 0 && (
-                    <p className="text-[9px] text-muted-foreground text-center py-2">—</p>
-                )}
-            </div>
+                        <div
+                            className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: task.projectColor }}
+                        />
+                    </div>
+                )
+            })}
+            {overflow > 0 && (
+                <div
+                    className="absolute bottom-0 h-6 w-8 rounded border bg-muted/80 border-border flex items-center justify-center"
+                    style={{
+                        left: `${displayTasks.length * 14}px`,
+                        zIndex: 0
+                    }}
+                >
+                    <span className="text-[8px] font-medium text-muted-foreground">+{overflow}</span>
+                </div>
+            )}
         </div>
     )
 }
 
-// User Kanban Dialog - shows mini kanban + assign button
-function UserKanbanDialog({
+// Workload history sparkline chart
+function WorkloadSparkline({ history }: { history: WorkloadHistory[] }) {
+    if (history.length === 0) {
+        return (
+            <div className="h-12 flex items-center justify-center text-[9px] text-muted-foreground/60 italic">
+                No activity data yet
+            </div>
+        )
+    }
+
+    const width = 200
+    const height = 40
+    const padding = { top: 4, right: 4, bottom: 12, left: 4 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+
+    // Calculate cumulative values
+    let cumSubmitted = 0
+    let cumApproved = 0
+    const data = history.map(h => {
+        cumSubmitted += h.submitted
+        cumApproved += h.approved
+        return {
+            date: new Date(h.date),
+            submitted: cumSubmitted,
+            approved: cumApproved
+        }
+    })
+
+    const maxValue = Math.max(...data.map(d => Math.max(d.submitted, d.approved)), 1)
+    const minDate = data[0].date.getTime()
+    const maxDate = data[data.length - 1].date.getTime()
+    const dateRange = maxDate - minDate || 1
+
+    const getX = (date: Date) => padding.left + ((date.getTime() - minDate) / dateRange) * chartWidth
+    const getY = (value: number) => padding.top + chartHeight - (value / maxValue) * chartHeight
+
+    // Build paths
+    let submittedPath = `M ${getX(data[0].date)} ${getY(data[0].submitted)}`
+    let approvedPath = `M ${getX(data[0].date)} ${getY(data[0].approved)}`
+
+    data.slice(1).forEach(d => {
+        submittedPath += ` L ${getX(d.date)} ${getY(d.submitted)}`
+        approvedPath += ` L ${getX(d.date)} ${getY(d.approved)}`
+    })
+
+    return (
+        <svg width={width} height={height} className="overflow-visible">
+            {/* Submitted line */}
+            <path
+                d={submittedPath}
+                fill="none"
+                className="stroke-blue-400"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+            />
+            {/* Approved line */}
+            <path
+                d={approvedPath}
+                fill="none"
+                className="stroke-emerald-400"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+            />
+            {/* End points */}
+            <circle cx={getX(data[data.length - 1].date)} cy={getY(data[data.length - 1].submitted)} r={2} className="fill-blue-500" />
+            <circle cx={getX(data[data.length - 1].date)} cy={getY(data[data.length - 1].approved)} r={2} className="fill-emerald-500" />
+
+            {/* Labels */}
+            <text x={width - padding.right} y={getY(data[data.length - 1].submitted) - 3} className="text-[7px] fill-blue-500" textAnchor="end">
+                {data[data.length - 1].submitted}
+            </text>
+            <text x={width - padding.right} y={getY(data[data.length - 1].approved) + 8} className="text-[7px] fill-emerald-500" textAnchor="end">
+                {data[data.length - 1].approved}
+            </text>
+        </svg>
+    )
+}
+
+// Detailed user profile dialog
+function UserDetailDialog({
     open,
     onOpenChange,
     user,
     unassignedTasks,
-    onAssignClick
+    onAssignClick,
+    onAssignTasks
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     user: UserStat | null
     unassignedTasks: Task[]
     onAssignClick: () => void
+    onAssignTasks: (taskIds: string[], userId: string) => Promise<void>
 }) {
     const router = useRouter()
+    const [workloadHistory, setWorkloadHistory] = useState<WorkloadHistory[]>([])
+    const [loadingHistory, setLoadingHistory] = useState(false)
+
+    useEffect(() => {
+        if (open && user) {
+            fetchWorkloadHistory(user.id)
+        }
+    }, [open, user])
+
+    const fetchWorkloadHistory = async (userId: string) => {
+        setLoadingHistory(true)
+        try {
+            const res = await fetch(`/api/users/${userId}/workload-history`)
+            if (res.ok) {
+                const data = await res.json()
+                setWorkloadHistory(data.history || [])
+            }
+        } catch (error) {
+            console.error('Failed to fetch workload history:', error)
+        } finally {
+            setLoadingHistory(false)
+        }
+    }
 
     if (!user) return null
 
@@ -252,89 +259,240 @@ function UserKanbanDialog({
         let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
         if (task.pushId) url += `&push=${task.pushId}`
         router.push(url)
+        onOpenChange(false)
     }
 
-    // Group tasks by column
+    // Group tasks by status
     const todoTasks = user.tasks.filter(t => t.columnName === 'To Do')
     const inProgressTasks = user.tasks.filter(t => t.columnName === 'In Progress')
     const reviewTasks = user.tasks.filter(t => t.columnName === 'Review')
     const doneTasks = user.tasks.filter(t => t.columnName === 'Done')
 
+    // Calculate stats
+    const completionRate = user.tasks.length > 0
+        ? Math.round((doneTasks.length / user.tasks.length) * 100)
+        : 0
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                    <div className="flex items-center justify-between gap-2">
-                        <DialogTitle className="text-sm flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">
-                                {user.name.charAt(0).toUpperCase()}
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+                {/* Header */}
+                <div className="p-6 pb-4 border-b bg-muted/30">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            {user.avatar ? (
+                                <img
+                                    src={user.avatar}
+                                    alt={user.name}
+                                    className="w-14 h-14 rounded-full border-2 border-background shadow-md"
+                                />
+                            ) : (
+                                <div className="w-14 h-14 rounded-full bg-primary/10 border-2 border-background shadow-md flex items-center justify-center text-xl font-bold text-primary">
+                                    {user.name.charAt(0).toUpperCase()}
+                                </div>
+                            )}
+                            <div>
+                                <h2 className="text-lg font-semibold">{user.name}</h2>
+                                <p className="text-sm text-muted-foreground">{user.role}</p>
                             </div>
-                            <span className="truncate">{user.name}'s Board</span>
-                        </DialogTitle>
+                        </div>
                         {unassignedTasks.length > 0 && (
-                            <Button
-                                size="sm"
-                                onClick={onAssignClick}
-                                className="h-7 text-xs shrink-0"
-                            >
-                                <Plus className="h-3 w-3 mr-1" />
-                                <span className="hidden sm:inline">Assign Task</span>
-                                <span className="sm:hidden">Assign</span>
+                            <Button size="sm" onClick={onAssignClick}>
+                                <Plus className="h-4 w-4 mr-1.5" />
+                                Assign Task
                             </Button>
                         )}
                     </div>
-                </DialogHeader>
 
-                {/* Stats row */}
-                <div className="flex items-center gap-2 sm:gap-4 py-2 text-[10px] text-muted-foreground border-b flex-wrap">
-                    <span>{user.activeTasks} active</span>
-                    {user.overdueTasks > 0 && (
-                        <span className="text-red-500">{user.overdueTasks} overdue</span>
-                    )}
-                    {user.stuckTasks > 0 && (
-                        <span className="text-amber-500">{user.stuckTasks} stuck</span>
-                    )}
-                    {user.helpRequestTasks > 0 && (
-                        <span className="text-amber-500">{user.helpRequestTasks} need help</span>
-                    )}
-                    <span className="text-green-600">{user.doneTasks} done</span>
-                </div>
-
-                {/* Mini Kanban Grid */}
-                <div className="flex-1 overflow-auto py-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <MiniKanbanColumn
-                            name="To Do"
-                            tasks={todoTasks}
-                            onTaskClick={handleTaskClick}
-                            maxVisible={4}
-                        />
-                        <MiniKanbanColumn
-                            name="In Progress"
-                            tasks={inProgressTasks}
-                            onTaskClick={handleTaskClick}
-                            maxVisible={4}
-                        />
-                        <MiniKanbanColumn
-                            name="Review"
-                            tasks={reviewTasks}
-                            onTaskClick={handleTaskClick}
-                            maxVisible={4}
-                        />
-                        <MiniKanbanColumn
-                            name="Done"
-                            tasks={doneTasks}
-                            onTaskClick={handleTaskClick}
-                            maxVisible={2}
-                        />
+                    {/* Quick stats */}
+                    <div className="grid grid-cols-4 gap-3 mt-4">
+                        <div className="bg-background rounded-lg p-3 border">
+                            <p className="text-2xl font-bold">{user.activeTasks}</p>
+                            <p className="text-[10px] text-muted-foreground">Active Tasks</p>
+                        </div>
+                        <div className="bg-background rounded-lg p-3 border">
+                            <p className="text-2xl font-bold text-emerald-600">{doneTasks.length}</p>
+                            <p className="text-[10px] text-muted-foreground">Completed</p>
+                        </div>
+                        <div className="bg-background rounded-lg p-3 border">
+                            <p className="text-2xl font-bold">{completionRate}%</p>
+                            <p className="text-[10px] text-muted-foreground">Completion Rate</p>
+                        </div>
+                        <div className="bg-background rounded-lg p-3 border">
+                            {user.overdueTasks > 0 ? (
+                                <>
+                                    <p className="text-2xl font-bold text-red-500">{user.overdueTasks}</p>
+                                    <p className="text-[10px] text-muted-foreground">Overdue</p>
+                                </>
+                            ) : user.stuckTasks > 0 ? (
+                                <>
+                                    <p className="text-2xl font-bold text-amber-500">{user.stuckTasks}</p>
+                                    <p className="text-[10px] text-muted-foreground">Stuck</p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-2xl font-bold text-emerald-500">✓</p>
+                                    <p className="text-[10px] text-muted-foreground">On Track</p>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
 
+                {/* Content */}
+                <div className="flex-1 overflow-auto p-6">
+                    {/* Workload History */}
+                    <div className="mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-medium">Activity Over Time</h3>
+                            <div className="flex items-center gap-3 text-[9px]">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-blue-400" />
+                                    Submitted
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                    Approved
+                                </span>
+                            </div>
+                        </div>
+                        <div className="bg-muted/30 rounded-lg p-4 border">
+                            {loadingHistory ? (
+                                <div className="h-12 flex items-center justify-center">
+                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : (
+                                <WorkloadSparkline history={workloadHistory} />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Tasks by Column */}
+                    <h3 className="text-sm font-medium mb-3">Current Tasks</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* To Do */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 flex items-center justify-between">
+                                <span className="text-xs font-medium">To Do</span>
+                                <span className="text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{todoTasks.length}</span>
+                            </div>
+                            <div className="max-h-40 overflow-auto">
+                                {todoTasks.length > 0 ? todoTasks.map(task => (
+                                    <button
+                                        key={task.id}
+                                        onClick={() => handleTaskClick(task)}
+                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
+                                            </div>
+                                            {task.isOverdue && <AlertCircle className="h-3 w-3 text-red-500 shrink-0" />}
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* In Progress */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-amber-100 dark:bg-amber-900/30 px-3 py-2 flex items-center justify-between">
+                                <span className="text-xs font-medium">In Progress</span>
+                                <span className="text-[10px] bg-amber-200 dark:bg-amber-800/50 px-1.5 py-0.5 rounded">{inProgressTasks.length}</span>
+                            </div>
+                            <div className="max-h-40 overflow-auto">
+                                {inProgressTasks.length > 0 ? inProgressTasks.map(task => (
+                                    <button
+                                        key={task.id}
+                                        onClick={() => handleTaskClick(task)}
+                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
+                                            </div>
+                                            {task.isStuck && <Clock className="h-3 w-3 text-amber-500 shrink-0" />}
+                                            {task.isBlockedByHelp && <HelpCircle className="h-3 w-3 text-amber-500 shrink-0" />}
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Review */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-2 flex items-center justify-between">
+                                <span className="text-xs font-medium">In Review</span>
+                                <span className="text-[10px] bg-blue-200 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{reviewTasks.length}</span>
+                            </div>
+                            <div className="max-h-40 overflow-auto">
+                                {reviewTasks.length > 0 ? reviewTasks.map(task => (
+                                    <button
+                                        key={task.id}
+                                        onClick={() => handleTaskClick(task)}
+                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
+                                            </div>
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Done */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <div className="bg-emerald-100 dark:bg-emerald-900/30 px-3 py-2 flex items-center justify-between">
+                                <span className="text-xs font-medium">Done</span>
+                                <span className="text-[10px] bg-emerald-200 dark:bg-emerald-800/50 px-1.5 py-0.5 rounded">{doneTasks.length}</span>
+                            </div>
+                            <div className="max-h-40 overflow-auto">
+                                {doneTasks.length > 0 ? doneTasks.slice(0, 5).map(task => (
+                                    <button
+                                        key={task.id}
+                                        onClick={() => handleTaskClick(task)}
+                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-medium leading-tight line-through opacity-60">{task.title}</p>
+                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
+                                            </div>
+                                        </div>
+                                    </button>
+                                )) : (
+                                    <p className="text-[10px] text-muted-foreground text-center py-4">No completed tasks</p>
+                                )}
+                                {doneTasks.length > 5 && (
+                                    <p className="text-[9px] text-muted-foreground text-center py-2 border-t">
+                                        +{doneTasks.length - 5} more completed
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </DialogContent>
         </Dialog>
     )
 }
 
+// Assign tasks dialog
 function AssignTasksDialog({
     open,
     onOpenChange,
@@ -383,8 +541,7 @@ function AssignTasksDialog({
 
                 <div className="py-2">
                     <p className="text-xs text-muted-foreground mb-3">
-                        Select unassigned tasks to assign to {user.name.split(' ')[0]}.
-                        Current workload: {user.activeTasks} active tasks.
+                        Select tasks to assign. Current workload: {user.activeTasks} active tasks.
                     </p>
 
                     <div className="flex-1 overflow-y-auto max-h-[40vh] space-y-1 border rounded-md p-2">
@@ -451,19 +608,14 @@ export function DashboardHeatmap({
     allTasks
 }: DashboardHeatmapProps) {
     const router = useRouter()
-    const [selectedIssue, setSelectedIssue] = useState<CriticalIssue | null>(null)
     const [selectedUser, setSelectedUser] = useState<UserStat | null>(null)
     const [assigningToUser, setAssigningToUser] = useState<UserStat | null>(null)
-    const [showAllMembers, setShowAllMembers] = useState(false)
 
-    const maxWorkload = Math.max(...userStats.map(u => u.workloadScore), 1)
     const totalActiveTasks = allTasks.filter(t => t.columnName !== 'Done').length
-
-    // Sort users by workload
-    const sortedUsers = [...userStats].sort((a, b) => b.workloadScore - a.workloadScore)
-    const displayedUsers = showAllMembers ? sortedUsers : sortedUsers.slice(0, 8)
-
     const unassignedTasks = allTasks.filter(t => t.isUnassigned)
+
+    // Sort users by workload (most active first)
+    const sortedUsers = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
 
     const handleAssignTasks = async (taskIds: string[], userId: string) => {
         const errors: string[] = []
@@ -487,78 +639,64 @@ export function DashboardHeatmap({
         router.refresh()
     }
 
-    if (criticalIssues.length === 0 && userStats.length === 0) {
+    if (userStats.length === 0) {
         return null
     }
 
     return (
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-medium">
-                        Work Distribution
-                    </h2>
-                    {criticalIssues.filter(i => i.type === 'overdue').map((issue, idx) => (
-                        <button
-                            key={`overdue-${idx}`}
-                            onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
-                            className="text-[10px] text-red-600 underline hover:text-red-700"
-                        >
-                            {issue.count} overdue
-                        </button>
-                    ))}
-                    {criticalIssues.filter(i => i.type === 'stuck').map((issue, idx) => (
-                        <button
-                            key={`stuck-${idx}`}
-                            onClick={() => issue.tasks.length > 0 && setSelectedIssue(issue)}
-                            className="text-[10px] text-amber-600 underline hover:text-amber-700"
-                        >
-                            {issue.count} stuck
-                        </button>
-                    ))}
-                </div>
+                <h2 className="text-sm font-medium">Work Distribution</h2>
                 <span className="text-[10px] text-muted-foreground">
-                    {totalActiveTasks} active tasks
+                    {totalActiveTasks} active across {sortedUsers.length} members
                 </span>
             </div>
 
-            {/* Workload Distribution Grid */}
-            <div className="mb-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                    {displayedUsers.map(user => {
-                        const isOverloaded = overloadedUsers.includes(user.id)
-                        const isIdle = idleUsers.includes(user.id)
+            {/* User Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {sortedUsers.map(user => {
+                    const isOverloaded = overloadedUsers.includes(user.id)
+                    const isIdle = idleUsers.includes(user.id)
+                    const hasIssues = user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0
 
-                        return (
-                            <div
-                                key={user.id}
-                                className={cn(
-                                    "p-2 rounded-md border transition-all text-left relative group",
-                                    getWorkloadColor(user.workloadScore, maxWorkload),
-                                    isOverloaded && "ring-2 ring-red-400",
-                                    isIdle && "ring-2 ring-blue-400"
-                                )}
-                            >
-                                {/* User header - clickable for view tasks */}
-                                <button
-                                    onClick={() => setSelectedUser(user)}
-                                    className="w-full text-left"
-                                >
-                                    <div className="flex items-center justify-between gap-1.5">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                            <div className="w-5 h-5 rounded-full bg-background flex items-center justify-center text-[9px] font-medium shrink-0 border">
-                                                {user.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <p className="text-[10px] font-medium truncate">{user.name.split(' ')[0]}</p>
-                                        </div>
-                                        <span className="text-[9px] text-muted-foreground shrink-0">
-                                            {user.activeTasks} active
-                                        </span>
+                    return (
+                        <button
+                            key={user.id}
+                            onClick={() => setSelectedUser(user)}
+                            className={cn(
+                                "p-3 rounded-lg border text-left transition-all hover:shadow-md hover:border-primary/30",
+                                "bg-card",
+                                isOverloaded && "border-red-300 dark:border-red-800",
+                                isIdle && "border-blue-300 dark:border-blue-800"
+                            )}
+                        >
+                            {/* User header */}
+                            <div className="flex items-center gap-2 mb-2">
+                                {user.avatar ? (
+                                    <img
+                                        src={user.avatar}
+                                        alt={user.name}
+                                        className="w-7 h-7 rounded-full border"
+                                    />
+                                ) : (
+                                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary border">
+                                        {user.name.charAt(0).toUpperCase()}
                                     </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-medium truncate">{user.name.split(' ')[0]}</p>
+                                    <p className="text-[9px] text-muted-foreground">{user.role}</p>
+                                </div>
+                            </div>
 
-                                    {/* Issue badges - only show if any */}
-                                    {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0 || isIdle) && (
-                                        <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                            {/* Task stack visual */}
+                            <TaskStack tasks={user.tasks} maxVisible={5} />
+
+                            {/* Status indicators */}
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                                <div className="flex items-center gap-1">
+                                    {hasIssues ? (
+                                        <>
                                             {user.overdueTasks > 0 && (
                                                 <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/50">
                                                     {user.overdueTasks} late
@@ -569,99 +707,62 @@ export function DashboardHeatmap({
                                                     {user.stuckTasks} stuck
                                                 </span>
                                             )}
-                                            {user.helpRequestTasks > 0 && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
-                                                    {user.helpRequestTasks} help
-                                                </span>
-                                            )}
-                                            {isIdle && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50">
-                                                    Free
-                                                </span>
-                                            )}
-                                        </div>
+                                        </>
+                                    ) : isIdle ? (
+                                        <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50">
+                                            Available
+                                        </span>
+                                    ) : (
+                                        <span className="text-[8px] text-emerald-600">On track</span>
                                     )}
-                                </button>
-
-                                {/* Assign button - appears on hover */}
-                                {unassignedTasks.length > 0 && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            setAssigningToUser(user)
-                                        }}
-                                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                                        title="Assign tasks"
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                    </button>
-                                )}
+                                </div>
+                                <span className="text-[9px] text-muted-foreground">
+                                    {user.doneTasks} done
+                                </span>
                             </div>
-                        )
-                    })}
-                </div>
-
-                {/* More members button */}
-                {sortedUsers.length > 8 && (
-                    <button
-                        onClick={() => setShowAllMembers(!showAllMembers)}
-                        className="w-full mt-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors"
-                    >
-                        {showAllMembers ? 'Show less' : `+${sortedUsers.length - 8} more members`}
-                    </button>
-                )}
+                        </button>
+                    )
+                })}
             </div>
 
-            {/* Unassigned Tasks Quick View */}
+            {/* Unassigned Tasks */}
             {unassignedTasks.length > 0 && (
-                <div className="mt-4 pt-3 border-t">
+                <div className="mt-4 pt-4 border-t">
                     <h4 className="text-[10px] font-medium text-muted-foreground mb-2 flex items-center gap-1">
                         <UserX className="h-3 w-3" />
                         Unassigned Tasks ({unassignedTasks.length})
                     </h4>
-                    <div className="space-y-1 max-h-32 overflow-y-auto">
-                        {unassignedTasks.slice(0, 5).map(task => (
+                    <div className="flex flex-wrap gap-1.5">
+                        {unassignedTasks.slice(0, 8).map(task => (
                             <Link
                                 key={task.id}
                                 href={`/dashboard/projects/${task.projectId}?task=${task.id}`}
-                                className="flex items-center justify-between p-1.5 rounded hover:bg-muted/50 transition-colors"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 hover:bg-muted transition-colors text-[10px]"
                             >
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                    <div
-                                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                                        style={{ backgroundColor: task.projectColor }}
-                                    />
-                                    <span className="text-[10px] truncate">{task.title}</span>
-                                </div>
-                                <ChevronRight className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+                                <span
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ backgroundColor: task.projectColor }}
+                                />
+                                <span className="max-w-[120px] truncate">{task.title}</span>
                             </Link>
                         ))}
-                        {unassignedTasks.length > 5 && (
-                            <p className="text-[9px] text-muted-foreground text-center">
-                                +{unassignedTasks.length - 5} more
-                            </p>
+                        {unassignedTasks.length > 8 && (
+                            <span className="px-2 py-1 text-[10px] text-muted-foreground">
+                                +{unassignedTasks.length - 8} more
+                            </span>
                         )}
                     </div>
                 </div>
             )}
 
-            {/* Task List Dialog for Issues */}
-            <TaskListDialog
-                open={!!selectedIssue}
-                onOpenChange={() => setSelectedIssue(null)}
-                title={selectedIssue?.message || ''}
-                tasks={selectedIssue?.tasks || []}
-            />
-
-            {/* User Kanban Dialog */}
-            <UserKanbanDialog
+            {/* User Detail Dialog */}
+            <UserDetailDialog
                 open={!!selectedUser}
                 onOpenChange={() => setSelectedUser(null)}
                 user={selectedUser}
                 unassignedTasks={unassignedTasks}
-                onAssignClick={() => {
-                    setAssigningToUser(selectedUser)
-                }}
+                onAssignClick={() => setAssigningToUser(selectedUser)}
+                onAssignTasks={handleAssignTasks}
             />
 
             {/* Assign Tasks Dialog */}

@@ -166,6 +166,41 @@ export async function POST(
             }
         })
 
+        // Parse @mentions and create notifications
+        const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+        const mentions = content.match(mentionRegex)
+
+        if (mentions && mentions.length > 0) {
+            const mentionNames = mentions.map((m: string) => m.substring(1).toLowerCase())
+
+            // Find users in the same workspace whose name contains any of the mentioned names
+            const mentionedUsers = await prisma.user.findMany({
+                where: {
+                    workspaceId: user.workspaceId,
+                    id: { not: dbUser.id }, // Don't notify the commenter
+                    OR: mentionNames.map((name: string) => ({
+                        name: { contains: name, mode: 'insensitive' as const }
+                    }))
+                },
+                select: { id: true, name: true }
+            })
+
+            // Create notifications for mentioned users
+            if (mentionedUsers.length > 0) {
+                const projectId = task.column?.board?.projectId
+                await prisma.notification.createMany({
+                    data: mentionedUsers.map(mentionedUser => ({
+                        workspaceId: user.workspaceId!,
+                        userId: mentionedUser.id,
+                        type: 'mention',
+                        title: 'You were mentioned',
+                        message: `${dbUser.name} mentioned you in a comment on "${task.title}"`,
+                        link: projectId ? `/dashboard/projects/${projectId}?task=${taskId}` : undefined
+                    }))
+                })
+            }
+        }
+
         return NextResponse.json(comment, { status: 201 })
     } catch (error: any) {
         let errorMessage = 'Failed to create comment. Please try again.'

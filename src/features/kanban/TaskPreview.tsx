@@ -127,7 +127,7 @@ const CommentNode = ({ comment, depth = 0, userRole, currentUserId, onReply, onD
                     </div>
 
                     <div className="text-[11px] text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
-                        {comment.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
+                        {comment.content.split(/(https?:\/\/[^\s]+|@\w+(?:\s+\w+)?)/g).map((part, i) => {
                             if (part.match(/^https?:\/\//)) {
                                 return (
                                     <a
@@ -139,6 +139,16 @@ const CommentNode = ({ comment, depth = 0, userRole, currentUserId, onReply, onD
                                     >
                                         {part}
                                     </a>
+                                )
+                            }
+                            if (part.match(/^@\w+/)) {
+                                return (
+                                    <span
+                                        key={i}
+                                        className="text-primary font-medium bg-primary/10 px-1 rounded"
+                                    >
+                                        {part}
+                                    </span>
                                 )
                             }
                             return <span key={i}>{part}</span>
