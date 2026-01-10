@@ -76,22 +76,22 @@ type WorkloadHistory = {
 function TaskStack({ count }: { count: number }) {
     if (count === 0) {
         return (
-            <div className="h-4 flex items-center">
+            <div className="h-6 flex items-center">
                 <span className="text-[8px] text-muted-foreground">No tasks</span>
             </div>
         )
     }
 
-    const displayCount = Math.min(count, 8)
+    const displayCount = Math.min(count, 6)
 
     return (
-        <div className="relative h-4 flex items-center">
+        <div className="relative h-6 flex items-end">
             {Array.from({ length: displayCount }).map((_, idx) => (
                 <div
                     key={idx}
-                    className="absolute h-3 w-5 rounded bg-muted-foreground/30"
+                    className="absolute bottom-0 h-5 w-7 rounded-sm bg-muted border border-border shadow-sm"
                     style={{
-                        left: `${idx * 5}px`,
+                        left: `${idx * 10}px`,
                         zIndex: displayCount - idx
                     }}
                 />
