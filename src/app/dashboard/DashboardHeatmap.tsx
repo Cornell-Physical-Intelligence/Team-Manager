@@ -91,7 +91,7 @@ function TaskStack({ count }: { count: number }) {
                     key={idx}
                     className="absolute bottom-0 h-5 w-8 rounded-sm bg-muted border border-border shadow-sm flex items-center justify-center"
                     style={{
-                        left: `${idx * 10}px`,
+                        left: `${idx * 6}px`,
                         zIndex: displayCount - idx
                     }}
                 >
@@ -225,7 +225,7 @@ function UserDetailDialog({
     if (!user) return null
 
     const handleTaskClick = (task: Task) => {
-        let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
+        let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
         if (task.pushId) url += `&push=${task.pushId}`
         router.push(url)
         onOpenChange(false)
@@ -714,7 +714,7 @@ export function DashboardHeatmap({
                         {unassignedTasks.slice(0, 8).map(task => (
                             <Link
                                 key={task.id}
-                                href={`/dashboard/projects/${task.projectId}?task=${task.id}`}
+                                href={`/dashboard/projects/${task.projectId}?highlight=${task.id}`}
                                 className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 hover:bg-muted transition-colors text-[10px]"
                             >
                                 <span
