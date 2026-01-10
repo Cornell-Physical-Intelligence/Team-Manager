@@ -247,62 +247,63 @@ function UserDetailDialog({
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
                 {/* Header */}
                 <div className="p-6 pb-4 border-b bg-muted/30">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
                             {user.avatar ? (
                                 <img
                                     src={user.avatar}
                                     alt={user.name}
-                                    className="w-14 h-14 rounded-full border-2 border-background shadow-md"
+                                    className="w-12 h-12 rounded-full border-2 border-background shadow-md"
                                 />
                             ) : (
-                                <div className="w-14 h-14 rounded-full bg-primary/10 border-2 border-background shadow-md flex items-center justify-center text-xl font-bold text-primary">
+                                <div className="w-12 h-12 rounded-full bg-primary/10 border-2 border-background shadow-md flex items-center justify-center text-lg font-bold text-primary">
                                     {user.name.charAt(0).toUpperCase()}
                                 </div>
                             )}
                             <div>
-                                <h2 className="text-lg font-semibold">{user.name}</h2>
-                                <p className="text-sm text-muted-foreground">{user.role}</p>
+                                <h2 className="text-base font-semibold">{user.name}</h2>
+                                <p className="text-xs text-muted-foreground">{user.role}</p>
                             </div>
                         </div>
-                        {unassignedTasks.length > 0 && (
-                            <Button size="sm" onClick={onAssignClick}>
-                                <Plus className="h-4 w-4 mr-1.5" />
-                                Assign Task
-                            </Button>
-                        )}
-                    </div>
 
-                    {/* Quick stats */}
-                    <div className="flex items-center gap-6 mt-4">
-                        <div>
-                            <p className="text-2xl font-bold">{user.activeTasks}</p>
-                            <p className="text-[10px] text-muted-foreground">Active</p>
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold">{doneTasks.length}</p>
-                            <p className="text-[10px] text-muted-foreground">Completed</p>
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold">{completionRate}%</p>
-                            <p className="text-[10px] text-muted-foreground">Rate</p>
-                        </div>
-                        <div>
-                            {user.overdueTasks > 0 ? (
-                                <>
-                                    <p className="text-2xl font-bold">{user.overdueTasks}</p>
-                                    <p className="text-[10px] text-muted-foreground">Overdue</p>
-                                </>
-                            ) : user.stuckTasks > 0 ? (
-                                <>
-                                    <p className="text-2xl font-bold">{user.stuckTasks}</p>
-                                    <p className="text-[10px] text-muted-foreground">Stuck</p>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-2xl font-bold">✓</p>
-                                    <p className="text-[10px] text-muted-foreground">On Track</p>
-                                </>
+                        {/* Stats inline */}
+                        <div className="flex items-center gap-5">
+                            <div className="text-center">
+                                <p className="text-lg font-bold">{user.activeTasks}</p>
+                                <p className="text-[9px] text-muted-foreground">Active</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-lg font-bold">{doneTasks.length}</p>
+                                <p className="text-[9px] text-muted-foreground">Done</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-lg font-bold">{completionRate}%</p>
+                                <p className="text-[9px] text-muted-foreground">Rate</p>
+                            </div>
+                            <div className="text-center">
+                                {user.overdueTasks > 0 ? (
+                                    <>
+                                        <p className="text-lg font-bold">{user.overdueTasks}</p>
+                                        <p className="text-[9px] text-muted-foreground">Overdue</p>
+                                    </>
+                                ) : user.stuckTasks > 0 ? (
+                                    <>
+                                        <p className="text-lg font-bold">{user.stuckTasks}</p>
+                                        <p className="text-[9px] text-muted-foreground">Stuck</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-lg font-bold">✓</p>
+                                        <p className="text-[9px] text-muted-foreground">On Track</p>
+                                    </>
+                                )}
+                            </div>
+
+                            {unassignedTasks.length > 0 && (
+                                <Button size="sm" onClick={onAssignClick} className="ml-2">
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Assign
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -355,7 +356,7 @@ function UserDetailDialog({
                                         <div className="flex items-start gap-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
@@ -388,7 +389,7 @@ function UserDetailDialog({
                                         <div className="flex items-start gap-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
@@ -421,7 +422,7 @@ function UserDetailDialog({
                                         <div className="flex items-start gap-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
@@ -448,7 +449,7 @@ function UserDetailDialog({
                                         <div className="flex items-start gap-1.5">
                                             <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug line-through">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug line-through line-clamp-2">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
