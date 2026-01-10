@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronRight, TrendingUp, TrendingDown, Minus, CheckCircle2, Clock, Loader2, AlertTriangle, Calendar, Target, Activity } from "lucide-react"
+import { ChevronRight, TrendingUp, TrendingDown, Minus, CheckCircle2, Clock, Loader2, AlertTriangle, Calendar, Target, Activity, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type PushStats = {
@@ -60,12 +60,64 @@ const getPushHealth = (push: PushStats) => {
     return completionRate
 }
 
+// Mini sparkline component for completion trend
+function CompletionSparkline({ pushes, currentPushId }: { pushes: PushStats[], currentPushId: string }) {
+    if (pushes.length < 2) return null
+
+    const data = pushes.map(p => ({
+        id: p.id,
+        rate: p.total > 0 ? (p.completed / p.total) * 100 : 0
+    }))
+
+    const maxRate = Math.max(...data.map(d => d.rate), 100)
+    const width = 140
+    const height = 32
+    const padding = 2
+
+    const points = data.map((d, i) => {
+        const x = padding + (i / (data.length - 1)) * (width - padding * 2)
+        const y = height - padding - (d.rate / maxRate) * (height - padding * 2)
+        return { x, y, id: d.id, rate: d.rate }
+    })
+
+    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+
+    return (
+        <div className="mt-2 pt-2 border-t border-border">
+            <div className="text-[9px] text-muted-foreground mb-1">Completion trend</div>
+            <svg width={width} height={height} className="overflow-visible">
+                {/* Grid line at 50% */}
+                <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="currentColor" strokeOpacity={0.1} strokeDasharray="2,2" />
+                {/* Line */}
+                <path d={pathD} fill="none" stroke="#10b981" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                {/* Dots */}
+                {points.map((p, i) => (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={p.id === currentPushId ? 4 : 2}
+                        fill={p.id === currentPushId ? "#10b981" : "#6b7280"}
+                        stroke={p.id === currentPushId ? "#fff" : "none"}
+                        strokeWidth={1}
+                    />
+                ))}
+            </svg>
+            <div className="flex justify-between text-[8px] text-muted-foreground mt-0.5">
+                <span>{pushes[0]?.name?.slice(0, 8)}</span>
+                <span>{pushes[pushes.length - 1]?.name?.slice(0, 8)}</span>
+            </div>
+        </div>
+    )
+}
+
 export function ProjectActivityTracker() {
     const router = useRouter()
     const [projects, setProjects] = useState<ProjectActivity[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedProject, setSelectedProject] = useState<string | null>(null)
     const [hoveredPush, setHoveredPush] = useState<string | null>(null)
+    const [showLegend, setShowLegend] = useState(false)
 
     useEffect(() => {
         fetchProjectActivity()
@@ -226,7 +278,11 @@ export function ProjectActivityTracker() {
 
                     {/* Sprint Bars - Custom Design */}
                     {selectedProjectData.pushes.length > 0 ? (
-                        <div className="space-y-1.5">
+                        <div
+                            className="space-y-1.5"
+                            onMouseEnter={() => setShowLegend(true)}
+                            onMouseLeave={() => { setShowLegend(false); setHoveredPush(null) }}
+                        >
                             {selectedProjectData.pushes.map(push => {
                                 const completionPct = push.total > 0 ? (push.completed / push.total) * 100 : 0
                                 const reviewPct = push.total > 0 ? (push.inReview / push.total) * 100 : 0
@@ -240,7 +296,6 @@ export function ProjectActivityTracker() {
                                         key={push.id}
                                         className="relative group"
                                         onMouseEnter={() => setHoveredPush(push.id)}
-                                        onMouseLeave={() => setHoveredPush(null)}
                                     >
                                         {/* Bar Container */}
                                         <div className="flex items-center gap-2">
@@ -250,25 +305,25 @@ export function ProjectActivityTracker() {
                                             )}>
                                                 {push.name}
                                             </span>
-                                            <div className="flex-1 h-4 bg-muted/30 rounded-sm overflow-hidden relative">
-                                                {/* Completed */}
+                                            <div className="flex-1 h-4 bg-muted/40 rounded-sm overflow-hidden relative">
+                                                {/* Completed - Green */}
                                                 <div
-                                                    className="absolute left-0 top-0 bottom-0 bg-neutral-800 dark:bg-neutral-200 transition-all"
-                                                    style={{ width: `${completionPct}%` }}
+                                                    className="absolute left-0 top-0 bottom-0 transition-all"
+                                                    style={{ width: `${completionPct}%`, backgroundColor: '#10b981' }}
                                                 />
-                                                {/* In Review */}
+                                                {/* In Review - Blue */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 bg-neutral-500 dark:bg-neutral-400 transition-all"
-                                                    style={{ left: `${completionPct}%`, width: `${reviewPct}%` }}
+                                                    className="absolute top-0 bottom-0 transition-all"
+                                                    style={{ left: `${completionPct}%`, width: `${reviewPct}%`, backgroundColor: '#3b82f6' }}
                                                 />
-                                                {/* In Progress */}
+                                                {/* In Progress - Amber */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 bg-neutral-300 dark:bg-neutral-600 transition-all"
-                                                    style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%` }}
+                                                    className="absolute top-0 bottom-0 transition-all"
+                                                    style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%`, backgroundColor: '#f59e0b' }}
                                                 />
                                                 {/* Overdue indicator */}
                                                 {isOverdue && (
-                                                    <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-amber-500" />
+                                                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-red-500" />
                                                 )}
                                             </div>
                                             <span className="text-[9px] text-muted-foreground w-8 text-right shrink-0">
@@ -279,17 +334,29 @@ export function ProjectActivityTracker() {
                                         {/* Hover Tooltip - Detailed Info */}
                                         {isHovered && (
                                             <div className="absolute left-24 top-full mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg p-3 min-w-[200px] text-[10px]">
-                                                <div className="font-semibold text-xs mb-2">{push.name}</div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="font-semibold text-xs">{push.name}</div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            router.push(`/dashboard/projects/${selectedProjectData.id}?push=${push.id}`)
+                                                        }}
+                                                        className="p-1 rounded hover:bg-muted transition-colors"
+                                                        title="Go to sprint"
+                                                    >
+                                                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                                    </button>
+                                                </div>
 
                                                 {/* Status Badge */}
                                                 <div className="flex items-center gap-2 mb-2">
                                                     {isOverdue ? (
-                                                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">
+                                                        <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">
                                                             {Math.abs(daysStatus!)}d overdue
                                                         </span>
                                                     ) : daysStatus !== null && daysStatus >= 0 ? (
                                                         <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                                                            {daysStatus === 0 ? 'Due today' : `${daysStatus}d remaining`}
+                                                            {daysStatus === 0 ? 'Due today' : `${daysStatus}d left`}
                                                         </span>
                                                     ) : null}
                                                     {completionPct === 100 && (
@@ -303,21 +370,21 @@ export function ProjectActivityTracker() {
                                                 <div className="space-y-1.5 border-t border-border pt-2">
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-neutral-800 dark:bg-neutral-200" />
+                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#10b981' }} />
                                                             Done
                                                         </span>
                                                         <span className="font-medium">{push.completed} <span className="text-muted-foreground font-normal">({Math.round(completionPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-neutral-500 dark:bg-neutral-400" />
+                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
                                                             In Review
                                                         </span>
                                                         <span className="font-medium">{push.inReview} <span className="text-muted-foreground font-normal">({Math.round(reviewPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-neutral-300 dark:bg-neutral-600" />
+                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
                                                             In Progress
                                                         </span>
                                                         <span className="font-medium">{push.inProgress} <span className="text-muted-foreground font-normal">({Math.round(progressPct)}%)</span></span>
@@ -338,12 +405,15 @@ export function ProjectActivityTracker() {
                                                     {push.endDate && (
                                                         <>
                                                             <span>→</span>
-                                                            <span className={isOverdue ? "text-amber-600" : ""}>
+                                                            <span className={isOverdue ? "text-red-600" : ""}>
                                                                 {new Date(push.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                             </span>
                                                         </>
                                                     )}
                                                 </div>
+
+                                                {/* Sparkline - Completion Trend */}
+                                                <CompletionSparkline pushes={selectedProjectData.pushes} currentPushId={push.id} />
                                             </div>
                                         )}
                                     </div>
@@ -356,18 +426,21 @@ export function ProjectActivityTracker() {
                         </div>
                     )}
 
-                    {/* Legend - Compact */}
-                    <div className="flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border text-[8px] text-muted-foreground">
+                    {/* Legend - Shows on hover */}
+                    <div className={cn(
+                        "flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border text-[8px] text-muted-foreground transition-opacity duration-200",
+                        showLegend ? "opacity-100" : "opacity-0"
+                    )}>
                         <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm bg-neutral-800 dark:bg-neutral-200" />
+                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#10b981' }} />
                             Done
                         </span>
                         <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm bg-neutral-500 dark:bg-neutral-400" />
+                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
                             Review
                         </span>
                         <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm bg-neutral-300 dark:bg-neutral-600" />
+                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
                             Progress
                         </span>
                         <span className="flex items-center gap-1">
