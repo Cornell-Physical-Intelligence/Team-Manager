@@ -7,10 +7,35 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const user = await getCurrentUser()
+        if (!user || !user.workspaceId) {
+            return NextResponse.json({ comments: [], hasNew: false }, { status: 200 })
+        }
+
         const { id } = await params
         const { searchParams } = new URL(request.url)
         const since = searchParams.get('since') // ISO timestamp for incremental updates
         const countOnly = searchParams.get('countOnly') === 'true'
+
+        // Verify task belongs to user's workspace
+        const task = await prisma.task.findUnique({
+            where: { id },
+            select: {
+                column: {
+                    select: {
+                        board: {
+                            select: {
+                                project: { select: { workspaceId: true } }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        if (task?.column?.board?.project?.workspaceId !== user.workspaceId) {
+            return NextResponse.json({ comments: [], hasNew: false }, { status: 200 })
+        }
 
         // If countOnly, just return the count for quick polling
         if (countOnly) {
@@ -171,18 +196,37 @@ export async function DELETE(
         }
 
         const user = await getCurrentUser()
-        if (!user) {
+        if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
         const comment = await prisma.comment.findUnique({
             where: { id: commentId },
             include: {
-                replies: { select: { id: true } }
+                replies: { select: { id: true } },
+                task: {
+                    select: {
+                        column: {
+                            select: {
+                                board: {
+                                    select: {
+                                        project: { select: { workspaceId: true } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         })
 
         if (!comment) {
+            return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
+        }
+
+        // Verify comment's task belongs to user's workspace
+        const commentWorkspaceId = comment.task?.column?.board?.project?.workspaceId
+        if (!commentWorkspaceId || commentWorkspaceId !== user.workspaceId) {
             return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
         }
 

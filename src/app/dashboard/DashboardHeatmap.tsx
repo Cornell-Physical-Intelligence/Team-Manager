@@ -466,18 +466,25 @@ export function DashboardHeatmap({
     const unassignedTasks = allTasks.filter(t => t.isUnassigned)
 
     const handleAssignTasks = async (taskIds: string[], userId: string) => {
-        try {
-            for (const taskId of taskIds) {
-                await fetch(`/api/tasks/${taskId}`, {
+        const errors: string[] = []
+        for (const taskId of taskIds) {
+            try {
+                const res = await fetch(`/api/tasks/${taskId}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ assigneeIds: [userId] })
                 })
+                if (!res.ok) {
+                    errors.push(taskId)
+                }
+            } catch (error) {
+                errors.push(taskId)
             }
-            router.refresh()
-        } catch (error) {
-            console.error('Failed to assign tasks:', error)
         }
+        if (errors.length > 0) {
+            console.error(`Failed to assign ${errors.length} task(s)`)
+        }
+        router.refresh()
     }
 
     if (criticalIssues.length === 0 && userStats.length === 0) {
@@ -547,26 +554,6 @@ export function DashboardHeatmap({
                                         <span className="text-[9px] text-muted-foreground shrink-0">
                                             {user.activeTasks} active
                                         </span>
-                                    </div>
-
-                                    {/* Task counts - visible on hover */}
-                                    <div className="grid grid-cols-4 gap-0.5 text-center mt-1.5 h-0 overflow-hidden group-hover:h-auto transition-all">
-                                        <div className="bg-background/50 rounded px-0.5 py-0.5">
-                                            <p className="text-[8px] text-muted-foreground">TD</p>
-                                            <p className="text-[10px] font-bold">{user.todoTasks}</p>
-                                        </div>
-                                        <div className="bg-background/50 rounded px-0.5 py-0.5">
-                                            <p className="text-[8px] text-muted-foreground">IP</p>
-                                            <p className="text-[10px] font-bold">{user.inProgressTasks}</p>
-                                        </div>
-                                        <div className="bg-background/50 rounded px-0.5 py-0.5">
-                                            <p className="text-[8px] text-muted-foreground">RV</p>
-                                            <p className="text-[10px] font-bold">{user.reviewTasks}</p>
-                                        </div>
-                                        <div className="bg-background/50 rounded px-0.5 py-0.5">
-                                            <p className="text-[8px] text-muted-foreground">DN</p>
-                                            <p className="text-[10px] font-bold text-green-600">{user.doneTasks}</p>
-                                        </div>
                                     </div>
 
                                     {/* Issue badges - only show if any */}

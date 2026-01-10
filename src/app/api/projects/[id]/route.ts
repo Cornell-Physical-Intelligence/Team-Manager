@@ -49,13 +49,26 @@ export async function PATCH(
 ) {
     try {
         const user = await getCurrentUser()
-        if (!user) {
+        if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
-
-
         const { id } = await params
+
+        // Verify project exists and belongs to user's workspace
+        const existingProject = await prisma.project.findUnique({
+            where: { id },
+            select: { workspaceId: true }
+        })
+
+        if (!existingProject) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
+        if (existingProject.workspaceId !== user.workspaceId) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
         const body = await request.json()
         const { name, description, leadId, memberIds, color } = body
 
@@ -107,7 +120,7 @@ export async function DELETE(
 ) {
     try {
         const user = await getCurrentUser()
-        if (!user) {
+        if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
@@ -116,6 +129,20 @@ export async function DELETE(
         }
 
         const { id } = await params
+
+        // Verify project exists and belongs to user's workspace
+        const existingProject = await prisma.project.findUnique({
+            where: { id },
+            select: { workspaceId: true }
+        })
+
+        if (!existingProject) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
+        if (existingProject.workspaceId !== user.workspaceId) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
 
         // Delete in order: tasks -> columns -> boards -> pushes -> project
         await prisma.$transaction(async (tx) => {
