@@ -117,7 +117,6 @@ export function ProjectActivityTracker() {
     const [loading, setLoading] = useState(true)
     const [selectedProject, setSelectedProject] = useState<string | null>(null)
     const [hoveredPush, setHoveredPush] = useState<string | null>(null)
-    const [showLegend, setShowLegend] = useState(false)
 
     useEffect(() => {
         fetchProjectActivity()
@@ -207,10 +206,7 @@ export function ProjectActivityTracker() {
     return (
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium flex items-center gap-1.5">
-                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                    Project Activity
-                </h2>
+                <h2 className="text-sm font-medium">Project Activity</h2>
                 {projectMetrics && projectMetrics.velocityTrend !== 'stable' && (
                     <div className={cn(
                         "flex items-center gap-0.5 text-[9px]",
@@ -252,36 +248,22 @@ export function ProjectActivityTracker() {
 
             {selectedProjectData && projectMetrics && (
                 <>
-                    {/* Quick Stats - Compact */}
-                    <div className="flex items-center gap-3 mb-4 text-[10px]">
-                        <div className="flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                            <span className="font-medium">{selectedProjectData.totalCompleted}</span>
-                            <span className="text-muted-foreground">done</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-blue-500" />
-                            <span className="font-medium">{selectedProjectData.totalInReview}</span>
-                            <span className="text-muted-foreground">review</span>
-                        </div>
+                    {/* Project Stats Row */}
+                    <div className="flex items-center justify-between mb-3 text-[10px] text-muted-foreground">
+                        <span>{selectedProjectData.totalCompleted}/{selectedProjectData.totalTasks} tasks done</span>
                         {projectMetrics.overdueCount > 0 && (
                             <div className="flex items-center gap-1 text-amber-600">
                                 <AlertTriangle className="h-3 w-3" />
-                                <span className="font-medium">{projectMetrics.overdueCount}</span>
-                                <span>overdue</span>
+                                <span>{projectMetrics.overdueCount} overdue</span>
                             </div>
                         )}
-                        <div className="ml-auto text-muted-foreground">
-                            {selectedProjectData.completionRate}% complete
-                        </div>
                     </div>
 
                     {/* Sprint Bars - Custom Design */}
                     {selectedProjectData.pushes.length > 0 ? (
                         <div
                             className="space-y-1.5"
-                            onMouseEnter={() => setShowLegend(true)}
-                            onMouseLeave={() => { setShowLegend(false); setHoveredPush(null) }}
+                            onMouseLeave={() => setHoveredPush(null)}
                         >
                             {selectedProjectData.pushes.map(push => {
                                 const completionPct = push.total > 0 ? (push.completed / push.total) * 100 : 0
@@ -305,21 +287,21 @@ export function ProjectActivityTracker() {
                                             )}>
                                                 {push.name}
                                             </span>
-                                            <div className="flex-1 h-4 bg-muted/40 rounded-sm overflow-hidden relative">
+                                            <div className="flex-1 h-4 rounded-sm overflow-hidden relative bg-neutral-300 dark:bg-neutral-700">
                                                 {/* Completed - Green */}
                                                 <div
-                                                    className="absolute left-0 top-0 bottom-0 transition-all"
-                                                    style={{ width: `${completionPct}%`, backgroundColor: '#10b981' }}
+                                                    className="absolute left-0 top-0 bottom-0 transition-all bg-emerald-500 dark:bg-emerald-400"
+                                                    style={{ width: `${completionPct}%` }}
                                                 />
                                                 {/* In Review - Blue */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all"
-                                                    style={{ left: `${completionPct}%`, width: `${reviewPct}%`, backgroundColor: '#3b82f6' }}
+                                                    className="absolute top-0 bottom-0 transition-all bg-blue-500 dark:bg-blue-400"
+                                                    style={{ left: `${completionPct}%`, width: `${reviewPct}%` }}
                                                 />
                                                 {/* In Progress - Amber */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all"
-                                                    style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%`, backgroundColor: '#f59e0b' }}
+                                                    className="absolute top-0 bottom-0 transition-all bg-amber-500 dark:bg-amber-400"
+                                                    style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%` }}
                                                 />
                                                 {/* Overdue indicator */}
                                                 {isOverdue && (
@@ -370,28 +352,28 @@ export function ProjectActivityTracker() {
                                                 <div className="space-y-1.5 border-t border-border pt-2">
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#10b981' }} />
+                                                            <span className="w-2 h-2 rounded-sm bg-emerald-500 dark:bg-emerald-400" />
                                                             Done
                                                         </span>
                                                         <span className="font-medium">{push.completed} <span className="text-muted-foreground font-normal">({Math.round(completionPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                                                            <span className="w-2 h-2 rounded-sm bg-blue-500 dark:bg-blue-400" />
                                                             In Review
                                                         </span>
                                                         <span className="font-medium">{push.inReview} <span className="text-muted-foreground font-normal">({Math.round(reviewPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
+                                                            <span className="w-2 h-2 rounded-sm bg-amber-500 dark:bg-amber-400" />
                                                             In Progress
                                                         </span>
                                                         <span className="font-medium">{push.inProgress} <span className="text-muted-foreground font-normal">({Math.round(progressPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-muted" />
+                                                            <span className="w-2 h-2 rounded-sm bg-neutral-300 dark:bg-neutral-700" />
                                                             To Do
                                                         </span>
                                                         <span className="font-medium">{push.todo}</span>
@@ -425,29 +407,6 @@ export function ProjectActivityTracker() {
                             No sprints in this project yet
                         </div>
                     )}
-
-                    {/* Legend - Shows on hover */}
-                    <div className={cn(
-                        "flex items-center justify-center gap-3 mt-3 pt-2 border-t border-border text-[8px] text-muted-foreground transition-opacity duration-200",
-                        showLegend ? "opacity-100" : "opacity-0"
-                    )}>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#10b981' }} />
-                            Done
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
-                            Review
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: '#f59e0b' }} />
-                            Progress
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-sm bg-muted" />
-                            To Do
-                        </span>
-                    </div>
 
                     {/* View Project Link */}
                     <button
