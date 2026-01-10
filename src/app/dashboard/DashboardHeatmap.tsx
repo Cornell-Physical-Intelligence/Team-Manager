@@ -72,63 +72,36 @@ type WorkloadHistory = {
     approved: number
 }
 
-// Stacked task cards visual indicator
-function TaskStack({ tasks, maxVisible = 5 }: { tasks: Task[], maxVisible?: number }) {
-    const activeTasks = tasks.filter(t => t.columnName !== 'Done')
-    const displayTasks = activeTasks.slice(0, maxVisible)
-    const overflow = activeTasks.length - maxVisible
-
-    if (activeTasks.length === 0) {
+// Stacked task cards visual indicator - subtle count display
+function TaskStack({ count }: { count: number }) {
+    if (count === 0) {
         return (
-            <div className="h-8 flex items-center justify-center">
-                <span className="text-[9px] text-muted-foreground italic">No active tasks</span>
+            <div className="h-4 flex items-center">
+                <span className="text-[9px] text-muted-foreground/50">—</span>
             </div>
         )
     }
 
-    return (
-        <div className="relative h-8 flex items-end">
-            {displayTasks.map((task, idx) => {
-                const columnColors: Record<string, string> = {
-                    'To Do': 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600',
-                    'In Progress': 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
-                    'Review': 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
-                }
-                const colorClass = columnColors[task.columnName] || 'bg-muted border-border'
+    const displayCount = Math.min(count, 6)
 
-                return (
-                    <div
-                        key={task.id}
-                        className={cn(
-                            "absolute bottom-0 h-6 rounded border shadow-sm transition-transform hover:translate-y-[-2px]",
-                            colorClass,
-                            task.isOverdue && "ring-1 ring-red-400"
-                        )}
-                        style={{
-                            left: `${idx * 14}px`,
-                            width: '32px',
-                            zIndex: maxVisible - idx
-                        }}
-                        title={task.title}
-                    >
-                        <div
-                            className="absolute top-1 left-1 w-1.5 h-1.5 rounded-full"
-                            style={{ backgroundColor: task.projectColor }}
-                        />
-                    </div>
-                )
-            })}
-            {overflow > 0 && (
+    return (
+        <div className="relative h-4 flex items-center">
+            {Array.from({ length: displayCount }).map((_, idx) => (
                 <div
-                    className="absolute bottom-0 h-6 w-8 rounded border bg-muted/80 border-border flex items-center justify-center"
+                    key={idx}
+                    className="absolute h-3 w-4 rounded-sm bg-muted-foreground/20 border border-muted-foreground/10"
                     style={{
-                        left: `${displayTasks.length * 14}px`,
-                        zIndex: 0
+                        left: `${idx * 6}px`,
+                        zIndex: displayCount - idx
                     }}
-                >
-                    <span className="text-[8px] font-medium text-muted-foreground">+{overflow}</span>
-                </div>
-            )}
+                />
+            ))}
+            <span
+                className="text-[9px] font-medium text-muted-foreground ml-1"
+                style={{ marginLeft: `${displayCount * 6 + 4}px` }}
+            >
+                {count}
+            </span>
         </div>
     )
 }
@@ -367,120 +340,129 @@ function UserDetailDialog({
                         </div>
                     </div>
 
-                    {/* Tasks by Column */}
+                    {/* Kanban Board */}
                     <h3 className="text-sm font-medium mb-3">Current Tasks</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-4 gap-3">
                         {/* To Do */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 flex items-center justify-between">
-                                <span className="text-xs font-medium">To Do</span>
-                                <span className="text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{todoTasks.length}</span>
+                        <div className="border rounded-lg overflow-hidden bg-slate-50/50 dark:bg-slate-900/20">
+                            <div className="bg-slate-100 dark:bg-slate-800 px-2 py-1.5 flex items-center justify-between border-b">
+                                <span className="text-[10px] font-medium">To Do</span>
+                                <span className="text-[9px] bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded">{todoTasks.length}</span>
                             </div>
-                            <div className="max-h-40 overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
                                 {todoTasks.length > 0 ? todoTasks.map(task => (
                                     <button
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
                                     >
-                                        <div className="flex items-start gap-2">
-                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                        <div className="flex items-start gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
-                                            {task.isOverdue && <AlertCircle className="h-3 w-3 text-red-500 shrink-0" />}
                                         </div>
+                                        {task.isOverdue && (
+                                            <div className="flex items-center gap-1 mt-1.5 text-[9px] text-red-500">
+                                                <AlertCircle className="h-2.5 w-2.5" />
+                                                Overdue
+                                            </div>
+                                        )}
                                     </button>
                                 )) : (
-                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
                                 )}
                             </div>
                         </div>
 
                         {/* In Progress */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-amber-100 dark:bg-amber-900/30 px-3 py-2 flex items-center justify-between">
-                                <span className="text-xs font-medium">In Progress</span>
-                                <span className="text-[10px] bg-amber-200 dark:bg-amber-800/50 px-1.5 py-0.5 rounded">{inProgressTasks.length}</span>
+                        <div className="border rounded-lg overflow-hidden bg-amber-50/30 dark:bg-amber-900/10">
+                            <div className="bg-amber-100 dark:bg-amber-900/30 px-2 py-1.5 flex items-center justify-between border-b">
+                                <span className="text-[10px] font-medium">In Progress</span>
+                                <span className="text-[9px] bg-amber-200 dark:bg-amber-800/50 px-1 py-0.5 rounded">{inProgressTasks.length}</span>
                             </div>
-                            <div className="max-h-40 overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
                                 {inProgressTasks.length > 0 ? inProgressTasks.map(task => (
                                     <button
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
                                     >
-                                        <div className="flex items-start gap-2">
-                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                        <div className="flex items-start gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
-                                            {task.isStuck && <Clock className="h-3 w-3 text-amber-500 shrink-0" />}
-                                            {task.isBlockedByHelp && <HelpCircle className="h-3 w-3 text-amber-500 shrink-0" />}
                                         </div>
+                                        {(task.isStuck || task.isBlockedByHelp) && (
+                                            <div className="flex items-center gap-1 mt-1.5 text-[9px] text-amber-600">
+                                                {task.isStuck && <><Clock className="h-2.5 w-2.5" /> Stuck</>}
+                                                {task.isBlockedByHelp && <><HelpCircle className="h-2.5 w-2.5" /> Needs help</>}
+                                            </div>
+                                        )}
                                     </button>
                                 )) : (
-                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
                                 )}
                             </div>
                         </div>
 
                         {/* Review */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-2 flex items-center justify-between">
-                                <span className="text-xs font-medium">In Review</span>
-                                <span className="text-[10px] bg-blue-200 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{reviewTasks.length}</span>
+                        <div className="border rounded-lg overflow-hidden bg-blue-50/30 dark:bg-blue-900/10">
+                            <div className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1.5 flex items-center justify-between border-b">
+                                <span className="text-[10px] font-medium">Review</span>
+                                <span className="text-[9px] bg-blue-200 dark:bg-blue-800/50 px-1 py-0.5 rounded">{reviewTasks.length}</span>
                             </div>
-                            <div className="max-h-40 overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
                                 {reviewTasks.length > 0 ? reviewTasks.map(task => (
                                     <button
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
                                     >
-                                        <div className="flex items-start gap-2">
-                                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
+                                        <div className="flex items-start gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-medium leading-tight">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
                                     </button>
                                 )) : (
-                                    <p className="text-[10px] text-muted-foreground text-center py-4">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
                                 )}
                             </div>
                         </div>
 
                         {/* Done */}
-                        <div className="border rounded-lg overflow-hidden">
-                            <div className="bg-emerald-100 dark:bg-emerald-900/30 px-3 py-2 flex items-center justify-between">
-                                <span className="text-xs font-medium">Done</span>
-                                <span className="text-[10px] bg-emerald-200 dark:bg-emerald-800/50 px-1.5 py-0.5 rounded">{doneTasks.length}</span>
+                        <div className="border rounded-lg overflow-hidden bg-emerald-50/30 dark:bg-emerald-900/10">
+                            <div className="bg-emerald-100 dark:bg-emerald-900/30 px-2 py-1.5 flex items-center justify-between border-b">
+                                <span className="text-[10px] font-medium">Done</span>
+                                <span className="text-[9px] bg-emerald-200 dark:bg-emerald-800/50 px-1 py-0.5 rounded">{doneTasks.length}</span>
                             </div>
-                            <div className="max-h-40 overflow-auto">
-                                {doneTasks.length > 0 ? doneTasks.slice(0, 5).map(task => (
+                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
+                                {doneTasks.length > 0 ? doneTasks.slice(0, 8).map(task => (
                                     <button
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left px-3 py-2 border-b last:border-0 hover:bg-muted/50 transition-colors"
+                                        className="w-full text-left p-2 rounded border bg-background/50 hover:bg-muted/50 transition-colors opacity-70"
                                     >
-                                        <div className="flex items-start gap-2">
+                                        <div className="flex items-start gap-1.5">
                                             <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-xs font-medium leading-tight line-through opacity-60">{task.title}</p>
+                                                <p className="text-[11px] font-medium leading-snug line-through">{task.title}</p>
                                                 <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
                                             </div>
                                         </div>
                                     </button>
                                 )) : (
-                                    <p className="text-[10px] text-muted-foreground text-center py-4">No completed tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-6">No completed</p>
                                 )}
-                                {doneTasks.length > 5 && (
-                                    <p className="text-[9px] text-muted-foreground text-center py-2 border-t">
-                                        +{doneTasks.length - 5} more completed
+                                {doneTasks.length > 8 && (
+                                    <p className="text-[8px] text-muted-foreground text-center py-1">
+                                        +{doneTasks.length - 8} more
                                     </p>
                                 )}
                             </div>
@@ -690,7 +672,7 @@ export function DashboardHeatmap({
                             </div>
 
                             {/* Task stack visual */}
-                            <TaskStack tasks={user.tasks} maxVisible={5} />
+                            <TaskStack count={user.activeTasks} />
 
                             {/* Status indicators */}
                             <div className="flex items-center justify-between mt-2 pt-2 border-t">
