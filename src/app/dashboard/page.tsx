@@ -5,6 +5,7 @@ import { DashboardClient } from "./DashboardClient"
 import { TeamPopup } from "./TeamPopup"
 import { TaskRow, ApprovalRow } from "./TaskRow"
 import { DashboardHeatmap } from "./DashboardHeatmap"
+import { ProjectActivityTracker } from "./ProjectActivityTracker"
 
 export const dynamic = 'force-dynamic'
 
@@ -470,54 +471,23 @@ export default async function DashboardPage() {
                     {/* Right Column - Leadership Only */}
                     {isLeadership && (
                         <div className="space-y-5">
-                            {/* Team Overview */}
-                            {teamStats && (
-                                <section className="border border-border rounded-lg p-4">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h2 className="text-sm font-medium">
-                                            Team
-                                        </h2>
-                                        <TeamPopup members={teamStats.users} totalTasks={teamStats.totalTasks}>
-                                            <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                                                View details
-                                            </button>
-                                        </TeamPopup>
-                                    </div>
-                                    <div className="space-y-1">
-                                        {teamStats.users.slice(0, 6).map(member => {
-                                            const activeTasks = member.todo + member.inProgress + member.review
-                                            return (
-                                                <TeamPopup key={member.id} members={teamStats.users} totalTasks={teamStats.totalTasks}>
-                                                    <button className="w-full flex items-center justify-between p-2 rounded-md hover:bg-muted/30 transition-colors text-left">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium shrink-0">
-                                                                {member.name.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <span className="text-sm truncate">{member.name}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0">
-                                                            <span>{activeTasks} active</span>
-                                                            <span>{member.done} done</span>
-                                                        </div>
-                                                    </button>
-                                                </TeamPopup>
-                                            )
-                                        })}
-                                        {teamStats.users.length > 6 && (
-                                            <TeamPopup members={teamStats.users} totalTasks={teamStats.totalTasks}>
-                                                <button className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-2">
-                                                    +{teamStats.users.length - 6} more members
-                                                </button>
-                                            </TeamPopup>
-                                        )}
-                                    </div>
-                                </section>
-                            )}
+                            {/* Project Activity Tracker */}
+                            <ProjectActivityTracker />
 
                             {/* Recent Activity */}
                             {recentActivity.length > 0 && (
                                 <section className="border border-border rounded-lg p-4">
-                                    <h2 className="text-sm font-medium mb-4">Recent Activity</h2>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-sm font-medium">Recent Activity</h2>
+                                        {teamStats && (
+                                            <TeamPopup members={teamStats.users} totalTasks={teamStats.totalTasks}>
+                                                <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                                                    <Users className="h-3 w-3" />
+                                                    Team
+                                                </button>
+                                            </TeamPopup>
+                                        )}
+                                    </div>
                                     <div className="space-y-1">
                                         {recentActivity.map(log => (
                                             <DashboardClient
