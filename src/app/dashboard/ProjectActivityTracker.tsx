@@ -60,52 +60,53 @@ const getPushHealth = (push: PushStats) => {
     return completionRate
 }
 
-// Mini sparkline component for completion trend
-function CompletionSparkline({ pushes, currentPushId }: { pushes: PushStats[], currentPushId: string }) {
+// Mini chart showing completed tasks per push over time
+function CompletionTimeline({ pushes, currentPushId }: { pushes: PushStats[], currentPushId: string }) {
     if (pushes.length < 2) return null
 
-    const data = pushes.map(p => ({
+    // Get last 6 pushes max for cleaner display
+    const recentPushes = pushes.slice(-6)
+    const data = recentPushes.map(p => ({
         id: p.id,
-        rate: p.total > 0 ? (p.completed / p.total) * 100 : 0
+        completed: p.completed,
+        date: p.startDate ? new Date(p.startDate) : null
     }))
 
-    const maxRate = Math.max(...data.map(d => d.rate), 100)
-    const width = 140
-    const height = 32
-    const padding = 2
+    const maxCompleted = Math.max(...data.map(d => d.completed), 1)
+    const width = 160
+    const height = 40
+    const barWidth = (width - 8) / data.length - 4
+    const padding = 4
 
-    const points = data.map((d, i) => {
-        const x = padding + (i / (data.length - 1)) * (width - padding * 2)
-        const y = height - padding - (d.rate / maxRate) * (height - padding * 2)
-        return { x, y, id: d.id, rate: d.rate }
-    })
-
-    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+    // Format month for x-axis
+    const formatMonth = (date: Date | null) => {
+        if (!date) return ''
+        return date.toLocaleDateString('en-US', { month: 'short' })
+    }
 
     return (
         <div className="mt-2 pt-2 border-t border-border">
-            <div className="text-[9px] text-muted-foreground mb-1">Completion trend</div>
-            <svg width={width} height={height} className="overflow-visible">
-                {/* Grid line at 50% */}
-                <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="currentColor" strokeOpacity={0.1} strokeDasharray="2,2" />
-                {/* Line */}
-                <path d={pathD} fill="none" stroke="#10b981" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                {/* Dots */}
-                {points.map((p, i) => (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={p.id === currentPushId ? 4 : 2}
-                        fill={p.id === currentPushId ? "#10b981" : "#6b7280"}
-                        stroke={p.id === currentPushId ? "#fff" : "none"}
-                        strokeWidth={1}
-                    />
-                ))}
-            </svg>
-            <div className="flex justify-between text-[8px] text-muted-foreground mt-0.5">
-                <span>{pushes[0]?.name?.slice(0, 8)}</span>
-                <span>{pushes[pushes.length - 1]?.name?.slice(0, 8)}</span>
+            <div className="text-[9px] text-muted-foreground mb-1.5">Tasks completed per sprint</div>
+            <div className="flex items-end justify-between gap-1" style={{ height }}>
+                {data.map((d, i) => {
+                    const barHeight = Math.max(4, (d.completed / maxCompleted) * (height - 12))
+                    const isCurrent = d.id === currentPushId
+                    return (
+                        <div key={i} className="flex flex-col items-center gap-0.5">
+                            <span className="text-[8px] text-muted-foreground">{d.completed}</span>
+                            <div
+                                className={cn(
+                                    "rounded-sm transition-all",
+                                    isCurrent ? "bg-emerald-500" : "bg-muted-foreground/30"
+                                )}
+                                style={{ width: barWidth, height: barHeight }}
+                            />
+                            <span className="text-[7px] text-muted-foreground/70">
+                                {formatMonth(d.date)}
+                            </span>
+                        </div>
+                    )
+                })}
             </div>
         </div>
     )
@@ -380,22 +381,8 @@ export function ProjectActivityTracker() {
                                                     </div>
                                                 </div>
 
-                                                {/* Dates */}
-                                                <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border text-muted-foreground">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {new Date(push.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                    {push.endDate && (
-                                                        <>
-                                                            <span>→</span>
-                                                            <span className={isOverdue ? "text-red-600" : ""}>
-                                                                {new Date(push.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </div>
-
-                                                {/* Sparkline - Completion Trend */}
-                                                <CompletionSparkline pushes={selectedProjectData.pushes} currentPushId={push.id} />
+                                                {/* Timeline - Completed tasks per sprint */}
+                                                <CompletionTimeline pushes={selectedProjectData.pushes} currentPushId={push.id} />
                                             </div>
                                         )}
                                     </div>

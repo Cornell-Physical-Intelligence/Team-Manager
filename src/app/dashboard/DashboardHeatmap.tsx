@@ -537,17 +537,20 @@ export function DashboardHeatmap({
                                     onClick={() => setSelectedUser(user)}
                                     className="w-full text-left"
                                 >
-                                    <div className="flex items-center gap-1.5 mb-1.5">
-                                        <div className="w-5 h-5 rounded-full bg-background flex items-center justify-center text-[9px] font-medium shrink-0 border">
-                                            {user.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-1.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <div className="w-5 h-5 rounded-full bg-background flex items-center justify-center text-[9px] font-medium shrink-0 border">
+                                                {user.name.charAt(0).toUpperCase()}
+                                            </div>
                                             <p className="text-[10px] font-medium truncate">{user.name.split(' ')[0]}</p>
                                         </div>
+                                        <span className="text-[9px] text-muted-foreground shrink-0">
+                                            {user.activeTasks} active
+                                        </span>
                                     </div>
 
-                                    {/* Task counts */}
-                                    <div className="grid grid-cols-4 gap-0.5 text-center mb-1.5">
+                                    {/* Task counts - visible on hover */}
+                                    <div className="grid grid-cols-4 gap-0.5 text-center mt-1.5 h-0 overflow-hidden group-hover:h-auto transition-all">
                                         <div className="bg-background/50 rounded px-0.5 py-0.5">
                                             <p className="text-[8px] text-muted-foreground">TD</p>
                                             <p className="text-[10px] font-bold">{user.todoTasks}</p>
@@ -566,29 +569,31 @@ export function DashboardHeatmap({
                                         </div>
                                     </div>
 
-                                    {/* Issue badges */}
-                                    <div className="flex items-center gap-1 flex-wrap">
-                                        {user.overdueTasks > 0 && (
-                                            <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/50">
-                                                {user.overdueTasks} late
-                                            </span>
-                                        )}
-                                        {user.stuckTasks > 0 && (
-                                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
-                                                {user.stuckTasks} stuck
-                                            </span>
-                                        )}
-                                        {user.helpRequestTasks > 0 && (
-                                            <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
-                                                {user.helpRequestTasks} help
-                                            </span>
-                                        )}
-                                        {isIdle && (
-                                            <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50">
-                                                Free
-                                            </span>
-                                        )}
-                                    </div>
+                                    {/* Issue badges - only show if any */}
+                                    {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0 || isIdle) && (
+                                        <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                                            {user.overdueTasks > 0 && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/50">
+                                                    {user.overdueTasks} late
+                                                </span>
+                                            )}
+                                            {user.stuckTasks > 0 && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
+                                                    {user.stuckTasks} stuck
+                                                </span>
+                                            )}
+                                            {user.helpRequestTasks > 0 && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
+                                                    {user.helpRequestTasks} help
+                                                </span>
+                                            )}
+                                            {isIdle && (
+                                                <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50">
+                                                    Free
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </button>
 
                                 {/* Assign button - appears on hover */}
@@ -618,30 +623,6 @@ export function DashboardHeatmap({
                         {showAllMembers ? 'Show less' : `+${sortedUsers.length - 8} more members`}
                     </button>
                 )}
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center gap-3 pt-3 border-t text-[9px] text-muted-foreground flex-wrap">
-                <div className="flex items-center gap-1">
-                    <div className="w-2.5 h-2.5 rounded bg-green-200 dark:bg-green-800/40" />
-                    <span>Low</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-2.5 h-2.5 rounded bg-yellow-100 dark:bg-yellow-900/30" />
-                    <span>Medium</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-2.5 h-2.5 rounded bg-orange-100 dark:bg-orange-900/30" />
-                    <span>High</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-2.5 h-2.5 rounded bg-red-100 dark:bg-red-900/30" />
-                    <span>Overloaded</span>
-                </div>
-                <div className="flex items-center gap-1 ml-2">
-                    <div className="w-2.5 h-2.5 rounded border-2 border-blue-400" />
-                    <span>Available</span>
-                </div>
             </div>
 
             {/* Unassigned Tasks Quick View */}
