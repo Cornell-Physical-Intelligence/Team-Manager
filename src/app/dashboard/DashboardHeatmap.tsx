@@ -638,15 +638,19 @@ export function DashboardHeatmap({
                     const isIdle = idleUsers.includes(user.id)
                     const hasIssues = user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0
 
+                    // Determine status
+                    const status = hasIssues ? 'struggling' : isIdle ? 'available' : 'on-track'
+
                     return (
                         <button
                             key={user.id}
                             onClick={() => setSelectedUser(user)}
                             className={cn(
-                                "p-3 rounded-lg border text-left transition-all hover:shadow-md hover:border-primary/30",
+                                "p-3 rounded-lg border text-left transition-all hover:shadow-md",
                                 "bg-card",
-                                isOverloaded && "border-red-300 dark:border-red-800",
-                                isIdle && "border-blue-300 dark:border-blue-800"
+                                status === 'struggling' && "border-red-200 dark:border-red-900/50",
+                                status === 'available' && "border-blue-200 dark:border-blue-900/50",
+                                status === 'on-track' && "border-border"
                             )}
                         >
                             {/* User header */}
@@ -658,7 +662,7 @@ export function DashboardHeatmap({
                                         className="w-7 h-7 rounded-full border"
                                     />
                                 ) : (
-                                    <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary border">
+                                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold border">
                                         {user.name.charAt(0).toUpperCase()}
                                     </div>
                                 )}
@@ -671,30 +675,11 @@ export function DashboardHeatmap({
                             {/* Task stack visual */}
                             <TaskStack count={user.activeTasks} />
 
-                            {/* Status indicators */}
+                            {/* Status */}
                             <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                                <div className="flex items-center gap-1">
-                                    {hasIssues ? (
-                                        <>
-                                            {user.overdueTasks > 0 && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-600 dark:bg-red-900/50">
-                                                    {user.overdueTasks} late
-                                                </span>
-                                            )}
-                                            {user.stuckTasks > 0 && (
-                                                <span className="text-[8px] px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
-                                                    {user.stuckTasks} stuck
-                                                </span>
-                                            )}
-                                        </>
-                                    ) : isIdle ? (
-                                        <span className="text-[8px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/50">
-                                            Available
-                                        </span>
-                                    ) : (
-                                        <span className="text-[8px] text-emerald-600">On track</span>
-                                    )}
-                                </div>
+                                <span className="text-[9px] text-muted-foreground">
+                                    {status === 'struggling' ? 'Struggling' : status === 'available' ? 'Available' : 'On track'}
+                                </span>
                                 <span className="text-[9px] text-muted-foreground">
                                     {user.doneTasks} done
                                 </span>

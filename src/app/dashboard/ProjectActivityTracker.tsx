@@ -160,11 +160,11 @@ function TaskTimeline({ timeline, pushName }: { timeline: TimelineEvent[], pushN
                 <div className="text-[9px] text-muted-foreground">Task activity timeline</div>
                 <div className="flex items-center gap-2 text-[8px]">
                     <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400/70" />
                         Submitted
                     </span>
                     <span className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/70" />
                         Approved
                     </span>
                 </div>
@@ -193,7 +193,7 @@ function TaskTimeline({ timeline, pushName }: { timeline: TimelineEvent[], pushN
                     <path
                         d={submittedPath}
                         fill="none"
-                        className="stroke-blue-500"
+                        className="stroke-blue-400/80"
                         strokeWidth={1.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -205,7 +205,7 @@ function TaskTimeline({ timeline, pushName }: { timeline: TimelineEvent[], pushN
                     <path
                         d={approvedPath}
                         fill="none"
-                        className="stroke-emerald-500"
+                        className="stroke-emerald-400/80"
                         strokeWidth={1.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -219,7 +219,7 @@ function TaskTimeline({ timeline, pushName }: { timeline: TimelineEvent[], pushN
                         cx={getX(point.date)}
                         cy={getY(point.type === 'submitted' ? point.submitted : point.approved)}
                         r={2.5}
-                        className={point.type === 'submitted' ? 'fill-blue-500' : 'fill-emerald-500'}
+                        className={point.type === 'submitted' ? 'fill-blue-400/80' : 'fill-emerald-400/80'}
                     />
                 ))}
 
@@ -319,7 +319,7 @@ export function ProjectActivityTracker() {
     if (projects.length === 0) {
         return (
             <section className="border border-border rounded-lg p-4">
-                <h2 className="text-sm font-medium mb-3">Project Activity</h2>
+                <h2 className="text-sm font-medium mb-3">Activity Log</h2>
                 <p className="text-xs text-muted-foreground text-center py-8">
                     No projects found
                 </p>
@@ -330,7 +330,7 @@ export function ProjectActivityTracker() {
     return (
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-medium">Project Activity</h2>
+                <h2 className="text-sm font-medium">Activity Log</h2>
                 {projectMetrics && projectMetrics.velocityTrend !== 'stable' && (
                     <div className={cn(
                         "flex items-center gap-0.5 text-[9px]",
@@ -414,12 +414,12 @@ export function ProjectActivityTracker() {
                                             <div className="flex-1 h-4 rounded-sm overflow-hidden relative bg-neutral-300 dark:bg-neutral-700">
                                                 {/* Completed - Green */}
                                                 <div
-                                                    className="absolute left-0 top-0 bottom-0 transition-all bg-emerald-500 dark:bg-emerald-400"
+                                                    className="absolute left-0 top-0 bottom-0 transition-all bg-emerald-400/70 dark:bg-emerald-400"
                                                     style={{ width: `${completionPct}%` }}
                                                 />
                                                 {/* In Review - Blue */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all bg-blue-500 dark:bg-blue-400"
+                                                    className="absolute top-0 bottom-0 transition-all bg-blue-400/70 dark:bg-blue-400"
                                                     style={{ left: `${completionPct}%`, width: `${reviewPct}%` }}
                                                 />
                                                 {/* In Progress - Amber */}
@@ -476,14 +476,14 @@ export function ProjectActivityTracker() {
                                                 <div className="space-y-1.5 border-t border-border pt-2">
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-emerald-500 dark:bg-emerald-400" />
+                                                            <span className="w-2 h-2 rounded-sm bg-emerald-400/70 dark:bg-emerald-400" />
                                                             Done
                                                         </span>
                                                         <span className="font-medium">{push.completed} <span className="text-muted-foreground font-normal">({Math.round(completionPct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-blue-500 dark:bg-blue-400" />
+                                                            <span className="w-2 h-2 rounded-sm bg-blue-400/70 dark:bg-blue-400" />
                                                             In Review
                                                         </span>
                                                         <span className="font-medium">{push.inReview} <span className="text-muted-foreground font-normal">({Math.round(reviewPct)}%)</span></span>

@@ -362,13 +362,6 @@ export default async function DashboardPage() {
                     <div className="flex items-center gap-3 flex-wrap">
                         <h1 className="text-xl font-semibold">{user.name?.split(' ')[0]}'s Dashboard</h1>
                     </div>
-                    {/* Overdue warning on right */}
-                    {overdueTasks.length > 0 && (
-                        <span className="text-xs text-red-500 flex items-center gap-1">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            {overdueTasks.length} overdue
-                        </span>
-                    )}
                 </div>
 
                 {/* Main Grid */}

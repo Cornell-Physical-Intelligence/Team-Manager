@@ -201,16 +201,18 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                                 }}
                             />
                             <button
-                                className={`relative z-10 flex items-center gap-1 h-7 px-2 rounded-md text-sm font-medium transition-colors duration-200 ${view === 'kanban' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                className={`relative z-10 flex items-center gap-1.5 h-7 px-2 sm:px-3 rounded-md text-sm font-medium transition-colors duration-200 ${view === 'kanban' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => handleViewChange('kanban')}
                             >
                                 <LayoutGrid className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline text-xs">Kanban</span>
                             </button>
                             <button
-                                className={`relative z-10 flex items-center gap-1 h-7 px-2 rounded-md text-sm font-medium transition-colors duration-200 ${view === 'gantt' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                                className={`relative z-10 flex items-center gap-1.5 h-7 px-2 sm:px-3 rounded-md text-sm font-medium transition-colors duration-200 ${view === 'gantt' ? 'text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => handleViewChange('gantt')}
                             >
                                 <Calendar className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline text-xs">Gantt</span>
                             </button>
                         </div>
                         {project.lead && (
