@@ -27,7 +27,7 @@ export function TaskRow({ task }: TaskRowProps) {
     const handleClick = () => {
         setIsLoading(true)
         // Build URL with push parameter if available
-        let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
+        let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
         if (task.pushId) {
             url += `&push=${task.pushId}`
         }
@@ -107,7 +107,7 @@ export function ApprovalRow({ task }: ApprovalRowProps) {
 
     const handleClick = () => {
         setIsLoading(true)
-        let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
+        let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
         if (task.pushId) {
             url += `&push=${task.pushId}`
         }
