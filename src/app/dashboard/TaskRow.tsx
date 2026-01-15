@@ -44,7 +44,7 @@ export function TaskRow({ task }: TaskRowProps) {
             <div
                 className="absolute inset-y-0 left-0 w-16 pointer-events-none"
                 style={{
-                    background: `linear-gradient(to right, ${task.projectColor}15, transparent)`
+                    background: `linear-gradient(to right, ${task.projectColor}25, transparent)`
                 }}
             />
 
@@ -124,7 +124,7 @@ export function ApprovalRow({ task }: ApprovalRowProps) {
             <div
                 className="absolute inset-y-0 left-0 w-16 pointer-events-none"
                 style={{
-                    background: `linear-gradient(to right, ${task.projectColor}15, transparent)`
+                    background: `linear-gradient(to right, ${task.projectColor}25, transparent)`
                 }}
             />
 

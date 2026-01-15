@@ -645,13 +645,7 @@ export function DashboardHeatmap({
                         <button
                             key={user.id}
                             onClick={() => setSelectedUser(user)}
-                            className={cn(
-                                "relative p-3 rounded-lg border text-left transition-all hover:shadow-md overflow-hidden",
-                                "bg-card",
-                                status === 'struggling' && "border-red-300 dark:border-red-800",
-                                status === 'available' && "border-blue-300 dark:border-blue-800",
-                                status === 'on-track' && "border-emerald-300 dark:border-emerald-800"
-                            )}
+                            className="relative p-3 rounded-lg border border-border text-left transition-all hover:shadow-md overflow-hidden bg-card"
                         >
                             {/* Bottom gradient */}
                             <div
