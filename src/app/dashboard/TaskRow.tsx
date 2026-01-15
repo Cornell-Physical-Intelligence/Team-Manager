@@ -58,7 +58,7 @@ export function TaskRow({ task }: TaskRowProps) {
                 </span>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0 ml-2">
+            <div className="relative flex items-center gap-2 shrink-0">
                 {/* Comments/attachments count */}
                 {(task.commentsCount > 0 || task.attachmentsCount > 0) && (
                     <span className="text-[10px] text-muted-foreground hidden sm:inline">

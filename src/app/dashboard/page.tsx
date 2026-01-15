@@ -347,7 +347,7 @@ export default async function DashboardPage() {
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
         if (diffMs < 0) {
             const overdueDays = Math.abs(diffDays)
-            return { text: overdueDays === 0 ? 'Today' : `${overdueDays}d overdue`, isOverdue: true }
+            return { text: overdueDays === 0 ? 'Today' : `${overdueDays}d`, isOverdue: true }
         }
         if (diffDays === 0) return { text: 'Today', isOverdue: false }
         if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false }
