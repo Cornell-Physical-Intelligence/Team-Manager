@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { User, LayoutGrid, Calendar, Plus } from "lucide-react"
+import { LayoutGrid, Calendar, Plus } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
@@ -169,7 +169,18 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                 />
                 <div className="relative flex items-center justify-between gap-2 p-3">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                        <h1 className="text-base md:text-lg font-semibold truncate">{project.name}</h1>
+                        <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <h1 className="text-base md:text-lg font-semibold truncate cursor-default">{project.name}</h1>
+                                </TooltipTrigger>
+                                {project.lead && (
+                                    <TooltipContent side="bottom" align="start">
+                                        <p className="text-xs">Lead: {project.lead.name}</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                         {view === 'kanban' && (
                             <TooltipProvider delayDuration={300}>
                                 <Tooltip>
@@ -215,12 +226,6 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                                 <span className="hidden sm:inline text-xs">Gantt</span>
                             </button>
                         </div>
-                        {project.lead && (
-                            <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground shrink-0">
-                                <User className="h-3.5 w-3.5" />
-                                <span>Lead: {project.lead.name}</span>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
