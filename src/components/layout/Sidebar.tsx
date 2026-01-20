@@ -230,27 +230,31 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             transform: CSS.Transform.toString(transform),
             transition,
             opacity: isDragging ? 0.6 : 1,
-            ["--project-hover-bg" as any]: hexToRgba(projectColor, 0.08),
-            ["--project-active-bg" as any]: hexToRgba(projectColor, 0.18),
+            ["--project-active-bg" as any]: hexToRgba(projectColor, 0.22),
         }
 
         return (
             <div
                 ref={setNodeRef}
-                style={{
-                    ...style,
-                    ...(isActive && {
-                        background: `linear-gradient(to left, var(--project-active-bg), transparent 70%)`
-                    })
-                }}
+                style={style}
                 className={cn(
-                    "group flex items-center gap-1 rounded-md transition-colors",
-                    !isActive && "hover:bg-[var(--project-hover-bg)]"
+                    "group relative flex items-center gap-1 rounded-md transition-all duration-300",
+                    !isActive && "hover:bg-muted/50"
                 )}
             >
+                {/* Active gradient indicator */}
+                <div
+                    className={cn(
+                        "absolute inset-0 rounded-md transition-all duration-300 ease-out",
+                        isActive ? "opacity-100" : "opacity-0"
+                    )}
+                    style={{
+                        background: `linear-gradient(to left, var(--project-active-bg), transparent 60%)`,
+                    }}
+                />
                 <button
                     type="button"
-                    className="h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
+                    className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
                     style={{ color: projectColor }}
                     onClick={(e) => e.preventDefault()}
                     {...attributes}
@@ -263,7 +267,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                     href={`/dashboard/projects/${project.id}`}
                     onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
                     className={cn(
-                        "flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
+                        "relative z-10 flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
                         isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                     )}
                 >
