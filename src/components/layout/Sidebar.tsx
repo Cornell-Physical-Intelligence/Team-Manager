@@ -110,6 +110,119 @@ const PROJECT_COLOR_OPTIONS = [
     "#ec4899", // pink
 ] as const
 
+const SortableProjectRow = React.memo(({
+    project,
+    pathname,
+    navigatingTo,
+    isAdmin,
+    setNavigatingTo,
+    setEditingProject,
+    setDeleteConfirm
+}: {
+    project: Project
+    pathname: string
+    navigatingTo: string | null
+    isAdmin: boolean
+    setNavigatingTo: (path: string) => void
+    setEditingProject: (project: Project) => void
+    setDeleteConfirm: (project: Project) => void
+}) => {
+    const isActive = pathname === `/dashboard/projects/${project.id}`
+    const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
+    const projectColor = project.color || "#3b82f6"
+    const style: React.CSSProperties = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+        ["--project-active-bg" as any]: hexToRgba(projectColor, 0.22),
+    }
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={cn(
+                "group relative flex items-center gap-1 rounded-md transition-all duration-300",
+                !isActive && "hover:bg-muted/50"
+            )}
+        >
+            {/* Active gradient indicator - animates from right */}
+            <div
+                className={cn(
+                    "absolute inset-0 rounded-md",
+                    isActive ? "animate-sidebar-gradient" : "scale-x-0 origin-right"
+                )}
+                style={{
+                    background: `linear-gradient(to left, var(--project-active-bg), transparent 60%)`,
+                }}
+            />
+            <button
+                type="button"
+                className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
+                style={{ color: projectColor }}
+                onClick={(e) => e.preventDefault()}
+                {...attributes}
+                {...listeners}
+                title="Reorder"
+            >
+                <GripVertical className="h-4 w-4" />
+            </button>
+            <Link
+                href={`/dashboard/projects/${project.id}`}
+                onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
+                className={cn(
+                    "relative z-10 flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
+                    isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
+                )}
+            >
+                <span className="truncate">{project.name}</span>
+            </Link>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                    >
+                        {navigatingTo === `/dashboard/projects/${project.id}` ? (
+                            <div className="flex items-center gap-[3px]">
+                                {[0, 1, 2].map((i) => (
+                                    <span
+                                        key={i}
+                                        className="w-[3px] h-[3px] rounded-full bg-current animate-bounce"
+                                        style={{
+                                            animationDuration: '0.6s',
+                                            animationDelay: `${i * 0.1}s`,
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <MoreHorizontal className="h-4 w-4" />
+                        )}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="right" className="w-32 z-50">
+                    <DropdownMenuItem onSelect={() => setEditingProject(project)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                    </DropdownMenuItem>
+                    {isAdmin && (
+                        <DropdownMenuItem
+                            onSelect={() => setDeleteConfirm(project)}
+                            className="text-red-600"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                        </DropdownMenuItem>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    )
+})
+SortableProjectRow.displayName = "SortableProjectRow"
+
 export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUserData?: Partial<UserData>; isMobileSheet?: boolean } = {}) {
     const pathname = usePathname()
     const router = useRouter()
@@ -221,102 +334,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             return next
         })
     }, [persistProjectOrder])
-
-    function SortableProjectRow({ project }: { project: Project }) {
-        const isActive = pathname === `/dashboard/projects/${project.id}`
-        const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
-        const projectColor = project.color || "#3b82f6"
-        const style: React.CSSProperties = {
-            transform: CSS.Transform.toString(transform),
-            transition,
-            opacity: isDragging ? 0.6 : 1,
-            ["--project-active-bg" as any]: hexToRgba(projectColor, 0.22),
-        }
-
-        return (
-            <div
-                ref={setNodeRef}
-                style={style}
-                className={cn(
-                    "group relative flex items-center gap-1 rounded-md transition-all duration-300",
-                    !isActive && "hover:bg-muted/50"
-                )}
-            >
-                {/* Active gradient indicator - animates from right */}
-                <div
-                    className={cn(
-                        "absolute inset-0 rounded-md",
-                        isActive ? "animate-sidebar-gradient" : "scale-x-0 origin-right"
-                    )}
-                    style={{
-                        background: `linear-gradient(to left, var(--project-active-bg), transparent 60%)`,
-                    }}
-                />
-                <button
-                    type="button"
-                    className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
-                    style={{ color: projectColor }}
-                    onClick={(e) => e.preventDefault()}
-                    {...attributes}
-                    {...listeners}
-                    title="Reorder"
-                >
-                    <GripVertical className="h-4 w-4" />
-                </button>
-                <Link
-                    href={`/dashboard/projects/${project.id}`}
-                    onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
-                    className={cn(
-                        "relative z-10 flex-1 flex items-center rounded-md px-3 py-1.5 text-sm transition-colors truncate",
-                        isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
-                    )}
-                >
-                    <span className="truncate">{project.name}</span>
-                </Link>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
-                        >
-                            {navigatingTo === `/dashboard/projects/${project.id}` ? (
-                                <div className="flex items-center gap-[3px]">
-                                    {[0, 1, 2].map((i) => (
-                                        <span
-                                            key={i}
-                                            className="w-[3px] h-[3px] rounded-full bg-current animate-bounce"
-                                            style={{
-                                                animationDuration: '0.6s',
-                                                animationDelay: `${i * 0.1}s`,
-                                            }}
-                                        />
-                                    ))}
-                                </div>
-                            ) : (
-                                <MoreHorizontal className="h-4 w-4" />
-                            )}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="right" className="w-32 z-50">
-                        <DropdownMenuItem onSelect={() => setEditingProject(project)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
-                        </DropdownMenuItem>
-                        {isAdmin && (
-                            <DropdownMenuItem
-                                onSelect={() => setDeleteConfirm(project)}
-                                className="text-red-600"
-                            >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                            </DropdownMenuItem>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-        )
-    }
 
     // Fetch lead candidates & all users
     const fetchUsers = React.useCallback(() => {
@@ -578,7 +595,16 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                     >
                                         <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                                             {projects.map((project) => (
-                                                <SortableProjectRow key={project.id} project={project} />
+                                                <SortableProjectRow
+                                                    key={project.id}
+                                                    project={project}
+                                                    pathname={pathname}
+                                                    navigatingTo={navigatingTo}
+                                                    isAdmin={isAdmin}
+                                                    setNavigatingTo={setNavigatingTo}
+                                                    setEditingProject={setEditingProject}
+                                                    setDeleteConfirm={setDeleteConfirm}
+                                                />
                                             ))}
                                         </SortableContext>
                                     </DndContext>
