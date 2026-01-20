@@ -151,9 +151,7 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                             "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate",
                             isOverdue
                                 ? "bg-red-50 text-red-600 border-red-100"
-                                : daysLeft <= 2
-                                    ? "bg-orange-50 text-orange-600 border-orange-100"
-                                    : "bg-muted text-muted-foreground border-transparent"
+                                : "bg-muted text-muted-foreground border-transparent"
                         )}>
                             <Clock className="w-3 h-3 shrink-0" />
                             <span className="truncate">
