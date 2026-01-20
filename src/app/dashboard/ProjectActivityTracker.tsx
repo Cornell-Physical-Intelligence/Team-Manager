@@ -357,12 +357,12 @@ export function ProjectActivityTracker() {
     }
 
     return (
-        <section className="border border-border rounded-lg p-4 h-full flex flex-col">
+        <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3 shrink-0">
                 <h2 className="text-sm font-medium">Activity Log</h2>
             </div>
 
-            <TooltipProvider>
+            <TooltipProvider delayDuration={500}>
                 {/* Project Selector */}
                 <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide shrink-0 relative">
                     {projects.map(project => {
