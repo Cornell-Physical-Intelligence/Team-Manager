@@ -915,38 +915,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                                 >
                                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
                                         <span className="font-semibold text-base md:text-lg tracking-tight truncate">{push.name}</span>
-                                        {isComplete ? (
-                                            <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full ring-1 ring-inset ring-green-600/20 dark:ring-green-400/20 shrink-0">
-                                                <CheckCircle2 className="w-3 h-3" />
-                                                <span className="hidden md:inline">{push.endDate && push.endDate !== 'null' ? `Completed ${new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Completed!'}</span>
-                                                <span className="md:hidden">Done</span>
-                                            </span>
-                                        ) : push.taskCount > 0 && (
-                                            <TooltipProvider delayDuration={100}>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <div className="w-16 md:w-20 h-1.5 bg-muted/60 rounded-full overflow-hidden shrink-0">
-                                                            <div
-                                                                className="h-full bg-primary/50 rounded-full transition-all duration-300"
-                                                                style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
-                                                            />
-                                                        </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top" className="text-xs">
-                                                        {push.completedCount}/{push.taskCount} tasks completed
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                                        {!isComplete && (
-                                            <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                                                {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
-                                            </span>
-                                        )}
-                                        {isAdmin && (
+                                        {isAdmin && !isComplete && (
                                             <div
                                                 role="button"
                                                 onClick={(e) => {
@@ -957,11 +926,43 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                                                         setCreatingPushId(push.id)
                                                     }
                                                 }}
-                                                className="h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md border border-border hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all relative z-10"
+                                                className="h-6 w-6 md:h-7 md:w-7 flex items-center justify-center rounded-md border border-border hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all relative z-10 shrink-0"
                                                 title="Add Task"
                                             >
-                                                <Plus className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                <Plus className="h-3 w-3 md:h-3.5 md:w-3.5" />
                                             </div>
+                                        )}
+                                        {isComplete && (
+                                            <span className="hidden sm:flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full ring-1 ring-inset ring-green-600/20 dark:ring-green-400/20 shrink-0">
+                                                <CheckCircle2 className="w-3 h-3" />
+                                                <span className="hidden md:inline">{push.endDate && push.endDate !== 'null' ? `Completed ${new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : 'Completed!'}</span>
+                                                <span className="md:hidden">Done</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                                        {!isComplete && push.taskCount > 0 && (
+                                            <TooltipProvider delayDuration={100}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div className="w-20 md:w-24 h-2 bg-muted rounded-full overflow-hidden shrink-0">
+                                                            <div
+                                                                className="h-full bg-primary/60 rounded-full transition-all duration-300"
+                                                                style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
+                                                            />
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="text-xs">
+                                                        {push.completedCount}/{push.taskCount} tasks completed
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        )}
+                                        {!isComplete && (
+                                            <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                                {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
+                                            </span>
                                         )}
                                         {isAdmin && (
                                             <div

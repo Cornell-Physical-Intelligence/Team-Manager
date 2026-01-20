@@ -101,9 +101,6 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                     "w-full text-left group relative flex flex-col gap-1.5 p-3 rounded-lg border transition-colors transition-shadow duration-200",
                     "bg-emerald-50/40 border-emerald-100 hover:border-emerald-200 hover:shadow-sm dark:bg-emerald-900/10 dark:border-emerald-900/30 dark:hover:border-emerald-800/50"
                 )}
-                style={{
-                    background: `linear-gradient(to right, ${task.projectColor}15 0%, transparent 4px)`
-                }}
             >
                 <div className="flex items-start justify-between gap-2">
                     <h4 className="text-xs font-medium text-emerald-950/80 dark:text-emerald-100/80 leading-snug line-clamp-2">
@@ -128,9 +125,6 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                 isReview ? "border-orange-200 bg-orange-50/10" : "border-border",
                 task.hasHelpRequest && "ring-1 ring-amber-300/50"
             )}
-            style={{
-                background: `linear-gradient(to right, ${task.projectColor}20 0%, transparent 4px), ${isReview ? 'rgb(255 247 237 / 0.1)' : 'var(--card)'}`
-            }}
         >
             {/* Title */}
             <h4 className="text-sm font-medium leading-snug text-foreground mb-3 line-clamp-2">
@@ -282,7 +276,7 @@ export function PersonalKanban({ columns, projects, userName }: PersonalKanbanPr
     }
 
     const handleTaskClick = (task: Task) => {
-        let url = `/dashboard/projects/${task.projectId}?task=${task.id}`
+        let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
         if (task.pushId) url += `&push=${task.pushId}`
         router.push(url)
     }
