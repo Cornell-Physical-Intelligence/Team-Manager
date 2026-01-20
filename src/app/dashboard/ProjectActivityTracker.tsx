@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronRight, TrendingUp, TrendingDown, Minus, CheckCircle2, Clock, Loader2, AlertTriangle, Calendar, Target, Activity, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from "framer-motion"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 type TimelineEvent = {
     date: string
@@ -235,6 +237,17 @@ function TaskTimeline({ timeline, pushName }: { timeline: TimelineEvent[], pushN
     )
 }
 
+// Calculate velocity trend for a project
+const getProjectVelocityTrend = (pushes: PushStats[]) => {
+    if (pushes.length < 2) return 'stable'
+    const mid = Math.floor(pushes.length / 2)
+    const olderAvg = pushes.slice(0, mid).reduce((s, p) => s + p.completed, 0) / mid
+    const recentAvg = pushes.slice(mid).reduce((s, p) => s + p.completed, 0) / (pushes.length - mid)
+    if (recentAvg > olderAvg * 1.1) return 'up'
+    if (recentAvg < olderAvg * 0.9) return 'down'
+    return 'stable'
+}
+
 export function ProjectActivityTracker() {
     const router = useRouter()
     const [projects, setProjects] = useState<ProjectActivity[]>([])
@@ -302,15 +315,8 @@ export function ProjectActivityTracker() {
             ? pushes.reduce((sum, p) => sum + getPushHealth(p), 0) / pushes.length
             : 100
 
-        // Calculate velocity trend (comparing recent vs older pushes)
-        let velocityTrend: 'up' | 'down' | 'stable' = 'stable'
-        if (pushes.length >= 2) {
-            const mid = Math.floor(pushes.length / 2)
-            const olderAvg = pushes.slice(0, mid).reduce((s, p) => s + p.completed, 0) / mid
-            const recentAvg = pushes.slice(mid).reduce((s, p) => s + p.completed, 0) / (pushes.length - mid)
-            if (recentAvg > olderAvg * 1.1) velocityTrend = 'up'
-            else if (recentAvg < olderAvg * 0.9) velocityTrend = 'down'
-        }
+        // Calculate velocity trend
+        const velocityTrend = getProjectVelocityTrend(pushes)
 
         // Submissions in review
         const pendingReview = pushes.reduce((s, p) => s + p.inReview, 0)
@@ -351,47 +357,64 @@ export function ProjectActivityTracker() {
     }
 
     return (
-        <section className="border border-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
+        <section className="border border-border rounded-lg p-4 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-3 shrink-0">
                 <h2 className="text-sm font-medium">Activity Log</h2>
-                {projectMetrics && projectMetrics.velocityTrend !== 'stable' && (
-                    <div className={cn(
-                        "flex items-center gap-0.5 text-[9px]",
-                        projectMetrics.velocityTrend === 'up' ? "text-emerald-600" : "text-amber-600"
-                    )}>
-                        {projectMetrics.velocityTrend === 'up' ? (
-                            <TrendingUp className="h-3 w-3" />
-                        ) : (
-                            <TrendingDown className="h-3 w-3" />
-                        )}
-                        {projectMetrics.velocityTrend === 'up' ? 'Velocity up' : 'Slowing'}
-                    </div>
-                )}
             </div>
 
-            {/* Project Selector */}
-            <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-                {projects.map(project => {
-                    const hasOverdue = project.pushes.some(isPushOverdue)
-                    return (
-                        <button
-                            key={project.id}
-                            onClick={() => setSelectedProject(project.id)}
-                            className={cn(
-                                "px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition-all shrink-0 relative",
-                                selectedProject === project.id
-                                    ? "bg-foreground text-background"
-                                    : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                            )}
-                        >
-                            {project.name}
-                            {hasOverdue && selectedProject !== project.id && (
-                                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                            )}
-                        </button>
-                    )
-                })}
-            </div>
+            <TooltipProvider>
+                {/* Project Selector */}
+                <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide shrink-0 relative">
+                    {projects.map(project => {
+                        const hasOverdue = project.pushes.some(isPushOverdue)
+                        const trend = getProjectVelocityTrend(project.pushes)
+                        const isActive = selectedProject === project.id
+
+                        return (
+                            <Tooltip key={project.id}>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => setSelectedProject(project.id)}
+                                        className={cn(
+                                            "px-2.5 py-1.5 rounded text-[10px] font-medium whitespace-nowrap transition-colors shrink-0 relative",
+                                            isActive
+                                                ? "text-background"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        <span className="relative z-10">{project.name}</span>
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="active-project-bg"
+                                                className="absolute inset-0 bg-foreground rounded"
+                                                transition={{
+                                                    type: "spring",
+                                                    stiffness: 400,
+                                                    damping: 25,
+                                                    mass: 0.8
+                                                }}
+                                            />
+                                        )}
+                                        {hasOverdue && !isActive && (
+                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full z-20" />
+                                        )}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[10px] py-1.5 px-2">
+                                    <div className="flex items-center gap-1.5">
+                                        {trend === 'up' && <TrendingUp className="h-3 w-3 text-emerald-500" />}
+                                        {trend === 'down' && <TrendingDown className="h-3 w-3 text-amber-500" />}
+                                        {trend === 'stable' && <Minus className="h-3 w-3 text-blue-500" />}
+                                        <span className="font-medium">
+                                            {trend === 'up' ? 'Velocity up' : trend === 'down' ? 'Slowing' : 'Maintaining'}
+                                        </span>
+                                    </div>
+                                </TooltipContent>
+                            </Tooltip>
+                        )
+                    })}
+                </div>
+            </TooltipProvider>
 
             {selectedProjectData && projectMetrics && (
                 <>

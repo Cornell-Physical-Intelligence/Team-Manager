@@ -134,7 +134,7 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                 </div>
                 <div className="flex items-center justify-end mt-1">
                     <div
-                        className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-foreground truncate max-w-[120px]"
+                        className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px]"
                         style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
                     >
                         {task.projectName}
@@ -186,7 +186,7 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
 
                 {/* Project Badge (Right) */}
                 <div
-                    className="text-[10px] px-2 py-0.5 rounded-sm font-semibold text-foreground truncate max-w-[120px]"
+                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px]"
                     style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
                 >
                     {task.projectName}

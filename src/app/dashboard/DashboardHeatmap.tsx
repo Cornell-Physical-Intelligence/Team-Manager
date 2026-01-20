@@ -683,12 +683,7 @@ export function DashboardHeatmap({
 
                             {/* Status */}
                             <div className="relative flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                                <span className={cn(
-                                    "text-[9px] font-medium",
-                                    status === 'struggling' && "text-red-700 dark:text-red-400",
-                                    status === 'available' && "text-blue-700 dark:text-blue-400",
-                                    status === 'on-track' && "text-emerald-700 dark:text-emerald-400"
-                                )}>
+                                <span className="text-[9px] font-medium text-black dark:text-gray-100">
                                     {status === 'struggling' ? 'Struggling' : status === 'available' ? 'Available' : 'On track'}
                                 </span>
                                 <span className="text-[9px] text-muted-foreground">
