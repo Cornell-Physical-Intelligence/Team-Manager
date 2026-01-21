@@ -464,8 +464,7 @@ export function ProjectActivityTracker() {
                         >
                             {selectedProjectData.pushes.map(push => {
                                 const completionPct = push.total > 0 ? (push.completed / push.total) * 100 : 0
-                                const reviewPct = push.total > 0 ? (push.inReview / push.total) * 100 : 0
-                                const progressPct = push.total > 0 ? (push.inProgress / push.total) * 100 : 0
+                                const activePct = push.total > 0 ? ((push.inReview + push.inProgress) / push.total) * 100 : 0
                                 const isOverdue = isPushOverdue(push)
                                 const daysStatus = getDaysStatus(push)
                                 const isHovered = hoveredPush === push.id
@@ -490,15 +489,10 @@ export function ProjectActivityTracker() {
                                                     className="absolute left-0 top-0 bottom-0 transition-all bg-gradient-to-r from-emerald-400 to-emerald-500 dark:from-emerald-500 dark:to-emerald-400 animate-progress-shimmer border-r border-black/5"
                                                     style={{ width: `${completionPct}%` }}
                                                 />
-                                                {/* In Review - Blue */}
+                                                {/* Active (Review + Progress) - Blue */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-400 animate-progress-shimmer border-r border-black/5"
-                                                    style={{ left: `${completionPct}%`, width: `${reviewPct}%` }}
-                                                />
-                                                {/* In Progress - Amber */}
-                                                <div
-                                                    className="absolute top-0 bottom-0 transition-all bg-gradient-to-r from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-400 animate-progress-shimmer border-r border-black/5"
-                                                    style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%` }}
+                                                    className="absolute top-0 bottom-0 transition-all bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-400 animate-progress-shimmer"
+                                                    style={{ left: `${completionPct}%`, width: `${activePct}%` }}
                                                 />
                                                 {/* Overdue indicator */}
                                                 {isOverdue && (
@@ -564,17 +558,10 @@ export function ProjectActivityTracker() {
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-blue-400/70 dark:bg-blue-400" />
-                                                            In Review
+                                                            <span className="w-2 h-2 rounded-sm bg-blue-400 animate-progress-shimmer" />
+                                                            Active
                                                         </span>
-                                                        <span className="font-medium">{push.inReview} <span className="text-muted-foreground font-normal">({Math.round(reviewPct)}%)</span></span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-sm bg-amber-500 dark:bg-amber-400" />
-                                                            In Progress
-                                                        </span>
-                                                        <span className="font-medium">{push.inProgress} <span className="text-muted-foreground font-normal">({Math.round(progressPct)}%)</span></span>
+                                                        <span className="font-medium">{push.inReview + push.inProgress} <span className="text-muted-foreground font-normal">({Math.round(activePct)}%)</span></span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="flex items-center gap-1.5">

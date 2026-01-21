@@ -318,7 +318,7 @@ function UserDetailDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogContent className="max-w-7xl max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
@@ -358,26 +358,22 @@ function UserDetailDialog({
                         </div>
 
                         {/* Stats + Assign */}
-                        <div className="flex items-center gap-4 pr-6">
-                            <div className="text-center">
-                                <p className="text-lg font-bold">{user.activeTasks}</p>
-                                <p className="text-[9px] text-muted-foreground">Active</p>
+                        <div className="flex items-center gap-2 pr-6 h-10">
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium bg-muted/30 px-2.5 py-1 rounded-full border border-border/50">
+                                <span><span className="text-foreground/80">{user.activeTasks}</span> Active</span>
+                                <span className="opacity-30">•</span>
+                                <span><span className="text-foreground/80">{doneTasks.length}</span> Done</span>
+                                {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0) && (
+                                    <>
+                                        <span className="opacity-30">•</span>
+                                        <span><span className="text-foreground/80">{user.overdueTasks + user.stuckTasks + user.helpRequestTasks}</span> Issues</span>
+                                    </>
+                                )}
                             </div>
-                            <div className="text-center">
-                                <p className="text-lg font-bold">{doneTasks.length}</p>
-                                <p className="text-[9px] text-muted-foreground">Done</p>
-                            </div>
-                            {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0) && (
-                                <div className="text-center">
-                                    <p className="text-lg font-bold text-amber-600">
-                                        {user.overdueTasks + user.stuckTasks + user.helpRequestTasks}
-                                    </p>
-                                    <p className="text-[9px] text-muted-foreground">Issues</p>
-                                </div>
-                            )}
+
                             {unassignedTasks.length > 0 && (
-                                <Button size="sm" variant="outline" onClick={onAssignClick}>
-                                    <Plus className="h-3.5 w-3.5 mr-1" />
+                                <Button size="sm" variant="outline" onClick={onAssignClick} className="h-7 text-[10px] px-3">
+                                    <Plus className="h-3 w-3 mr-1" />
                                     Assign
                                 </Button>
                             )}
