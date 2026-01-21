@@ -144,24 +144,24 @@ export function ApprovalRow({ task, onApproved, onDenied }: ApprovalRowProps) {
 
     return (
         <div
+            onClick={handleClick}
             className={cn(
-                "w-full text-left group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 overflow-hidden min-h-[88px]",
+                "w-full text-left group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 overflow-hidden min-h-[88px] cursor-pointer",
                 "hover:shadow-md hover:border-primary/20 border-border"
             )}
         >
             <div className="flex items-center justify-between gap-2 mb-3">
-                <button
-                    onClick={handleClick}
-                    className="text-sm font-medium leading-snug line-clamp-2 text-left hover:underline flex-1"
-                >
+                <span className="text-sm font-medium leading-snug line-clamp-2 text-left flex-1 text-foreground">
                     {task.title}
-                </button>
+                </span>
                 {ApprovalPreviewButton && (
-                    <ApprovalPreviewButton
-                        task={task}
-                        onApproved={onApproved}
-                        onDenied={onDenied}
-                    />
+                    <div onClick={(e) => e.stopPropagation()}>
+                        <ApprovalPreviewButton
+                            task={task}
+                            onApproved={onApproved}
+                            onDenied={onDenied}
+                        />
+                    </div>
                 )}
             </div>
 
