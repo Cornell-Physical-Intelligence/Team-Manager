@@ -67,8 +67,11 @@ export function TaskRow({ task }: TaskRowProps) {
                 </div>
 
                 <div
-                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px]"
-                    style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
+                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px] border"
+                    style={{
+                        background: `linear-gradient(to right, ${task.projectColor}20, transparent)`,
+                        borderColor: `${task.projectColor}30`
+                    }}
                 >
                     {task.projectName}
                 </div>
@@ -196,8 +199,11 @@ export function ApprovalRow({ task, onApproved, onDenied }: ApprovalRowProps) {
 
                 {/* Project Badge */}
                 <div
-                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[100px]"
-                    style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
+                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[100px] border"
+                    style={{
+                        background: `linear-gradient(to right, ${task.projectColor}20, transparent)`,
+                        borderColor: `${task.projectColor}30`
+                    }}
                 >
                     {task.projectName}
                 </div>

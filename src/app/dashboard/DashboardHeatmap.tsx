@@ -672,26 +672,28 @@ export function DashboardHeatmap({
                             </div>
 
                             {/* Status */}
-                            <div className="relative flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                            <div className="relative flex items-center mt-2 pt-2 border-t border-border/50">
                                 <span
-                                    className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm"
+                                    className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm border"
                                     style={{
                                         background: status === 'struggling'
-                                            ? 'linear-gradient(to right, rgba(239, 68, 68, 0.2), transparent)'
+                                            ? 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)'
                                             : status === 'available'
-                                            ? 'linear-gradient(to right, rgba(59, 130, 246, 0.2), transparent)'
-                                            : 'linear-gradient(to right, rgba(34, 197, 94, 0.2), transparent)',
+                                            ? 'linear-gradient(to right, rgba(59, 130, 246, 0.15), transparent)'
+                                            : 'linear-gradient(to right, rgba(34, 197, 94, 0.15), transparent)',
                                         color: status === 'struggling'
                                             ? 'rgb(185, 28, 28)'
                                             : status === 'available'
                                             ? 'rgb(37, 99, 235)'
-                                            : 'rgb(22, 163, 74)'
+                                            : 'rgb(22, 163, 74)',
+                                        borderColor: status === 'struggling'
+                                            ? 'rgba(239, 68, 68, 0.3)'
+                                            : status === 'available'
+                                            ? 'rgba(59, 130, 246, 0.3)'
+                                            : 'rgba(34, 197, 94, 0.3)'
                                     }}
                                 >
                                     {status === 'struggling' ? 'Struggling' : status === 'available' ? 'Available' : 'On track'}
-                                </span>
-                                <span className="text-[9px] text-muted-foreground">
-                                    {user.doneTasks} done
                                 </span>
                             </div>
                         </button>

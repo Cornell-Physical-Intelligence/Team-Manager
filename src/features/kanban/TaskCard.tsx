@@ -5,22 +5,8 @@ import { CSS } from "@dnd-kit/utilities"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ArrowLeft, ArrowRight, Clock, CalendarDays, CheckCircle2, Lock } from "lucide-react"
 import { cn, getInitials } from "@/lib/utils"
-import { Slider } from "@/components/ui/slider"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { updateTaskProgress } from "@/app/actions/kanban"
-import { useState, useEffect, useRef } from "react"
-// import { useDebounce } from "@/hooks/use-debounce" 
-
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { useRef } from "react"
 
 type TaskCardProps = {
     task: {
@@ -78,94 +64,17 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
         opacity: isDragging ? 0 : 1,
     }
 
-    // Calculate time progress and status
+    // Calculate due date status
     const now = new Date().getTime()
-    const startTime = task.startDate ? new Date(task.startDate).getTime() : null
     const endTime = task.endDate ? new Date(task.endDate).getTime() : null
 
-    let timeProgress: number | null = null
     let daysLeft: number | null = null
     let isOverdue = false
 
-    if (startTime && endTime) {
-        const totalDuration = endTime - startTime
-        const elapsed = now - startTime
-        timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100)
-        daysLeft = Math.ceil((endTime - now) / (1000 * 60 * 60 * 24))
-        isOverdue = daysLeft < 0
-    } else if (endTime) {
+    if (endTime) {
         daysLeft = Math.ceil((endTime - now) / (1000 * 60 * 60 * 24))
         isOverdue = daysLeft < 0
     }
-
-    // Modern Progress Bar Color
-    const getProgressColor = () => {
-        if (isOverdue) return 'bg-red-500'
-        if (timeProgress && timeProgress > 90) return 'bg-orange-500'
-        return 'bg-primary/60'
-    }
-
-    // Manual Progress Logic
-    const [manualProgress, setManualProgress] = useState(task.progress || 0)
-    const [isUpdatingProgress, setIsUpdatingProgress] = useState(false)
-
-    useEffect(() => {
-        setManualProgress(task.progress || 0)
-    }, [task.progress])
-
-    const handleProgressChange = (value: number[]) => {
-        setManualProgress(value[0])
-    }
-
-    const [showReviewConfirm, setShowReviewConfirm] = useState(false)
-
-    const handleProgressCommit = async (value: number[]) => {
-        if (!task.enableProgress) return
-
-        // If user drags to 100%, show confirmation prompt
-        if (value[0] === 100) {
-            setShowReviewConfirm(true)
-            // Still update the progress locally/server to 100? 
-            // Better to wait for confirmation for the move, but save the 100% value.
-            // Actually, if they cancel, we might want to keep it at 100 or revert. 
-            // Let's assume we save the 100% value first.
-            await updateTaskProgress(task.id, 100, projectId || "unknown")
-            return
-        }
-
-        setIsUpdatingProgress(true)
-        await updateTaskProgress(task.id, value[0], projectId || "unknown")
-        setIsUpdatingProgress(false)
-    }
-
-    const navToReview = async () => {
-        // Trigger server action to move to review
-        // We can reuse updateTaskProgress but pass a flag, or separate action?
-        // Actually, updateTaskProgress previously inferred it. 
-        // We will modify updateTaskProgress to accept an explicit 'moveToReview' flag or rely on client call to updateTaskStatus.
-        // Let's use updateTaskProgress with a special 'forceReview' flag if we modify it, OR just call updateTaskStatus.
-        // But updateTaskStatus requires us to know the review column ID.
-        // Easier to let updateTaskProgress handle it via a new argument?
-        // Or just let updateTaskProgress handle it if progress is 100 AND we ask it to?
-
-        // Let's modify updateTaskProgress to take a 'moveToReview' boolean. 
-        // For now, I'll assume we updated the server action to NOT auto-move unless requested.
-        // Wait, I am editing the server action too. I will add `moveToReview` param.
-
-        setIsUpdatingProgress(true)
-        const result = await updateTaskProgress(task.id, 100, projectId || "unknown", true)
-        if (result.movedToReview) {
-            router.refresh()
-        }
-        setIsUpdatingProgress(false)
-        setShowReviewConfirm(false)
-    }
-
-    const isAssignee = currentUserId && (
-        task.assignee?.id === currentUserId || task.assignee?.name === currentUserId || // fallback if id missing
-        task.assignees?.some(a => a.user.id === currentUserId)
-    )
-    const canUpdateProgress = isAssignee || isAdmin
 
     const assigneeUsers =
         task.assignees && task.assignees.length > 0
@@ -177,12 +86,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
     const maxVisibleAssignees = 3
     const visibleAssignees = assigneeUsers.slice(0, maxVisibleAssignees)
     const extraAssigneeCount = Math.max(assigneeUsers.length - visibleAssignees.length, 0)
-
-    const getManualProgressColorClass = (val: number) => {
-        if (val < 30) return "bg-red-500"
-        if (val < 70) return "bg-yellow-500"
-        return "bg-green-500"
-    }
 
     // Render Overlay Card (Action of dragging)
     if (overlay) {
@@ -331,50 +234,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                 </div>
             </div>
 
-            {/* Progress Bar (if active) */}
-            {(task.enableProgress) ? (
-                <div
-                    className="mt-3 px-1"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {/* Stop propagation to prevent card drag when interacting with slider */}
-                    <TooltipProvider>
-                        <Tooltip delayDuration={0}>
-                            <TooltipTrigger asChild>
-                                <div className={cn("relative flex items-center gap-2", !canUpdateProgress && "opacity-80")}>
-                                    <Slider
-                                        disabled={!canUpdateProgress}
-                                        value={[manualProgress]}
-                                        max={100}
-                                        step={5}
-                                        onValueChange={handleProgressChange}
-                                        onValueCommit={handleProgressCommit}
-                                        className="h-4"
-                                        rangeClassName={getManualProgressColorClass(manualProgress)}
-                                    />
-                                    <span className="text-[10px] font-medium min-w-[3ch] text-muted-foreground">{manualProgress}%</span>
-                                </div>
-                            </TooltipTrigger>
-                            {!canUpdateProgress && (
-                                <TooltipContent side="top" className="text-[10px] bg-muted text-muted-foreground border shadow-sm px-2 py-1">
-                                    <p>Only assignees can update progress</p>
-                                </TooltipContent>
-                            )}
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-            ) : (
-                timeProgress !== null && !isReviewColumn && (
-                    <div className="mt-3 h-1 w-full bg-muted rounded-full overflow-hidden">
-                        <div
-                            className={cn("h-full rounded-full transition-all duration-300", getProgressColor())}
-                            style={{ width: `${Math.min(timeProgress, 100)}%` }}
-                        />
-                    </div>
-                )
-            )}
-
             {/* Review Actions Footer */}
             {isReviewColumn && (
                 <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between gap-2">
@@ -395,24 +254,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     )}
                 </div>
             )}
-
-
-            <div onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-                <AlertDialog open={showReviewConfirm} onOpenChange={setShowReviewConfirm}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Task Completed?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                You've marked this task as 100% complete. Would you like to move it to the <strong>Review</strong> column?
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>No, keep here</AlertDialogCancel>
-                            <AlertDialogAction onClick={navToReview}>Yes, move to Review</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </div>
         </div>
     )
 }
