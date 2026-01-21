@@ -5,10 +5,23 @@ import prisma from '@/lib/prisma'
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
+    const state = searchParams.get('state')
 
     if (!code) {
         return NextResponse.redirect(new URL('/?error=no_code', request.url))
     }
+
+    // SECURITY: Verify CSRF state parameter
+    const cookieStore = await cookies()
+    const storedState = cookieStore.get('oauth_state')?.value
+
+    if (!state || !storedState || state !== storedState) {
+        console.error('OAuth state mismatch - possible CSRF attack')
+        return NextResponse.redirect(new URL('/?error=invalid_state', request.url))
+    }
+
+    // Clear the state cookie after verification
+    cookieStore.delete('oauth_state')
 
     const clientId = process.env.DISCORD_CLIENT_ID
     const clientSecret = process.env.DISCORD_CLIENT_SECRET

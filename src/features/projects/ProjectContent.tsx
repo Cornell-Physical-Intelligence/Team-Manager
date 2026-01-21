@@ -141,6 +141,23 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
         }
     }, [taskIdFromUrl, board])
 
+    // Clear highlight param after animation to prevent repeating on reload/move
+    useEffect(() => {
+        if (highlightTaskId) {
+            const timer = setTimeout(() => {
+                const nextParams = new URLSearchParams(searchParams.toString())
+                nextParams.delete('highlight')
+                const query = nextParams.toString()
+                window.history.replaceState(
+                    {},
+                    '',
+                    query ? `/dashboard/projects/${project.id}?${query}` : `/dashboard/projects/${project.id}`
+                )
+            }, 3000)
+            return () => clearTimeout(timer)
+        }
+    }, [highlightTaskId, searchParams, project.id])
+
     const handleClosePreview = () => {
         setPreviewTask(null)
         const nextParams = new URLSearchParams(searchParams.toString())

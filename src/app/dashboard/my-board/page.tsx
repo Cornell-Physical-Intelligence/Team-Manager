@@ -110,6 +110,7 @@ export default async function MyBoardPage() {
         checklistCompleted: task.checklistItems.filter(i => i.completed).length,
         hasHelpRequest: task.helpRequests.length > 0,
         helpRequestStatus: task.helpRequests[0]?.status || null,
+        submittedAt: task.submittedAt?.toISOString() || null,
         createdAt: task.createdAt.toISOString(),
         updatedAt: task.updatedAt.toISOString()
     }))

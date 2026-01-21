@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronRight, TrendingUp, TrendingDown, Minus, CheckCircle2, Clock, Loader2, AlertTriangle, Calendar, Target, Activity, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -254,10 +254,30 @@ export function ProjectActivityTracker() {
     const [loading, setLoading] = useState(true)
     const [selectedProject, setSelectedProject] = useState<string | null>(null)
     const [hoveredPush, setHoveredPush] = useState<string | null>(null)
+    const [openTooltipId, setOpenTooltipId] = useState<string | null>(null)
+    const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     useEffect(() => {
         fetchProjectActivity()
     }, [])
+
+    const handleMouseEnter = (projectId: string) => {
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+        hoverTimeoutRef.current = setTimeout(() => {
+            setOpenTooltipId(projectId)
+        }, 500)
+    }
+
+    const handleMouseLeave = () => {
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+        setOpenTooltipId(null)
+    }
+
+    const handleProjectClick = (projectId: string) => {
+        if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+        setSelectedProject(projectId)
+        setOpenTooltipId(projectId)
+    }
 
     const fetchProjectActivity = async () => {
         try {
@@ -362,57 +382,61 @@ export function ProjectActivityTracker() {
                 <h2 className="text-sm font-medium">Activity Log</h2>
             </div>
 
-            <TooltipProvider delayDuration={500} skipDelayDuration={0}>
-                {/* Project Selector */}
-                <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide shrink-0 relative">
-                    {projects.map(project => {
-                        const hasOverdue = project.pushes.some(isPushOverdue)
-                        const trend = getProjectVelocityTrend(project.pushes)
-                        const isActive = selectedProject === project.id
+            <TooltipProvider delayDuration={500} skipDelayDuration={20}>
+                <div>
+                    {/* Project Selector */}
+                    <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide shrink-0 relative">
+                        {projects.map(project => {
+                            const hasOverdue = project.pushes.some(isPushOverdue)
+                            const trend = getProjectVelocityTrend(project.pushes)
+                            const isActive = selectedProject === project.id
 
-                        return (
-                            <Tooltip key={project.id}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => setSelectedProject(project.id)}
-                                        className={cn(
-                                            "px-2.5 py-1.5 rounded text-[10px] font-medium whitespace-nowrap transition-colors shrink-0 relative",
-                                            isActive
-                                                ? "text-background"
-                                                : "text-muted-foreground hover:text-foreground"
-                                        )}
-                                    >
-                                        <span className="relative z-10">{project.name}</span>
-                                        {isActive && (
-                                            <motion.div
-                                                layoutId="active-project-bg"
-                                                className="absolute inset-0 bg-foreground rounded"
-                                                transition={{
-                                                    type: "spring",
-                                                    stiffness: 400,
-                                                    damping: 25,
-                                                    mass: 0.8
-                                                }}
-                                            />
-                                        )}
-                                        {hasOverdue && !isActive && (
-                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full z-20" />
-                                        )}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-[10px] py-1.5 px-2">
-                                    <div className="flex items-center gap-1.5">
-                                        {trend === 'up' && <TrendingUp className="h-3 w-3 text-emerald-500" />}
-                                        {trend === 'down' && <TrendingDown className="h-3 w-3 text-amber-500" />}
-                                        {trend === 'stable' && <Minus className="h-3 w-3 text-blue-500" />}
-                                        <span className="font-medium">
-                                            {trend === 'up' ? 'Velocity up' : trend === 'down' ? 'Slowing' : 'Maintaining'}
-                                        </span>
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        )
-                    })}
+                            return (
+                                <Tooltip key={project.id} open={openTooltipId === project.id}>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={() => handleProjectClick(project.id)}
+                                            onMouseEnter={() => handleMouseEnter(project.id)}
+                                            onMouseLeave={handleMouseLeave}
+                                            className={cn(
+                                                "px-2.5 py-1.5 rounded text-[10px] font-medium whitespace-nowrap transition-colors shrink-0 relative",
+                                                isActive
+                                                    ? "text-background"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            <span className="relative z-10">{project.name}</span>
+                                            {isActive && (
+                                                <motion.div
+                                                    layoutId="active-project-bg"
+                                                    className="absolute inset-0 bg-foreground rounded"
+                                                    transition={{
+                                                        type: "spring",
+                                                        stiffness: 400,
+                                                        damping: 25,
+                                                        mass: 0.8
+                                                    }}
+                                                />
+                                            )}
+                                            {hasOverdue && !isActive && (
+                                                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full z-20" />
+                                            )}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-[10px] py-1.5 px-2">
+                                        <div className="flex items-center gap-1.5">
+                                            {trend === 'up' && <TrendingUp className="h-3 w-3 text-emerald-500" />}
+                                            {trend === 'down' && <TrendingDown className="h-3 w-3 text-amber-500" />}
+                                            {trend === 'stable' && <Minus className="h-3 w-3 text-blue-500" />}
+                                            <span className="font-medium">
+                                                {trend === 'up' ? 'Velocity up' : trend === 'down' ? 'Slowing' : 'Maintaining'}
+                                            </span>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            )
+                        })}
+                    </div>
                 </div>
             </TooltipProvider>
 

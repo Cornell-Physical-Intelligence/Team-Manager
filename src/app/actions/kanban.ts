@@ -185,38 +185,39 @@ export async function createTask(input: CreateTaskInput) {
         ]))
 
         if (assignedIds.length > 0) {
-            const project = await prisma.project.findUnique({
-                where: { id: projectId },
-                select: { id: true, name: true, workspaceId: true }
-            })
-
-            if (project?.workspaceId) {
-                const workspace = await prisma.workspace.findUnique({
-                    where: { id: project.workspaceId },
-                    select: { discordChannelId: true }
-                })
-                const webhookUrl = workspace?.discordChannelId || null
-
-                if (webhookUrl) {
-                    const assignedUsers = await prisma.user.findMany({
-                        where: { id: { in: assignedIds }, discordId: { not: null } },
-                        select: { discordId: true }
-                    })
-                    const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
-
-                    if (mentions) {
-                        const dueDate = endDate ? parseDateInput(endDate, "endOfDay") : null
-                        await sendDiscordNotification(
-                            "",
-                            [{
-                                title: "📌 Task Assignment",
-                                description: `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}`,
-                                color: 0x5865F2,
-                                timestamp: new Date().toISOString(),
-                            }],
-                            webhookUrl
-                        )
+            // Optimized: Fetch project with workspace in single query, parallelize with user fetch
+            const [project, assignedUsers] = await Promise.all([
+                prisma.project.findUnique({
+                    where: { id: projectId },
+                    select: {
+                        id: true,
+                        name: true,
+                        workspace: { select: { discordChannelId: true } }
                     }
+                }),
+                prisma.user.findMany({
+                    where: { id: { in: assignedIds }, discordId: { not: null } },
+                    select: { discordId: true }
+                })
+            ])
+
+            const webhookUrl = project?.workspace?.discordChannelId || null
+
+            if (project && webhookUrl && assignedUsers.length > 0) {
+                const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
+
+                if (mentions) {
+                    const dueDate = endDate ? parseDateInput(endDate, "endOfDay") : null
+                    await sendDiscordNotification(
+                        "",
+                        [{
+                            title: "📌 Task Assignment",
+                            description: `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}`,
+                            color: 0x5865F2,
+                            timestamp: new Date().toISOString(),
+                        }],
+                        webhookUrl
+                    )
                 }
             }
         }

@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronRight, Clock, Loader2 } from "lucide-react"
+import { Clock } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 type TaskRowProps = {
     task: {
@@ -17,72 +19,103 @@ type TaskRowProps = {
         isOverdue: boolean
         commentsCount: number
         attachmentsCount: number
+        progress: number
+        enableProgress: boolean
+        startDate: string | null
+        endDate: string | null
     }
+}
+
+const getManualProgressColorClass = (val: number) => {
+    if (val < 30) return "bg-red-500"
+    if (val < 70) return "bg-yellow-500"
+    return "bg-green-500"
+}
+
+const getInitials = (name: string) => {
+    const parts = name.split(' ')
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+    return name.slice(0, 2).toUpperCase()
 }
 
 export function TaskRow({ task }: TaskRowProps) {
     const router = useRouter()
-    const [isLoading, setIsLoading] = useState(false)
 
     const handleClick = () => {
-        setIsLoading(true)
-        // Build URL with push parameter if available
         let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
-        if (task.pushId) {
-            url += `&push=${task.pushId}`
-        }
+        if (task.pushId) url += `&push=${task.pushId}`
         router.push(url)
+    }
+
+    // Calculate time progress
+    const now = new Date().getTime()
+    const startTime = task.startDate ? new Date(task.startDate).getTime() : null
+    const endTime = task.endDate ? new Date(task.endDate).getTime() : null
+    let timeProgress: number | null = null
+
+    if (startTime && endTime) {
+        const totalDuration = endTime - startTime
+        const elapsed = now - startTime
+        timeProgress = Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100)
+    }
+
+    const getProgressColor = () => {
+        if (task.isOverdue) return 'bg-red-500'
+        if (timeProgress && timeProgress > 90) return 'bg-orange-500'
+        return 'bg-primary/60'
     }
 
     return (
         <button
             onClick={handleClick}
-            disabled={isLoading}
-            className="relative w-full flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/30 transition-colors group text-left overflow-hidden"
+            className={cn(
+                "w-full text-left group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 overflow-hidden",
+                "hover:shadow-md hover:border-primary/20 border-border"
+            )}
         >
-            {/* Project color gradient from left */}
-            <div
-                className="absolute inset-y-0 left-0 w-16 pointer-events-none"
-                style={{
-                    background: `linear-gradient(to right, ${task.projectColor}40, transparent)`
-                }}
-            />
-
-            <div className="relative flex items-center gap-2 min-w-0 flex-1">
-                {/* Task title */}
-                <span className="text-sm truncate">{task.title}</span>
-
-                {/* Status indicator - subtle, right of title */}
-                <span className="text-[9px] px-1 py-px rounded text-muted-foreground/60 shrink-0">
-                    {task.columnName}
-                </span>
+            <div className="flex items-start justify-between gap-2 mb-3">
+                <span className="text-sm font-medium leading-snug line-clamp-2">{task.title}</span>
             </div>
 
-            <div className="relative flex items-center gap-2 shrink-0">
-                {/* Comments/attachments count */}
-                {(task.commentsCount > 0 || task.attachmentsCount > 0) && (
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                        {task.commentsCount > 0 && `${task.commentsCount} comments`}
-                        {task.commentsCount > 0 && task.attachmentsCount > 0 && ' · '}
-                        {task.attachmentsCount > 0 && `${task.attachmentsCount} files`}
-                    </span>
-                )}
+            <div className="flex items-center justify-between gap-2 mt-auto">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    {task.dueText && (
+                        <div className={cn(
+                            "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate",
+                            task.isOverdue ? "bg-red-50 text-red-600 border-red-100" : "bg-muted text-muted-foreground border-transparent"
+                        )}>
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{task.dueText}</span>
+                        </div>
+                    )}
+                </div>
 
-                {/* Due date */}
-                {task.dueText && (
-                    <span className={`text-[10px] flex items-center gap-0.5 ${task.isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
-                        <Clock className="h-2.5 w-2.5" />
-                        {task.dueText}
-                    </span>
-                )}
-
-                {/* Arrow with loading state */}
-                {isLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
-                ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                )}
+                <div
+                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px]"
+                    style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
+                >
+                    {task.projectName}
+                </div>
             </div>
+
+            {/* Progress Bar */}
+            {task.enableProgress ? (
+                <div className="mt-3 h-1 w-full bg-muted rounded-full overflow-hidden shrink-0">
+                    <div
+                        className={cn("h-full rounded-full transition-all duration-300", getManualProgressColorClass(task.progress))}
+                        style={{ width: `${task.progress}%` }}
+                    />
+                </div>
+            ) : (
+                timeProgress !== null && (
+                    <div className="mt-3 h-1 w-full bg-muted rounded-full overflow-hidden shrink-0">
+                        <div
+                            className={cn("h-full rounded-full transition-all duration-300", getProgressColor())}
+                            style={{ width: `${timeProgress}%` }}
+                        />
+                    </div>
+                )
+            )}
         </button>
     )
 }
@@ -91,71 +124,127 @@ type ApprovalRowProps = {
     task: {
         id: string
         title: string
+        description: string | null
         projectId: string
         projectName: string
         projectColor: string
         pushId: string | null
         assignedTo: string[]
+        submittedAt: string | null
         commentsCount: number
         attachmentsCount: number
+        progress: number
+        enableProgress: boolean
+        startDate: string | null
+        endDate: string | null
+        doneColumnId: string
+        inProgressColumnId: string
     }
+    onApproved?: () => void
+    onDenied?: () => void
 }
 
-export function ApprovalRow({ task }: ApprovalRowProps) {
+export function ApprovalRow({ task, onApproved, onDenied }: ApprovalRowProps) {
     const router = useRouter()
-    const [isLoading, setIsLoading] = useState(false)
+    const [ApprovalPreviewButton, setApprovalPreviewButton] = useState<React.ComponentType<any> | null>(null)
+
+    // Dynamically import the preview button to avoid SSR issues
+    useEffect(() => {
+        import('./ApprovalPreview').then((mod) => {
+            setApprovalPreviewButton(() => mod.ApprovalPreviewButton)
+        })
+    }, [])
 
     const handleClick = () => {
-        setIsLoading(true)
         let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
-        if (task.pushId) {
-            url += `&push=${task.pushId}`
-        }
+        if (task.pushId) url += `&push=${task.pushId}`
         router.push(url)
     }
 
+    const maxVisible = 2
+    const visibleAssignees = task.assignedTo.slice(0, maxVisible)
+    const extraCount = task.assignedTo.length - maxVisible
+
+    // Calculate pending review time
+    const pendingText = task.submittedAt ? (() => {
+        const days = Math.floor((Date.now() - new Date(task.submittedAt).getTime()) / (1000 * 60 * 60 * 24))
+        return days === 0 ? 'Pending today' : `Pending ${days}d`
+    })() : null
+
     return (
-        <button
-            onClick={handleClick}
-            disabled={isLoading}
-            className="relative w-full flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/30 transition-colors group text-left overflow-hidden"
+        <div
+            className={cn(
+                "w-full text-left group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 overflow-hidden min-h-[88px]",
+                "hover:shadow-md hover:border-primary/20 border-border"
+            )}
         >
-            {/* Project color gradient from left */}
-            <div
-                className="absolute inset-y-0 left-0 w-16 pointer-events-none"
-                style={{
-                    background: `linear-gradient(to right, ${task.projectColor}40, transparent)`
-                }}
-            />
-
-            <div className="relative flex items-center gap-3 min-w-0 flex-1">
-                {/* Task title */}
-                <span className="text-sm truncate">{task.title}</span>
-            </div>
-
-            <div className="relative flex items-center gap-2 shrink-0">
-                {/* Assigned to */}
-                {task.assignedTo.length > 0 && (
-                    <span className="text-[10px] text-muted-foreground">
-                        by {task.assignedTo[0]}{task.assignedTo.length > 1 && ` +${task.assignedTo.length - 1}`}
-                    </span>
-                )}
-
-                {/* Comments/attachments */}
-                {(task.commentsCount > 0 || task.attachmentsCount > 0) && (
-                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                        {task.commentsCount > 0 && `${task.commentsCount}c`}
-                        {task.attachmentsCount > 0 && ` ${task.attachmentsCount}f`}
-                    </span>
-                )}
-
-                {/* Arrow with loading state */}
-                {isLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
-                ) : (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <button
+                    onClick={handleClick}
+                    className="text-sm font-medium leading-snug line-clamp-2 text-left hover:underline flex-1"
+                >
+                    {task.title}
+                </button>
+                {ApprovalPreviewButton && (
+                    <ApprovalPreviewButton
+                        task={task}
+                        onApproved={onApproved}
+                        onDenied={onDenied}
+                    />
                 )}
             </div>
-        </button>
+
+            <div className="flex items-center justify-between gap-2 mt-auto">
+                <div className="flex items-center gap-2 min-w-0">
+                    {/* Assignee Avatars */}
+                    <div className="flex -space-x-[5px]">
+                        {visibleAssignees.map((name, index) => (
+                            <Avatar
+                                key={name + index}
+                                className="relative h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background"
+                                title={name}
+                                style={{ zIndex: 30 - index }}
+                            >
+                                <AvatarFallback className="bg-primary/5 text-primary">
+                                    {getInitials(name)}
+                                </AvatarFallback>
+                            </Avatar>
+                        ))}
+                        {extraCount > 0 && (
+                            <Avatar
+                                className="relative h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background"
+                                title={task.assignedTo.slice(maxVisible).join(", ")}
+                                style={{ zIndex: 0 }}
+                            >
+                                <AvatarFallback className="bg-muted text-muted-foreground font-medium">
+                                    +{extraCount}
+                                </AvatarFallback>
+                            </Avatar>
+                        )}
+                        {task.assignedTo.length === 0 && (
+                            <Avatar className="h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background" title="Unassigned">
+                                <AvatarFallback className="bg-muted text-muted-foreground">—</AvatarFallback>
+                            </Avatar>
+                        )}
+                    </div>
+
+                    {/* Pending Review Time */}
+                    {pendingText && (
+                        <div className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border bg-muted text-muted-foreground border-transparent truncate">
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{pendingText}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Project Badge */}
+                <div
+                    className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[100px]"
+                    style={{ background: `linear-gradient(to right, ${task.projectColor}20, transparent)` }}
+                >
+                    {task.projectName}
+                </div>
+            </div>
+        </div>
     )
 }

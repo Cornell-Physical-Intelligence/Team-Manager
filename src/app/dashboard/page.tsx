@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from '@/lib/auth'
-import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock } from "lucide-react"
+import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock, Layout, ArrowRight } from "lucide-react"
+import Link from "next/link"
+import { cn } from "@/lib/utils"
 import { DashboardClient } from "./DashboardClient"
 import { TeamPopup } from "./TeamPopup"
 import { TaskRow, ApprovalRow } from "./TaskRow"
@@ -78,7 +80,16 @@ export default async function DashboardPage() {
             include: {
                 assignee: { select: { id: true, name: true } },
                 assignees: { include: { user: { select: { id: true, name: true } } } },
-                column: { include: { board: { include: { project: { select: { id: true, name: true, color: true } } } } } },
+                column: {
+                    include: {
+                        board: {
+                            include: {
+                                project: { select: { id: true, name: true, color: true } },
+                                columns: { select: { id: true, name: true } }
+                            }
+                        }
+                    }
+                },
                 push: { select: { id: true } },
                 _count: { select: { comments: true, attachments: true } }
             },
@@ -329,7 +340,7 @@ export default async function DashboardPage() {
     ])
 
     // Process tasks
-    const pendingTasks = myTasks.filter(t => t.column?.name !== 'Done')
+    const pendingTasks = myTasks.filter(t => t.column?.name !== 'Done' && t.column?.name !== 'Review')
     const overdueTasks = pendingTasks.filter(t => {
         const due = t.dueDate || t.endDate
         return due && new Date(due) < new Date()
@@ -343,15 +354,18 @@ export default async function DashboardPage() {
     // Helper to calculate due text
     const getDueText = (dueDate: Date | null): { text: string; isOverdue: boolean } => {
         if (!dueDate) return { text: '', isOverdue: false }
-        const diffMs = new Date(dueDate).getTime() - new Date().getTime()
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-        if (diffMs < 0) {
-            const overdueDays = Math.abs(diffDays)
-            return { text: overdueDays === 0 ? 'Today' : `${overdueDays}d`, isOverdue: true }
-        }
-        if (diffDays === 0) return { text: 'Today', isOverdue: false }
-        if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false }
-        return { text: `${diffDays}d`, isOverdue: false }
+        const now = new Date().getTime()
+        const endTime = new Date(dueDate).getTime()
+        const daysLeft = Math.ceil((endTime - now) / (1000 * 60 * 60 * 24))
+        const isOverdue = daysLeft < 0
+
+        const text = isOverdue
+            ? `${Math.abs(daysLeft)}d overdue`
+            : daysLeft === 0
+                ? "Today"
+                : `${daysLeft}d`
+
+        return { text, isOverdue }
     }
 
     return (
@@ -366,88 +380,115 @@ export default async function DashboardPage() {
 
                 {/* Main Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    {/* Left Column - Tasks */}
+                    {/* Left Column - Tasks & Approval Side-by-Side */}
                     <div className="lg:col-span-2 space-y-5">
-                        {/* My Tasks - Detailed View */}
-                        <section className="border border-border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-sm font-medium">My Tasks</h2>
-                            </div>
-
-                            {pendingTasks.length > 0 ? (
-                                <div className="space-y-2">
-                                    {pendingTasks.map(task => {
-                                        const project = task.column?.board?.project
-                                        const projectColor = project?.color || '#6b7280'
-                                        const dueDate = task.dueDate || task.endDate
-                                        const { text: dueText, isOverdue } = getDueText(dueDate)
-
-                                        return (
-                                            <TaskRow
-                                                key={task.id}
-                                                task={{
-                                                    id: task.id,
-                                                    title: task.title,
-                                                    columnName: task.column?.name || 'Unknown',
-                                                    projectId: project?.id || '',
-                                                    projectName: project?.name || '',
-                                                    projectColor,
-                                                    pushId: task.push?.id || null,
-                                                    dueText,
-                                                    isOverdue,
-                                                    commentsCount: task._count.comments,
-                                                    attachmentsCount: task._count.attachments
-                                                }}
-                                            />
-                                        )
-                                    })}
-
-                                    {/* Removed more tasks indicator */}
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground text-center py-8">No pending tasks</p>
-                            )}
-                        </section>
-
-                        {/* Pending Approval - Leadership Only */}
-                        {isLeadership && (
-                            <section className="border border-border rounded-lg p-4">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                            {/* My Tasks - Detailed View */}
+                            <section className={cn(
+                                "border border-border rounded-lg p-4 h-full",
+                                isLeadership ? "xl:col-span-1" : "xl:col-span-2"
+                            )}>
                                 <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-sm font-medium">Pending Approval</h2>
+                                    <h2 className="text-sm font-medium">My Tasks</h2>
+                                    <Link
+                                        href="/dashboard/my-board"
+                                        className="text-[10px] text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 px-2 py-1 rounded bg-muted/50 hover:bg-muted"
+                                    >
+                                        <ArrowRight className="h-3 w-3" />
+                                        Personal Board
+                                    </Link>
                                 </div>
 
-                                {pendingApproval.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {pendingApproval.map(task => {
+                                {pendingTasks.length > 0 ? (
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {pendingTasks.map(task => {
                                             const project = task.column?.board?.project
                                             const projectColor = project?.color || '#6b7280'
-                                            const assignees = task.assignees?.map(a => a.user.name) || []
-                                            const assignee = task.assignee?.name
-                                            const assignedTo = assignees.length > 0 ? assignees : (assignee ? [assignee] : [])
+                                            const dueDate = task.dueDate || task.endDate
+                                            const { text: dueText, isOverdue } = getDueText(dueDate)
 
                                             return (
-                                                <ApprovalRow
+                                                <TaskRow
                                                     key={task.id}
                                                     task={{
                                                         id: task.id,
                                                         title: task.title,
+                                                        columnName: task.column?.name || 'Unknown',
                                                         projectId: project?.id || '',
                                                         projectName: project?.name || '',
                                                         projectColor,
                                                         pushId: task.push?.id || null,
-                                                        assignedTo,
+                                                        dueText,
+                                                        isOverdue,
                                                         commentsCount: task._count.comments,
-                                                        attachmentsCount: task._count.attachments
+                                                        attachmentsCount: task._count.attachments,
+                                                        progress: task.progress,
+                                                        enableProgress: task.enableProgress,
+                                                        startDate: task.startDate?.toISOString() || null,
+                                                        endDate: task.endDate?.toISOString() || null
                                                     }}
                                                 />
                                             )
                                         })}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground text-center py-6">No tasks pending approval</p>
+                                    <p className="text-sm text-muted-foreground text-center py-8">No pending tasks</p>
                                 )}
                             </section>
-                        )}
+
+                            {/* Pending Approval - Leadership Only */}
+                            {isLeadership && (
+                                <section className="border border-border rounded-lg p-4 h-full xl:col-span-1">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-sm font-medium">Approval</h2>
+                                    </div>
+
+                                    {pendingApproval.length > 0 ? (
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {pendingApproval.map(task => {
+                                                const project = task.column?.board?.project
+                                                const projectColor = project?.color || '#6b7280'
+                                                const assignees = task.assignees?.map(a => a.user.name) || []
+                                                const assignee = task.assignee?.name
+                                                const assignedTo = assignees.length > 0 ? assignees : (assignee ? [assignee] : [])
+
+                                                // Get Done and In Progress column IDs from the board
+                                                const columns = task.column?.board?.columns || []
+                                                const doneColumn = columns.find(c => c.name === 'Done')
+                                                const inProgressColumn = columns.find(c => c.name === 'In Progress')
+
+                                                return (
+                                                    <ApprovalRow
+                                                        key={task.id}
+                                                        task={{
+                                                            id: task.id,
+                                                            title: task.title,
+                                                            description: task.description,
+                                                            projectId: project?.id || '',
+                                                            projectName: project?.name || '',
+                                                            projectColor,
+                                                            pushId: task.push?.id || null,
+                                                            assignedTo,
+                                                            submittedAt: task.submittedAt?.toISOString() || null,
+                                                            commentsCount: task._count.comments,
+                                                            attachmentsCount: task._count.attachments,
+                                                            progress: task.progress,
+                                                            enableProgress: task.enableProgress,
+                                                            startDate: task.startDate?.toISOString() || null,
+                                                            endDate: task.endDate?.toISOString() || null,
+                                                            doneColumnId: doneColumn?.id || '',
+                                                            inProgressColumnId: inProgressColumn?.id || ''
+                                                        }}
+                                                    />
+                                                )
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-6">None pending</p>
+                                    )}
+                                </section>
+                            )}
+                        </div>
 
                         {/* Team Heatmap - Leadership Only */}
                         {isLeadership && heatmapData && (

@@ -250,7 +250,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
             className={cn(
                 "group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-colors transition-shadow duration-200",
                 "hover:shadow-md hover:border-primary/20",
-                isReviewColumn ? "border-orange-200 bg-orange-50/10" : "border-border",
+                "border-border",
                 isDragDisabled ? 'cursor-default' : 'cursor-grab',
                 isHighlighted && 'animate-highlight-bulge'
             )}
@@ -263,19 +263,33 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
             {/* Meta Row: Date & Avatar */}
             <div className="flex items-center justify-between gap-2 mt-auto">
                 <div className="flex items-center gap-1.5 min-w-0">
-                    {/* Status / Date Badge */}
-                    {daysLeft !== null && (
-                        <div className={cn(
-                            "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px]",
-                            isOverdue
-                                ? "bg-red-50 text-red-600 border-red-100"
-                                : "bg-muted text-muted-foreground border-transparent"
-                        )}>
-                            <Clock className="w-3 h-3 shrink-0" />
-                            <span className="truncate">
-                                {isOverdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
-                            </span>
-                        </div>
+                    {/* Status / Date Badge - Show pending time for Review, due date for others */}
+                    {isReviewColumn ? (
+                        task.updatedAt && (
+                            <div className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border bg-muted text-muted-foreground border-transparent truncate max-w-[120px]">
+                                <Clock className="w-3 h-3 shrink-0" />
+                                <span className="truncate">
+                                    {(() => {
+                                        const days = Math.floor((Date.now() - new Date(task.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+                                        return days === 0 ? 'Pending today' : `Pending ${days}d`
+                                    })()}
+                                </span>
+                            </div>
+                        )
+                    ) : (
+                        daysLeft !== null && (
+                            <div className={cn(
+                                "flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px]",
+                                isOverdue
+                                    ? "bg-red-50 text-red-600 border-red-100"
+                                    : "bg-muted text-muted-foreground border-transparent"
+                            )}>
+                                <Clock className="w-3 h-3 shrink-0" />
+                                <span className="truncate">
+                                    {isOverdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
+                                </span>
+                            </div>
+                        )
                     )}
                 </div>
 
@@ -363,7 +377,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
 
             {/* Review Actions Footer */}
             {isReviewColumn && (
-                <div className="mt-3 pt-2.5 border-t border-orange-100 flex items-center justify-between gap-2">
+                <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between gap-2">
                     {isAdmin ? (
                         <>
                             <div className="flex items-center gap-1 text-[10px] font-medium text-red-500/80 group-hover:text-red-600 transition-colors">
@@ -382,7 +396,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                 </div>
             )}
 
-            
+
             <div onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
                 <AlertDialog open={showReviewConfirm} onOpenChange={setShowReviewConfirm}>
                     <AlertDialogContent>

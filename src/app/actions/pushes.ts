@@ -137,14 +137,17 @@ export async function deletePush(pushId: string, projectId: string) {
             return { error: 'Unauthorized: Only Admins and Team Leads can delete pushes' }
         }
 
-        // Remove push association from tasks before deleting
-        await prisma.task.updateMany({
-            where: { pushId },
-            data: { pushId: null }
-        })
+        // Use transaction to ensure atomic operation
+        await prisma.$transaction(async (tx) => {
+            // Remove push association from tasks before deleting
+            await tx.task.updateMany({
+                where: { pushId },
+                data: { pushId: null }
+            })
 
-        await prisma.push.delete({
-            where: { id: pushId }
+            await tx.push.delete({
+                where: { id: pushId }
+            })
         })
 
         revalidatePath('/dashboard')

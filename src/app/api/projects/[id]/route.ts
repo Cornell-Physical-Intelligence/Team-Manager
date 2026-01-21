@@ -53,6 +53,11 @@ export async function PATCH(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
+        // SECURITY: Only Admins and Team Leads can update projects
+        if (user.role !== 'Admin' && user.role !== 'Team Lead') {
+            return NextResponse.json({ error: 'Forbidden: Only Admins and Team Leads can update projects' }, { status: 403 })
+        }
+
         const { id } = await params
 
         // Verify project exists and belongs to user's workspace

@@ -78,20 +78,23 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
     }
 
     try {
-        // Delete existing project memberships
-        await prisma.projectMember.deleteMany({
-            where: { userId }
-        })
-
-        // Create new project memberships
-        if (projectIds.length > 0) {
-            await prisma.projectMember.createMany({
-                data: projectIds.map(projectId => ({
-                    userId,
-                    projectId
-                }))
+        // Use transaction to ensure atomic operation
+        await prisma.$transaction(async (tx) => {
+            // Delete existing project memberships
+            await tx.projectMember.deleteMany({
+                where: { userId }
             })
-        }
+
+            // Create new project memberships
+            if (projectIds.length > 0) {
+                await tx.projectMember.createMany({
+                    data: projectIds.map(projectId => ({
+                        userId,
+                        projectId
+                    }))
+                })
+            }
+        })
 
         revalidatePath('/dashboard/members')
         revalidatePath('/dashboard')
@@ -148,27 +151,30 @@ export async function removeUserFromWorkspace(userId: string) {
     }
 
     try {
-        // Remove from WorkspaceMember
+        // Use transaction to ensure atomic operation
         if (currentUser.workspaceId) {
-            await prisma.workspaceMember.delete({
-                where: {
-                    userId_workspaceId: {
-                        userId: userId,
-                        workspaceId: currentUser.workspaceId
-                    }
-                }
-            })
-
-            // Also clear user's workspaceId and role if this Was their main workspace
-            if (targetUser?.workspaceId === currentUser.workspaceId) {
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: {
-                        workspaceId: null,
-                        role: 'Member' // Reset role to Member default
+            await prisma.$transaction(async (tx) => {
+                // Remove from WorkspaceMember
+                await tx.workspaceMember.delete({
+                    where: {
+                        userId_workspaceId: {
+                            userId: userId,
+                            workspaceId: currentUser.workspaceId!
+                        }
                     }
                 })
-            }
+
+                // Also clear user's workspaceId and role if this was their main workspace
+                if (targetUser?.workspaceId === currentUser.workspaceId) {
+                    await tx.user.update({
+                        where: { id: userId },
+                        data: {
+                            workspaceId: null,
+                            role: 'Member' // Reset role to Member default
+                        }
+                    })
+                }
+            })
         }
 
         revalidatePath('/dashboard/members')
