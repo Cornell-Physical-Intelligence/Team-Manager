@@ -467,6 +467,7 @@
   from {
     transform: scaleX(0);
   }
+
   to {
     transform: scaleX(1);
   }
@@ -475,4 +476,44 @@
 .animate-sidebar-gradient {
   transform-origin: right;
   animation: sidebar-gradient-expand 0.3s ease-out forwards;
+}
+
+/* Tag shimmer effect on hover */
+.tag-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.tag-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to left, var(--tag-color, rgba(156, 163, 175, 0.15)), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.tag-shimmer:hover::after {
+  opacity: 1;
+}
+
+/* Progress bar shimmer effect */
+@keyframes progress-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-progress-shimmer {
+  background-size: 200% 200%;
+  animation: progress-shimmer 3s ease infinite;
 }

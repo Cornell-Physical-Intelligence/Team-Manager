@@ -15,7 +15,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { Plus, ChevronDown, CheckCircle2, Pencil } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 import { PushDialog } from "@/features/pushes/PushDialog"
 import { Button } from "@/components/ui/button"
@@ -86,9 +86,22 @@ type BoardProps = {
     pushes?: PushType[]
     highlightTaskId?: string | null
     expandPushId?: string | null
+    initialNewTask?: boolean
+    initialAssigneeId?: string | null
+    initialPushId?: string | null
 }
 
-export function Board({ board, projectId, users, pushes = [], highlightTaskId, expandPushId }: BoardProps) {
+export function Board({
+    board,
+    projectId,
+    users,
+    pushes = [],
+    highlightTaskId,
+    expandPushId,
+    initialNewTask,
+    initialAssigneeId,
+    initialPushId
+}: BoardProps) {
     const router = useRouter()
     const [columns, setColumns] = useState<ColumnData[]>(board.columns)
     const [activeTask, setActiveTask] = useState<Task | null>(null)
@@ -135,6 +148,23 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
 
     const isAdmin = userRole === 'Admin' || userRole === 'Team Lead'
     const { triggerConfetti } = useConfetti()
+    const searchParams = useSearchParams()
+
+    // Handle initial new task creation from URL
+    useEffect(() => {
+        if (initialNewTask && columns.length > 0 && !creatingColumnId && mounted) {
+            // Find the "To Do" column or use the first one
+            const todoCol = columns.find(c => c.name === 'To Do' || c.name === 'Todo') || columns[0]
+            setCreatingColumnId(todoCol.id)
+            if (initialPushId) setCreatingPushId(initialPushId)
+
+            // Clean up URL parameters to prevent re-opening on refresh
+            const url = new URL(window.location.href)
+            url.searchParams.delete('newTask')
+            url.searchParams.delete('assigneeId')
+            window.history.replaceState({}, '', url.pathname + url.search)
+        }
+    }, [initialNewTask, columns, initialPushId, creatingColumnId, mounted])
 
     const fetchUserRole = useCallback(async () => {
         try {
@@ -936,8 +966,8 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                                                     }
                                                 }}
                                                 className={`h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs ${isComplete
-                                                        ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
-                                                        : "border-border bg-background hover:bg-muted/50"
+                                                    ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
+                                                    : "border-border bg-background hover:bg-muted/50"
                                                     }`}
                                             >
                                                 <Plus className="h-3.5 w-3.5" />
@@ -1063,6 +1093,7 @@ export function Board({ board, projectId, users, pushes = [], highlightTaskId, e
                     users={users}
                     columnId={creatingColumnId}
                     pushId={creatingPushId}
+                    initialAssigneeIds={initialAssigneeId ? [initialAssigneeId] : []}
                     open={true}
                     onOpenChange={(open) => {
                         if (open) return

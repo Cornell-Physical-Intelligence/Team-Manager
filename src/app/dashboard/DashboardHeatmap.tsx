@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
     ChevronRight, Loader2, Plus, UserX, TrendingUp, TrendingDown,
-    Calendar, Clock, CheckCircle2, AlertCircle, HelpCircle, X
+    Calendar, Clock, CheckCircle2, AlertCircle, HelpCircle, X, ArrowLeft, ExternalLink, GripVertical
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,20 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { TaskDialog } from "@/features/kanban/TaskDialog"
 
 type Task = {
     id: string
@@ -64,6 +78,26 @@ type DashboardHeatmapProps = {
     overloadedUsers: string[]
     idleUsers: string[]
     allTasks: Task[]
+    projects: {
+        id: string
+        name: string
+        color: string
+        pushes: {
+            id: string
+            name: string
+            color: string
+        }[]
+        boards: {
+            id: string
+            columns: {
+                id: string
+                name: string
+            }[]
+        }[]
+        members: {
+            userId: string
+        }[]
+    }[]
 }
 
 type WorkloadHistory = {
@@ -188,7 +222,9 @@ function UserDetailDialog({
     user,
     unassignedTasks,
     onAssignClick,
-    onAssignTasks
+    onAssignTasks,
+    onAddTask,
+    onBack
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -196,31 +232,10 @@ function UserDetailDialog({
     unassignedTasks: Task[]
     onAssignClick: () => void
     onAssignTasks: (taskIds: string[], userId: string) => Promise<void>
+    onAddTask: (user: UserStat) => void
+    onBack?: () => void
 }) {
     const router = useRouter()
-    const [workloadHistory, setWorkloadHistory] = useState<WorkloadHistory[]>([])
-    const [loadingHistory, setLoadingHistory] = useState(false)
-
-    useEffect(() => {
-        if (open && user) {
-            fetchWorkloadHistory(user.id)
-        }
-    }, [open, user])
-
-    const fetchWorkloadHistory = async (userId: string) => {
-        setLoadingHistory(true)
-        try {
-            const res = await fetch(`/api/users/${userId}/workload-history`)
-            if (res.ok) {
-                const data = await res.json()
-                setWorkloadHistory(data.history || [])
-            }
-        } catch (error) {
-            console.error('Failed to fetch workload history:', error)
-        } finally {
-            setLoadingHistory(false)
-        }
-    }
 
     if (!user) return null
 
@@ -237,37 +252,113 @@ function UserDetailDialog({
     const reviewTasks = user.tasks.filter(t => t.columnName === 'Review')
     const doneTasks = user.tasks.filter(t => t.columnName === 'Done')
 
-    // Calculate stats
-    const completionRate = user.tasks.length > 0
-        ? Math.round((doneTasks.length / user.tasks.length) * 100)
-        : 0
+    // Task card component
+    const TaskCard = ({ task }: { task: Task }) => (
+        <button
+            onClick={() => handleTaskClick(task)}
+            className="w-full text-left p-2 rounded-lg border bg-card hover:bg-muted/50 hover:border-primary/20 transition-all"
+        >
+            <div className="flex items-start justify-between gap-1">
+                <p className="text-[10px] font-medium leading-snug line-clamp-2 flex-1">{task.title}</p>
+
+                {/* Status icons */}
+                <div className="flex items-center gap-0.5 shrink-0 text-muted-foreground">
+                    {task.isOverdue && (
+                        <TooltipProvider delayDuration={500}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <AlertCircle className="h-3 w-3 text-red-500" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                    Overdue
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                    {task.isStuck && (
+                        <TooltipProvider delayDuration={500}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Clock className="h-3 w-3" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                    Stuck (3+ days)
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                    {task.isBlockedByHelp && (
+                        <TooltipProvider delayDuration={500}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <HelpCircle className="h-3 w-3" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                    Needs help
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                </div>
+            </div>
+
+            {/* Project tag */}
+            <div
+                className="text-[8px] px-1 py-0.5 rounded-sm font-medium text-muted-foreground mt-1.5 w-fit border tag-shimmer"
+                style={{
+                    background: `linear-gradient(to right, ${task.projectColor}20, transparent)`,
+                    borderColor: `${task.projectColor}30`,
+                    '--tag-color': `${task.projectColor}20`
+                } as React.CSSProperties}
+            >
+                {task.projectName}
+            </div>
+        </button>
+    )
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-                {/* Header */}
-                <div className="p-6 pb-4 border-b bg-muted/30">
+            <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+                <DialogHeader>
                     <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3">
+                            {onBack && (
+                                <button
+                                    onClick={onBack}
+                                    className="p-1 rounded-md hover:bg-muted transition-colors"
+                                    title="Back"
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                </button>
+                            )}
                             {user.avatar ? (
                                 <img
                                     src={user.avatar}
                                     alt={user.name}
-                                    className="w-12 h-12 rounded-full border-2 border-background shadow-md"
+                                    className="w-10 h-10 rounded-full"
                                 />
                             ) : (
-                                <div className="w-12 h-12 rounded-full bg-primary/10 border-2 border-background shadow-md flex items-center justify-center text-lg font-bold text-primary">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
                                     {user.name.charAt(0).toUpperCase()}
                                 </div>
                             )}
                             <div>
-                                <h2 className="text-base font-semibold">{user.name}</h2>
+                                <DialogTitle className="text-base">{user.name}</DialogTitle>
                                 <p className="text-xs text-muted-foreground">{user.role}</p>
                             </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 w-10 p-0 rounded-sm border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-primary/5 transition-all text-muted-foreground hover:text-primary shrink-0"
+                                onClick={() => onAddTask(user)}
+                                title="Quick Add Task"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                            </Button>
                         </div>
 
-                        {/* Stats inline */}
-                        <div className="flex items-center gap-5">
+                        {/* Stats + Assign */}
+                        <div className="flex items-center gap-4 pr-6">
                             <div className="text-center">
                                 <p className="text-lg font-bold">{user.activeTasks}</p>
                                 <p className="text-[9px] text-muted-foreground">Active</p>
@@ -276,69 +367,26 @@ function UserDetailDialog({
                                 <p className="text-lg font-bold">{doneTasks.length}</p>
                                 <p className="text-[9px] text-muted-foreground">Done</p>
                             </div>
-                            <div className="text-center">
-                                <p className="text-lg font-bold">{completionRate}%</p>
-                                <p className="text-[9px] text-muted-foreground">Rate</p>
-                            </div>
-                            <div className="text-center">
-                                {user.overdueTasks > 0 ? (
-                                    <>
-                                        <p className="text-lg font-bold">{user.overdueTasks}</p>
-                                        <p className="text-[9px] text-muted-foreground">Overdue</p>
-                                    </>
-                                ) : user.stuckTasks > 0 ? (
-                                    <>
-                                        <p className="text-lg font-bold">{user.stuckTasks}</p>
-                                        <p className="text-[9px] text-muted-foreground">Stuck</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p className="text-lg font-bold">✓</p>
-                                        <p className="text-[9px] text-muted-foreground">On Track</p>
-                                    </>
-                                )}
-                            </div>
-
+                            {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0) && (
+                                <div className="text-center">
+                                    <p className="text-lg font-bold text-amber-600">
+                                        {user.overdueTasks + user.stuckTasks + user.helpRequestTasks}
+                                    </p>
+                                    <p className="text-[9px] text-muted-foreground">Issues</p>
+                                </div>
+                            )}
                             {unassignedTasks.length > 0 && (
-                                <Button size="sm" onClick={onAssignClick} className="ml-2">
-                                    <Plus className="h-4 w-4 mr-1" />
+                                <Button size="sm" variant="outline" onClick={onAssignClick}>
+                                    <Plus className="h-3.5 w-3.5 mr-1" />
                                     Assign
                                 </Button>
                             )}
                         </div>
                     </div>
-                </div>
+                </DialogHeader>
 
-                {/* Content */}
-                <div className="flex-1 overflow-auto p-6">
-                    {/* Workload History */}
-                    <div className="mb-6">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium">Activity Over Time</h3>
-                            <div className="flex items-center gap-3 text-[9px]">
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-blue-400" />
-                                    Submitted
-                                </span>
-                                <span className="flex items-center gap-1">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                                    Approved
-                                </span>
-                            </div>
-                        </div>
-                        <div className="bg-muted/30 rounded-lg p-4 border">
-                            {loadingHistory ? (
-                                <div className="h-12 flex items-center justify-center">
-                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                </div>
-                            ) : (
-                                <WorkloadSparkline history={workloadHistory} />
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Kanban Board */}
-                    <h3 className="text-sm font-medium mb-3">Current Tasks</h3>
+                {/* Mini Kanban */}
+                <div className="flex-1 overflow-auto mt-4">
                     <div className="grid grid-cols-4 gap-3">
                         {/* To Do */}
                         <div className="border rounded-lg overflow-hidden">
@@ -346,29 +394,11 @@ function UserDetailDialog({
                                 <span className="text-[10px] font-medium">To Do</span>
                                 <span className="text-[9px] text-muted-foreground">{todoTasks.length}</span>
                             </div>
-                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[300px] overflow-auto">
                                 {todoTasks.length > 0 ? todoTasks.map(task => (
-                                    <button
-                                        key={task.id}
-                                        onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
-                                    >
-                                        <div className="flex items-start gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
-                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
-                                            </div>
-                                        </div>
-                                        {task.isOverdue && (
-                                            <div className="flex items-center gap-1 mt-1.5 text-[9px] text-red-500">
-                                                <AlertCircle className="h-2.5 w-2.5" />
-                                                Overdue
-                                            </div>
-                                        )}
-                                    </button>
+                                    <TaskCard key={task.id} task={task} />
                                 )) : (
-                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-4">No tasks</p>
                                 )}
                             </div>
                         </div>
@@ -379,29 +409,11 @@ function UserDetailDialog({
                                 <span className="text-[10px] font-medium">In Progress</span>
                                 <span className="text-[9px] text-muted-foreground">{inProgressTasks.length}</span>
                             </div>
-                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[300px] overflow-auto">
                                 {inProgressTasks.length > 0 ? inProgressTasks.map(task => (
-                                    <button
-                                        key={task.id}
-                                        onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
-                                    >
-                                        <div className="flex items-start gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
-                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
-                                            </div>
-                                        </div>
-                                        {(task.isStuck || task.isBlockedByHelp) && (
-                                            <div className="flex items-center gap-1 mt-1.5 text-[9px] text-amber-600">
-                                                {task.isStuck && <><Clock className="h-2.5 w-2.5" /> Stuck</>}
-                                                {task.isBlockedByHelp && <><HelpCircle className="h-2.5 w-2.5" /> Needs help</>}
-                                            </div>
-                                        )}
-                                    </button>
+                                    <TaskCard key={task.id} task={task} />
                                 )) : (
-                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-4">No tasks</p>
                                 )}
                             </div>
                         </div>
@@ -412,23 +424,11 @@ function UserDetailDialog({
                                 <span className="text-[10px] font-medium">Review</span>
                                 <span className="text-[9px] text-muted-foreground">{reviewTasks.length}</span>
                             </div>
-                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[300px] overflow-auto">
                                 {reviewTasks.length > 0 ? reviewTasks.map(task => (
-                                    <button
-                                        key={task.id}
-                                        onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left p-2 rounded border bg-background hover:bg-muted/50 transition-colors"
-                                    >
-                                        <div className="flex items-start gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: task.projectColor }} />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug line-clamp-2">{task.title}</p>
-                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
-                                            </div>
-                                        </div>
-                                    </button>
+                                    <TaskCard key={task.id} task={task} />
                                 )) : (
-                                    <p className="text-[9px] text-muted-foreground text-center py-6">No tasks</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-4">No tasks</p>
                                 )}
                             </div>
                         </div>
@@ -439,23 +439,20 @@ function UserDetailDialog({
                                 <span className="text-[10px] font-medium">Done</span>
                                 <span className="text-[9px] text-muted-foreground">{doneTasks.length}</span>
                             </div>
-                            <div className="p-1.5 space-y-1.5 max-h-[280px] overflow-auto">
+                            <div className="p-1.5 space-y-1.5 max-h-[300px] overflow-auto">
                                 {doneTasks.length > 0 ? doneTasks.slice(0, 8).map(task => (
                                     <button
                                         key={task.id}
                                         onClick={() => handleTaskClick(task)}
-                                        className="w-full text-left p-2 rounded border bg-background/50 hover:bg-muted/50 transition-colors opacity-70"
+                                        className="w-full text-left p-2 rounded-lg border bg-card/50 hover:bg-muted/50 transition-all opacity-60"
                                     >
-                                        <div className="flex items-start gap-1.5">
+                                        <div className="flex items-start gap-1">
                                             <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-[11px] font-medium leading-snug line-through line-clamp-2">{task.title}</p>
-                                                <p className="text-[9px] text-muted-foreground mt-0.5">{task.projectName}</p>
-                                            </div>
+                                            <p className="text-[10px] font-medium leading-snug line-through line-clamp-2">{task.title}</p>
                                         </div>
                                     </button>
                                 )) : (
-                                    <p className="text-[9px] text-muted-foreground text-center py-6">No completed</p>
+                                    <p className="text-[9px] text-muted-foreground text-center py-4">No completed</p>
                                 )}
                                 {doneTasks.length > 8 && (
                                     <p className="text-[8px] text-muted-foreground text-center py-1">
@@ -579,19 +576,145 @@ function AssignTasksDialog({
     )
 }
 
+// Quick task selection dialog (Project & Push)
+function QuickAddTaskDialog({
+    open,
+    onOpenChange,
+    user,
+    projects,
+    onContinue
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    user: UserStat | null
+    projects: DashboardHeatmapProps['projects']
+    onContinue: (projectId: string, pushId: string) => void
+}) {
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+    const [selectedPushId, setSelectedPushId] = useState<string>('')
+
+    const selectedProject = projects.find(p => p.id === selectedProjectId)
+    const activePushes = selectedProject?.pushes || []
+
+    // Reset push if project changes
+    useEffect(() => {
+        setSelectedPushId('')
+    }, [selectedProjectId])
+
+    const handleContinue = () => {
+        if (!selectedProjectId || !selectedPushId || !user) return
+        onContinue(selectedProjectId, selectedPushId)
+        onOpenChange(false)
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle className="text-base font-semibold">
+                        Add Task for {user?.name.split(' ')[0]}
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Project</label>
+                        <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                            <SelectTrigger className="w-full text-xs h-9">
+                                <SelectValue placeholder="Choose a project" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {projects.map(project => (
+                                    <SelectItem key={project.id} value={project.id} className="text-xs text-foreground justify-start">
+                                        <div className="flex items-center gap-2">
+                                            <GripVertical className="h-3.5 w-3.5 opacity-60 shrink-0" style={{ color: project.color }} />
+                                            <span className="truncate">{project.name}</span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {selectedProjectId && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Push</label>
+                            <Select
+                                value={selectedPushId}
+                                onValueChange={setSelectedPushId}
+                                disabled={activePushes.length === 0}
+                            >
+                                <SelectTrigger className="w-full text-xs h-9">
+                                    <SelectValue placeholder={activePushes.length === 0 ? "No active pushes" : "Select target push"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {activePushes.map(push => (
+                                        <SelectItem key={push.id} value={push.id} className="text-xs text-foreground justify-start">
+                                            {push.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {activePushes.length === 0 && (
+                                <p className="text-[9px] text-muted-foreground italic px-1">This project has no active pushes. Tasks must be assigned to a push.</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button
+                        size="sm"
+                        onClick={handleContinue}
+                        disabled={!selectedProjectId || !selectedPushId || activePushes.length === 0}
+                        className="w-full h-9 text-xs"
+                    >
+                        Continue
+                        <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 export function DashboardHeatmap({
     userStats,
     criticalIssues,
     overloadedUsers,
     idleUsers,
-    allTasks
+    allTasks,
+    projects
 }: DashboardHeatmapProps) {
     const router = useRouter()
     const [selectedUser, setSelectedUser] = useState<UserStat | null>(null)
     const [assigningToUser, setAssigningToUser] = useState<UserStat | null>(null)
+    const [issuePopup, setIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
+    const [previousIssuePopup, setPreviousIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
+    const [quickAddTaskUser, setQuickAddTaskUser] = useState<UserStat | null>(null)
+    const [localTaskDialog, setLocalTaskDialog] = useState<{
+        userId: string
+        projectId: string
+        pushId: string
+    } | null>(null)
+
+    // Prepare users for TaskDialog per project
+    const projectUsers = projects.reduce((acc, p) => {
+        acc[p.id] = userStats.map(u => ({
+            id: u.id,
+            name: u.name,
+            isProjectMember: p.members.some(m => m.userId === u.id)
+        }))
+        return acc
+    }, {} as Record<string, { id: string, name: string, isProjectMember: boolean }[]>)
 
     const totalActiveTasks = allTasks.filter(t => t.columnName !== 'Done').length
     const unassignedTasks = allTasks.filter(t => t.isUnassigned)
+
+    // Calculate issue counts
+    const overdueTasks = allTasks.filter(t => t.isOverdue && t.columnName !== 'Done')
+    const stuckTasks = allTasks.filter(t => t.isStuck && t.columnName !== 'Done')
+    const helpTasks = allTasks.filter(t => t.isBlockedByHelp && t.columnName !== 'Done')
 
     // Sort users by workload (most active first)
     const sortedUsers = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
@@ -625,7 +748,58 @@ export function DashboardHeatmap({
     return (
         <section className="border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-medium">Work Distribution</h2>
+                <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-medium">Work Distribution</h2>
+
+                    {/* Issue counts */}
+                    <div className="flex items-center gap-1.5">
+                        {overdueTasks.length > 0 && (
+                            <button
+                                onClick={() => setIssuePopup('overdue')}
+                                className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-sm font-medium border tag-shimmer transition-colors hover:bg-muted/50"
+                                style={{
+                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                    borderColor: 'rgba(156, 163, 175, 0.3)',
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
+                            >
+                                <AlertCircle className="h-2.5 w-2.5" />
+                                {overdueTasks.length} Overdue
+                            </button>
+                        )}
+                        {stuckTasks.length > 0 && (
+                            <button
+                                onClick={() => setIssuePopup('stuck')}
+                                className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-sm font-medium border tag-shimmer transition-colors hover:bg-muted/50"
+                                style={{
+                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                    borderColor: 'rgba(156, 163, 175, 0.3)',
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
+                            >
+                                <Clock className="h-2.5 w-2.5" />
+                                {stuckTasks.length} Stuck
+                            </button>
+                        )}
+                        {helpTasks.length > 0 && (
+                            <button
+                                onClick={() => setIssuePopup('help')}
+                                className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-sm font-medium border tag-shimmer transition-colors hover:bg-muted/50"
+                                style={{
+                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                    borderColor: 'rgba(156, 163, 175, 0.3)',
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
+                            >
+                                <HelpCircle className="h-2.5 w-2.5" />
+                                {helpTasks.length} Need Help
+                            </button>
+                        )}
+                    </div>
+                </div>
                 <span className="text-[10px] text-muted-foreground">
                     {totalActiveTasks} active across {sortedUsers.length} members
                 </span>
@@ -642,10 +816,10 @@ export function DashboardHeatmap({
                     const status = hasIssues ? 'struggling' : isIdle ? 'available' : 'on-track'
 
                     return (
-                        <button
+                        <div
                             key={user.id}
                             onClick={() => setSelectedUser(user)}
-                            className="relative p-3 rounded-lg border border-border text-left transition-all hover:shadow-md overflow-hidden bg-card"
+                            className="relative p-3 rounded-lg border border-border text-left transition-all hover:shadow-md overflow-hidden bg-card cursor-pointer group"
                         >
                             {/* User header */}
                             <div className="relative flex items-center gap-2 mb-2">
@@ -666,37 +840,49 @@ export function DashboardHeatmap({
                                 </div>
                             </div>
 
-                            {/* Task stack visual */}
-                            <div className="relative">
+                            {/* Task stack visual with Add button */}
+                            <div className="relative flex items-center justify-between gap-1">
                                 <TaskStack count={user.activeTasks} />
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-8 rounded-sm p-0 border border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-primary/5 transition-opacity shrink-0"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setQuickAddTaskUser(user);
+                                    }}
+                                >
+                                    <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
                             </div>
 
                             {/* Status */}
                             <div className="relative flex items-center mt-2 pt-2 border-t border-border/50">
                                 <span
-                                    className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm border"
+                                    className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm border tag-shimmer"
                                     style={{
                                         background: status === 'struggling'
                                             ? 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)'
                                             : status === 'available'
-                                            ? 'linear-gradient(to right, rgba(59, 130, 246, 0.15), transparent)'
-                                            : 'linear-gradient(to right, rgba(34, 197, 94, 0.15), transparent)',
-                                        color: status === 'struggling'
-                                            ? 'rgb(185, 28, 28)'
-                                            : status === 'available'
-                                            ? 'rgb(37, 99, 235)'
-                                            : 'rgb(22, 163, 74)',
+                                                ? 'linear-gradient(to right, rgba(59, 130, 246, 0.08), transparent)'
+                                                : 'linear-gradient(to right, rgba(156, 163, 175, 0.1), transparent)',
+                                        color: 'rgb(107, 114, 128)',
                                         borderColor: status === 'struggling'
                                             ? 'rgba(239, 68, 68, 0.3)'
                                             : status === 'available'
-                                            ? 'rgba(59, 130, 246, 0.3)'
-                                            : 'rgba(34, 197, 94, 0.3)'
-                                    }}
+                                                ? 'rgba(59, 130, 246, 0.15)'
+                                                : 'rgba(156, 163, 175, 0.2)',
+                                        '--tag-color': status === 'struggling'
+                                            ? 'rgba(239, 68, 68, 0.15)'
+                                            : status === 'available'
+                                                ? 'rgba(59, 130, 246, 0.08)'
+                                                : 'rgba(156, 163, 175, 0.1)'
+                                    } as React.CSSProperties}
                                 >
                                     {status === 'struggling' ? 'Struggling' : status === 'available' ? 'Available' : 'On track'}
                                 </span>
                             </div>
-                        </button>
+                        </div>
                     )
                 })}
             </div>
@@ -734,11 +920,25 @@ export function DashboardHeatmap({
             {/* User Detail Dialog */}
             <UserDetailDialog
                 open={!!selectedUser}
-                onOpenChange={() => setSelectedUser(null)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSelectedUser(null)
+                        setPreviousIssuePopup(null)
+                    }
+                }}
                 user={selectedUser}
                 unassignedTasks={unassignedTasks}
                 onAssignClick={() => setAssigningToUser(selectedUser)}
                 onAssignTasks={handleAssignTasks}
+                onAddTask={(user) => {
+                    setSelectedUser(null);
+                    setQuickAddTaskUser(user);
+                }}
+                onBack={previousIssuePopup ? () => {
+                    setSelectedUser(null)
+                    setIssuePopup(previousIssuePopup)
+                    setPreviousIssuePopup(null)
+                } : undefined}
             />
 
             {/* Assign Tasks Dialog */}
@@ -749,6 +949,117 @@ export function DashboardHeatmap({
                 unassignedTasks={unassignedTasks}
                 onAssign={handleAssignTasks}
             />
+
+            {/* Issue Tasks Dialog */}
+            <Dialog open={!!issuePopup} onOpenChange={() => setIssuePopup(null)}>
+                <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col" showCloseButton={true}>
+                    <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-1.5 pt-2">
+                        {(issuePopup === 'overdue' ? overdueTasks : issuePopup === 'stuck' ? stuckTasks : helpTasks).map(task => {
+                            // Get assignees from userStats
+                            const assignees = userStats.filter(u => task.assigneeIds.includes(u.id))
+
+                            return (
+                                <div
+                                    key={task.id}
+                                    className="p-2 rounded-lg border bg-card group"
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p className="text-xs font-medium leading-snug line-clamp-2 flex-1">{task.title}</p>
+                                        <Link
+                                            href={`/dashboard/projects/${task.projectId}?highlight=${task.id}${task.pushId ? `&push=${task.pushId}` : ''}`}
+                                            onClick={() => setIssuePopup(null)}
+                                            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            Go to task
+                                            <ExternalLink className="h-2.5 w-2.5" />
+                                        </Link>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <div
+                                                className="text-[8px] px-1 py-0.5 rounded-sm font-medium text-muted-foreground border tag-shimmer"
+                                                style={{
+                                                    background: `linear-gradient(to right, ${task.projectColor}20, transparent)`,
+                                                    borderColor: `${task.projectColor}30`,
+                                                    '--tag-color': `${task.projectColor}20`
+                                                } as React.CSSProperties}
+                                            >
+                                                {task.projectName}
+                                            </div>
+                                            <span className="text-[8px] text-muted-foreground">{task.columnName}</span>
+                                        </div>
+
+                                        {/* Assignees with name */}
+                                        {assignees.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                {assignees.map(user => (
+                                                    <button
+                                                        key={user.id}
+                                                        onClick={() => {
+                                                            setPreviousIssuePopup(issuePopup)
+                                                            setIssuePopup(null)
+                                                            setSelectedUser(user)
+                                                        }}
+                                                        className="flex items-center gap-1.5 hover:bg-muted/50 rounded-full pr-2 transition-all"
+                                                    >
+                                                        {user.avatar ? (
+                                                            <img
+                                                                src={user.avatar}
+                                                                alt={user.name}
+                                                                className="w-6 h-6 rounded-full"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold">
+                                                                {user.name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div className="text-left">
+                                                            <p className="text-[9px] font-medium leading-tight">{user.name.split(' ')[0]}</p>
+                                                            <p className="text-[7px] text-muted-foreground leading-tight">{user.role}</p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </DialogContent>
+            </Dialog>
+            <QuickAddTaskDialog
+                open={!!quickAddTaskUser}
+                onOpenChange={(open) => !open && setQuickAddTaskUser(null)}
+                user={quickAddTaskUser}
+                projects={projects}
+                onContinue={(projectId, pushId) => {
+                    if (quickAddTaskUser) {
+                        setLocalTaskDialog({
+                            userId: quickAddTaskUser.id,
+                            projectId,
+                            pushId
+                        })
+                    }
+                }}
+            />
+
+            {localTaskDialog && (
+                <TaskDialog
+                    projectId={localTaskDialog.projectId}
+                    pushId={localTaskDialog.pushId}
+                    initialAssigneeIds={[localTaskDialog.userId]}
+                    columnId={projects.find(p => p.id === localTaskDialog.projectId)?.boards[0]?.columns[0]?.id}
+                    users={projectUsers[localTaskDialog.projectId] || []}
+                    open={true}
+                    onOpenChange={(open) => !open && setLocalTaskDialog(null)}
+                    onTaskCreated={() => {
+                        setLocalTaskDialog(null)
+                        // Note: Data will update via server components/revalidation
+                    }}
+                />
+            )}
         </section>
     )
 }

@@ -52,7 +52,7 @@ const formatDate = (d: Date | string | null | undefined) => {
     return dateObj.toISOString().split('T')[0]
 }
 
-export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted }: {
+export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds }: {
     columnId?: string
     projectId: string
     pushId?: string | null
@@ -63,6 +63,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     onTaskCreated?: (task: any) => void
     onTaskUpdated?: (task: any) => void
     onTaskDeleted?: (taskId: string) => void
+    initialAssigneeIds?: string[]
 }) {
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = externalOpen !== undefined
@@ -132,8 +133,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setExistingInstructionsFile(null)
                 setTitle("")
                 setDescription("")
-                setAssigneeId("")
-                setAssigneeIds([])
+                setAssigneeId(initialAssigneeIds?.[0] || "")
+                setAssigneeIds(initialAssigneeIds || [])
                 setStartDate(today)
                 setEndDate("")
                 setRequireAttachment(true)

@@ -170,12 +170,13 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     {isReviewColumn ? (
                         task.updatedAt && (
                             <div
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px]"
+                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
                                 style={{
                                     background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
                                     borderColor: 'rgba(156, 163, 175, 0.3)',
-                                    color: 'rgb(107, 114, 128)'
-                                }}
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
                             >
                                 <Clock className="w-3 h-3 shrink-0" />
                                 <span className="truncate">
@@ -189,16 +190,18 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     ) : (
                         daysLeft !== null && (
                             <div
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px]"
+                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
                                 style={isOverdue ? {
                                     background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
                                     borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    color: 'rgb(220, 38, 38)'
-                                } : {
+                                    color: 'rgb(220, 38, 38)',
+                                    '--tag-color': 'rgba(239, 68, 68, 0.15)'
+                                } as React.CSSProperties : {
                                     background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
                                     borderColor: 'rgba(156, 163, 175, 0.3)',
-                                    color: 'rgb(107, 114, 128)'
-                                }}
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
                             >
                                 <Clock className="w-3 h-3 shrink-0" />
                                 <span className="truncate">

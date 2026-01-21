@@ -257,6 +257,9 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                             pushes={pushes}
                             highlightTaskId={highlightTaskId}
                             expandPushId={pushIdFromUrl}
+                            initialNewTask={searchParams.get('newTask') === 'true'}
+                            initialAssigneeId={searchParams.get('assigneeId')}
+                            initialPushId={pushIdFromUrl}
                         />
                     ) : (
                         <div className="p-10 text-center text-muted-foreground">

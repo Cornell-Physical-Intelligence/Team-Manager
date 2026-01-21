@@ -401,7 +401,7 @@ export function ProjectActivityTracker() {
                                             className={cn(
                                                 "px-2.5 py-1.5 rounded text-[10px] font-medium whitespace-nowrap transition-colors shrink-0 relative",
                                                 isActive
-                                                    ? "text-background"
+                                                    ? "text-foreground"
                                                     : "text-muted-foreground hover:text-foreground"
                                             )}
                                         >
@@ -409,7 +409,10 @@ export function ProjectActivityTracker() {
                                             {isActive && (
                                                 <motion.div
                                                     layoutId="active-project-bg"
-                                                    className="absolute inset-0 bg-foreground rounded"
+                                                    className="absolute inset-0 rounded border border-foreground/30 tag-shimmer"
+                                                    style={{
+                                                        background: 'linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent)'
+                                                    }}
                                                     transition={{
                                                         type: "spring",
                                                         stiffness: 400,
@@ -481,20 +484,20 @@ export function ProjectActivityTracker() {
                                             )}>
                                                 {push.name}
                                             </span>
-                                            <div className="flex-1 h-4 rounded-sm overflow-hidden relative bg-neutral-300 dark:bg-neutral-700">
+                                            <div className="flex-1 h-3.5 rounded-sm overflow-hidden relative bg-neutral-200 dark:bg-neutral-800 border border-black/5 dark:border-white/5">
                                                 {/* Completed - Green */}
                                                 <div
-                                                    className="absolute left-0 top-0 bottom-0 transition-all bg-emerald-400/70 dark:bg-emerald-400"
+                                                    className="absolute left-0 top-0 bottom-0 transition-all bg-gradient-to-r from-emerald-400 to-emerald-500 dark:from-emerald-500 dark:to-emerald-400 animate-progress-shimmer border-r border-black/5"
                                                     style={{ width: `${completionPct}%` }}
                                                 />
                                                 {/* In Review - Blue */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all bg-blue-400/70 dark:bg-blue-400"
+                                                    className="absolute top-0 bottom-0 transition-all bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-400 animate-progress-shimmer border-r border-black/5"
                                                     style={{ left: `${completionPct}%`, width: `${reviewPct}%` }}
                                                 />
                                                 {/* In Progress - Amber */}
                                                 <div
-                                                    className="absolute top-0 bottom-0 transition-all bg-amber-500 dark:bg-amber-400"
+                                                    className="absolute top-0 bottom-0 transition-all bg-gradient-to-r from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-400 animate-progress-shimmer border-r border-black/5"
                                                     style={{ left: `${completionPct + reviewPct}%`, width: `${progressPct}%` }}
                                                 />
                                                 {/* Overdue indicator */}
@@ -536,7 +539,15 @@ export function ProjectActivityTracker() {
                                                         </span>
                                                     ) : null}
                                                     {completionPct === 100 && (
-                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-medium">
+                                                        <span
+                                                            className="text-[9px] px-1.5 py-0.5 rounded-sm font-medium border tag-shimmer"
+                                                            style={{
+                                                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                                                color: 'rgb(16, 185, 129)',
+                                                                borderColor: 'rgba(16, 185, 129, 0.3)',
+                                                                '--tag-color': 'rgba(16, 185, 129, 0.2)'
+                                                            } as React.CSSProperties}
+                                                        >
                                                             Complete
                                                         </span>
                                                     )}

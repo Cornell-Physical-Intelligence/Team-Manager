@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from '@/lib/auth'
-import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock, Layout, ArrowRight } from "lucide-react"
+import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock, Layout, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { DashboardClient } from "./DashboardClient"
@@ -331,12 +331,44 @@ export default async function DashboardPage() {
         return { userStats, criticalIssues, overloadedUsers, idleUsers, allTasks: transformedTasks }
     }
 
-    const [myTasks, pendingApproval, teamStats, recentActivity, heatmapData] = await Promise.all([
+    const fetchProjects = async () => {
+        return prisma.project.findMany({
+            where: { workspaceId: dbUser.workspaceId },
+            select: {
+                id: true,
+                name: true,
+                color: true,
+                pushes: {
+                    where: { status: 'Active' },
+                    select: {
+                        id: true,
+                        name: true,
+                        color: true
+                    }
+                },
+                boards: {
+                    select: {
+                        id: true,
+                        columns: {
+                            select: { id: true, name: true },
+                            orderBy: { order: 'asc' }
+                        }
+                    }
+                },
+                members: {
+                    select: { userId: true }
+                }
+            }
+        })
+    }
+
+    const [myTasks, pendingApproval, teamStats, recentActivity, heatmapData, projects] = await Promise.all([
         fetchMyTasks(),
         fetchPendingApproval(),
         fetchTeamStats(),
         fetchRecentActivity(),
-        fetchHeatmapData()
+        fetchHeatmapData(),
+        fetchProjects()
     ])
 
     // Process tasks
@@ -392,10 +424,10 @@ export default async function DashboardPage() {
                                     <h2 className="text-sm font-medium">My Tasks</h2>
                                     <Link
                                         href="/dashboard/my-board"
-                                        className="text-[10px] text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 px-2 py-1 rounded bg-muted/50 hover:bg-muted"
+                                        className="text-[10px] text-muted-foreground hover:text-foreground transition-all flex items-center gap-1"
                                     >
-                                        <ArrowRight className="h-3 w-3" />
                                         Personal Board
+                                        <ChevronRight className="h-3 w-3" />
                                     </Link>
                                 </div>
 
@@ -498,6 +530,7 @@ export default async function DashboardPage() {
                                 overloadedUsers={heatmapData.overloadedUsers}
                                 idleUsers={heatmapData.idleUsers}
                                 allTasks={heatmapData.allTasks}
+                                projects={projects}
                             />
                         )}
                     </div>
