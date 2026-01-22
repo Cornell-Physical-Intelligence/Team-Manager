@@ -188,7 +188,7 @@ const SortableProjectRow = React.memo(({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
+                        className="relative z-20 h-6 w-6 shrink-0 text-muted-foreground/50 hover:text-muted-foreground"
                     >
                         {navigatingTo === `/dashboard/projects/${project.id}` ? (
                             <div className="flex items-center gap-[3px]">

@@ -869,6 +869,11 @@ export function Board({
     const handleTaskCreated = (newTask: Task) => {
         setColumns(prev => prev.map(col => {
             if (col.id === newTask.columnId) {
+                // Check if task already exists (may have been added by sync polling)
+                const taskExists = col.tasks.some(t => t.id === newTask.id)
+                if (taskExists) {
+                    return col
+                }
                 return { ...col, tasks: [...col.tasks, newTask] }
             }
             return col
