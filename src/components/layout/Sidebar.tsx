@@ -476,14 +476,16 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     // Delete project
     const handleDelete = async () => {
         if (!deleteConfirm) return
-        if (deleteConfirmName !== deleteConfirm.name) {
+        if (deleteConfirmName.trim() !== deleteConfirm.name.trim()) {
             return // Name doesn't match, don't delete
         }
         setIsSubmitting(true)
 
         try {
             const res = await fetch(`/api/projects/${deleteConfirm.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirmName: deleteConfirmName.trim() })
             })
             if (res.ok) {
                 fetchProjects()
@@ -491,6 +493,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 setDeleteConfirmName("")
                 router.push('/dashboard')
                 router.refresh()
+            } else {
+                const data = await res.json().catch(() => ({}))
+                alert(data.error || 'Failed to delete project')
             }
         } catch (err) {
             console.error(err)
@@ -925,7 +930,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                             variant="destructive"
                             size="sm"
                             onClick={handleDelete}
-                            disabled={isSubmitting || deleteConfirmName !== deleteConfirm?.name}
+                            disabled={isSubmitting || deleteConfirmName.trim() !== deleteConfirm?.name.trim()}
                         >
                             {isSubmitting ? 'Deleting...' : 'Delete'}
                         </Button>

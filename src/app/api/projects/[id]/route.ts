@@ -135,10 +135,19 @@ export async function DELETE(
 
         const { id } = await params
 
+        // Parse request body for confirmation name
+        let confirmName: string | undefined
+        try {
+            const body = await request.json()
+            confirmName = body.confirmName
+        } catch {
+            // Body might be empty for backwards compatibility
+        }
+
         // Verify project exists and belongs to user's workspace
         const existingProject = await prisma.project.findUnique({
             where: { id },
-            select: { workspaceId: true }
+            select: { workspaceId: true, name: true }
         })
 
         if (!existingProject) {
@@ -147,6 +156,11 @@ export async function DELETE(
 
         if (existingProject.workspaceId !== user.workspaceId) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
+        }
+
+        // Verify confirmation name matches (trimmed comparison)
+        if (confirmName !== undefined && confirmName.trim() !== existingProject.name.trim()) {
+            return NextResponse.json({ error: 'Project name does not match' }, { status: 400 })
         }
 
         // Delete in order: tasks -> columns -> boards -> pushes -> project
