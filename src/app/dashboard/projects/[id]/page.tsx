@@ -9,7 +9,7 @@ interface ProjectPageProps {
 export default async function ProjectPage({ params }: ProjectPageProps) {
     const { id } = await params
 
-    const project = await prisma.project.findUnique({
+    const projectPromise = prisma.project.findUnique({
         where: { id },
         select: {
             id: true,
@@ -18,19 +18,6 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             workspaceId: true,
             lead: { select: { id: true, name: true } },
             members: { select: { userId: true } },
-            pushes: {
-                select: {
-                    id: true,
-                    name: true,
-                    startDate: true,
-                    endDate: true,
-                    status: true,
-                    color: true,
-                    projectId: true,
-                    dependsOnId: true,
-                },
-                orderBy: { startDate: "asc" }
-            },
             boards: {
                 select: {
                     id: true,
@@ -70,7 +57,14 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 }
             }
         }
-    }) as any
+    }) as Promise<any>
+
+    const pushesPromise = prisma.push.findMany({
+        where: { projectId: id },
+        orderBy: { startDate: "asc" }
+    }) as Promise<any[]>
+
+    const [project, projectPushes] = await Promise.all([projectPromise, pushesPromise])
 
     if (!project) {
         notFound()
@@ -106,7 +100,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         isProjectMember: projectMemberIds.has(u.id)
     }))
 
-    const pushIds = (project.pushes as any[]).map((p: any) => p.id)
+    const pushIds = projectPushes.map((p: any) => p.id)
     const counts = pushIds.length > 0
         ? await prisma.task.groupBy({
             by: ["pushId"],
@@ -128,10 +122,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
         })
         : []
 
-    const totalByPushId = new Map(counts.map((c) => [c.pushId as string, c._count._all]))
-    const doneByPushId = new Map(doneCounts.map((c) => [c.pushId as string, c._count._all]))
+    const totalByPushId = new Map(counts.map((c: any) => [c.pushId as string, c._count._all]))
+    const doneByPushId = new Map(doneCounts.map((c: any) => [c.pushId as string, c._count._all]))
 
-    const pushes = (project.pushes as any[]).map((push: any) => ({
+    const pushes = projectPushes.map((push: any) => ({
         id: push.id,
         name: push.name,
         startDate: push.startDate.toISOString(),

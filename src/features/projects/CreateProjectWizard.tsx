@@ -132,9 +132,12 @@ export function CreateProjectWizard({
                     leadId: projectData.leadId,
                     memberIds: projectData.memberIds,
                     pushes: pushes.map(p => ({
+                        tempId: p.tempId,
                         name: p.name,
                         startDate: formatDateISO(p.startDate),
-                        endDate: p.endDate ? formatDateISO(p.endDate) : undefined
+                        endDate: p.endDate ? formatDateISO(p.endDate) : undefined,
+                        color: p.color,
+                        dependsOn: p.dependsOn
                     }))
                 })
             })

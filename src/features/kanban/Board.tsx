@@ -312,7 +312,21 @@ export function Board({
             const prevTasksByColId = new Map(prev.map((c) => [c.id, c.tasks]))
             return board.columns.map((c) => ({ ...c, tasks: prevTasksByColId.get(c.id) || [] }))
         })
-    }, [board.columns])
+
+        // Ensure new pushes start collapsed
+        setCollapsedPushes(prev => {
+            const next = new Set(prev)
+            let changed = false
+            pushes.forEach(p => {
+                // If it's a new push (not in prev) and not explicitly requested to expand
+                if (!prev.has(p.id) && p.id !== expandPushId && !loadedPushes[p.id]) {
+                    next.add(p.id)
+                    changed = true
+                }
+            })
+            return changed ? next : prev
+        })
+    }, [board.columns, pushes, expandPushId, loadedPushes])
 
     // Smart real-time sync - poll for changes every 1.5 seconds
     const lastSyncTime = useRef<string>(new Date().toISOString())
@@ -937,17 +951,41 @@ export function Board({
                         </div>
                     )}
 
-                    {[...pushes].sort((a, b) => {
-                        const aComplete = isPushComplete(a.id)
-                        const bComplete = isPushComplete(b.id)
-                        if (aComplete !== bComplete) return aComplete ? 1 : -1
+                    {(() => {
+                        const pushMap = new Map(pushes.map(p => [p.id, p]))
+                        const childrenMap = new Map<string, PushType[]>()
+                        const roots: PushType[] = []
 
-                        const aStart = new Date(a.startDate).getTime()
-                        const bStart = new Date(b.startDate).getTime()
-                        if (aStart !== bStart) return aStart - bStart
+                        pushes.forEach(p => {
+                            if (p.dependsOnId && pushMap.has(p.dependsOnId)) {
+                                const children = childrenMap.get(p.dependsOnId) || []
+                                children.push(p)
+                                childrenMap.set(p.dependsOnId, children)
+                            } else {
+                                roots.push(p)
+                            }
+                        })
 
-                        return a.id.localeCompare(b.id)
-                    }).map(push => {
+                        const sortByDate = (a: PushType, b: PushType) => {
+                            const aComplete = isPushComplete(a.id)
+                            const bComplete = isPushComplete(b.id)
+                            if (aComplete !== bComplete) return aComplete ? 1 : -1
+                            return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+                        }
+
+                        roots.sort(sortByDate)
+
+                        const sortedPushes: PushType[] = []
+                        const addWithChildren = (push: PushType) => {
+                            sortedPushes.push(push)
+                            const children = childrenMap.get(push.id) || []
+                            children.sort(sortByDate)
+                            children.forEach(addWithChildren)
+                        }
+
+                        roots.forEach(addWithChildren)
+                        return sortedPushes
+                    })().map(push => {
                         const pushColumns = getPushTasks(push.id)
                         const isComplete = isPushComplete(push.id)
                         const isLocked = isPushLocked(push)
@@ -956,139 +994,132 @@ export function Board({
                         const contentId = `push-${push.id}-content`
 
                         return (
-                            <div key={push.id} className={cn(
-                                "w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200",
-                                isComplete ? "bg-muted/40 border-border/50" : "bg-card",
-                                isLocked && "grayscale opacity-70 border-dashed"
-                            )}>
-                                <div className="absolute top-0 left-0 w-1 h-full rounded-l-lg" style={{ backgroundColor: push.color }} />
-                                <button
-                                    type="button"
-                                    aria-expanded={isOpen}
-                                    aria-controls={contentId}
-                                    onClick={() => !isLocked && togglePushCollapse(push.id)}
-                                    className={cn(
-                                        "w-full flex items-center justify-between p-3 md:p-4 transition-colors relative overflow-hidden",
-                                        isOpen ? "rounded-t-lg" : "rounded-lg",
-                                        isLocked ? "cursor-not-allowed bg-muted/30" : "hover:bg-accent/50 dark:hover:bg-accent/20"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            {push.dependsOnId && (
+                            <div key={push.id} className="relative group/push-container">
+                                {/* Vertical connection line from parent to this child */}
+                                {push.dependsOnId && (
+                                    <div className="absolute left-1/2 -top-4 w-[3px] h-4 bg-muted-foreground/50 -translate-x-1/2 z-0" />
+                                )}
+
+                                <div className={cn(
+                                    "w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200 relative z-10",
+                                    isComplete ? "bg-muted/40 border-border/50" : "bg-card",
+                                    isLocked && "grayscale opacity-70 border-dashed"
+                                )}>
+                                    <button
+                                        type="button"
+                                        aria-expanded={isOpen}
+                                        aria-controls={contentId}
+                                        onClick={() => togglePushCollapse(push.id)}
+                                        className={cn(
+                                            "w-full flex items-center justify-between p-3 md:p-4 transition-colors relative overflow-hidden",
+                                            isOpen ? "rounded-t-lg" : "rounded-lg",
+                                            isLocked ? "cursor-not-allowed bg-muted/30" : "hover:bg-accent/50 dark:hover:bg-accent/20"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "font-semibold text-base md:text-lg tracking-tight truncate",
+                                                    isComplete && "text-muted-foreground",
+                                                    isLocked && "text-muted-foreground/80 font-medium"
+                                                )}>
+                                                    {push.name}
+                                                </span>
+                                            </div>
+
+                                            {isLocked && (
+                                                <Lock className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                            )}
+
+                                            {isAdmin && !isLocked && (
+                                                <div
+                                                    role="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        // Expand push if collapsed
+                                                        if (collapsedPushes.has(push.id)) {
+                                                            setCollapsedPushes(prev => {
+                                                                const next = new Set(prev)
+                                                                next.delete(push.id)
+                                                                return next
+                                                            })
+                                                            loadPushTasks(push.id)
+                                                        }
+                                                        const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
+                                                        if (todoColumn) {
+                                                            setCreatingColumnId(todoColumn.id)
+                                                            setCreatingPushId(push.id)
+                                                        }
+                                                    }}
+                                                    className={`h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs ${isComplete
+                                                        ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
+                                                        : "border-border bg-background hover:bg-muted/50"
+                                                        }`}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    <span className="hidden sm:inline">Add Task</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                                            {isComplete && (
+                                                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                            )}
+                                            {!isComplete && push.taskCount > 0 && (
                                                 <TooltipProvider delayDuration={100}>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Link className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-45" />
+                                                            <div className="w-20 md:w-24 h-2 bg-muted rounded-full overflow-hidden shrink-0">
+                                                                <div
+                                                                    className="h-full bg-primary/60 rounded-full transition-all duration-300"
+                                                                    style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
+                                                                />
+                                                            </div>
                                                         </TooltipTrigger>
-                                                        <TooltipContent side="top">
-                                                            Depends on {getParentPushName(push.dependsOnId)}
+                                                        <TooltipContent side="top" className="text-xs">
+                                                            {push.completedCount}/{push.taskCount} tasks completed
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
                                             )}
-                                            <span className={cn(
-                                                "font-semibold text-base md:text-lg tracking-tight truncate",
-                                                isComplete && "text-muted-foreground",
-                                                isLocked && "text-muted-foreground/80 italic"
-                                            )}>
-                                                {push.name}
-                                            </span>
+                                            {!isComplete && (
+                                                <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                                    {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
+                                                </span>
+                                            )}
+                                            {isAdmin && (
+                                                <div
+                                                    role="button"
+                                                    onClick={(e) => handleEditPush(e, push)}
+                                                    className={`flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}
+                                                    title="Edit Push"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                                </div>
+                                            )}
+                                            {(!isLocked || isOpen) && (
+                                                <div className={`h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}>
+                                                    <ChevronDown className={`h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            )}
                                         </div>
+                                    </button>
 
-                                        {isLocked && (
-                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[10px] font-medium text-muted-foreground border shrink-0">
-                                                <Lock className="h-3 w-3" />
-                                                Locked
-                                            </div>
-                                        )}
-
-                                        {isAdmin && !isLocked && (
-                                            <div
-                                                role="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    // Expand push if collapsed
-                                                    if (collapsedPushes.has(push.id)) {
-                                                        setCollapsedPushes(prev => {
-                                                            const next = new Set(prev)
-                                                            next.delete(push.id)
-                                                            return next
-                                                        })
-                                                        loadPushTasks(push.id)
-                                                    }
-                                                    const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
-                                                    if (todoColumn) {
-                                                        setCreatingColumnId(todoColumn.id)
-                                                        setCreatingPushId(push.id)
-                                                    }
-                                                }}
-                                                className={`h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs ${isComplete
-                                                    ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
-                                                    : "border-border bg-background hover:bg-muted/50"
-                                                    }`}
-                                            >
-                                                <Plus className="h-3.5 w-3.5" />
-                                                <span className="hidden sm:inline">Add Task</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                                        {isComplete && (
-                                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                                        )}
-                                        {!isComplete && push.taskCount > 0 && (
-                                            <TooltipProvider delayDuration={100}>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <div className="w-20 md:w-24 h-2 bg-muted rounded-full overflow-hidden shrink-0">
-                                                            <div
-                                                                className="h-full bg-primary/60 rounded-full transition-all duration-300"
-                                                                style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
-                                                            />
-                                                        </div>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top" className="text-xs">
-                                                        {push.completedCount}/{push.taskCount} tasks completed
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        )}
-                                        {!isComplete && (
-                                            <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                                                {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
-                                            </span>
-                                        )}
-                                        {isAdmin && (
-                                            <div
-                                                role="button"
-                                                onClick={(e) => handleEditPush(e, push)}
-                                                className={`flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}
-                                                title="Edit Push"
-                                            >
-                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </div>
-                                        )}
-                                        <div className={`h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}>
-                                            <ChevronDown className={`h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                                        </div>
-                                    </div>
-                                </button>
-
-                                <div
-                                    id={contentId}
-                                    className="grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                                    style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
-                                >
-                                    <div className={`min-h-0 ${isOpen ? "overflow-visible" : "overflow-hidden"}`}>
-                                        <div className={`p-4 pt-0 border-t rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"} ${isComplete ? "bg-muted/20 border-border/30" : "bg-muted/10"}`}>
-                                            <div className="pt-4">
-                                                {loadingPushes[push.id] ? (
-                                                    <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
-                                                ) : (
-                                                    renderPushBoard(pushColumns, push.id)
-                                                )}
+                                    <div
+                                        id={contentId}
+                                        className="grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                                        style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+                                    >
+                                        <div className={`min-h-0 ${isOpen ? "overflow-visible" : "overflow-hidden"}`}>
+                                            <div className={`p-4 pt-0 border-t rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"} ${isComplete ? "bg-muted/20 border-border/30" : "bg-muted/10"}`}>
+                                                <div className="pt-4">
+                                                    {loadingPushes[push.id] ? (
+                                                        <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
+                                                    ) : (
+                                                        renderPushBoard(pushColumns, push.id)
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

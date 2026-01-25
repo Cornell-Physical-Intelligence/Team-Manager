@@ -78,12 +78,15 @@ export function TimelineManagerDialog({
                 const updatedPushes = pushes.filter(p => initialPushes.some(ip => ip.id === p.tempId))
                 const newPushes = pushes.filter(p => !initialPushes.some(ip => ip.id === p.tempId))
 
-                // Perform deletions
+                // Map of tempId -> realId for newly created pushes
+                const idMap: Record<string, string> = {}
+
+                // Perform deletions first
                 for (const id of deletedPushIds) {
                     await deletePush(id, projectId)
                 }
 
-                // Perform updates
+                // Perform updates (existing pushes already have real IDs as tempIds)
                 for (const p of updatedPushes) {
                     await updatePush({
                         id: p.tempId,
@@ -95,7 +98,9 @@ export function TimelineManagerDialog({
                     })
                 }
 
-                // Perform creations
+                // Perform creations matching tempId to realId for chaining
+                // We must do this sequentially to ensure parents exist before children reference them
+                // and to build the ID map.
                 for (const p of newPushes) {
                     const formData = new FormData()
                     formData.append('name', p.name)
@@ -103,8 +108,15 @@ export function TimelineManagerDialog({
                     formData.append('startDate', p.startDate.toISOString().split('T')[0])
                     if (p.endDate) formData.append('endDate', p.endDate.toISOString().split('T')[0])
                     if (p.color) formData.append('color', p.color)
-                    if (p.dependsOn) formData.append('dependsOnId', p.dependsOn)
-                    await createPush(formData)
+
+                    // Resolve dependency: either a real ID from initialPushes or a newly created one from idMap
+                    const resolvedDependsOnId = p.dependsOn ? (idMap[p.dependsOn] || p.dependsOn) : null
+                    if (resolvedDependsOnId) formData.append('dependsOnId', resolvedDependsOnId)
+
+                    const result = await createPush(formData)
+                    if (result.success && result.push) {
+                        idMap[p.tempId] = result.push.id
+                    }
                 }
 
                 toast({

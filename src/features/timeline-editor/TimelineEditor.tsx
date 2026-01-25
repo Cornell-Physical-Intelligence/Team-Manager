@@ -119,40 +119,71 @@ export function TimelineEditor({
     // Calculate row assignments - chained pushes go on the same row
     const rowAssignments = useMemo(() => {
         const assignments: Record<string, number> = {}
-
-        const chains: string[][] = []
         const processed = new Set<string>()
+        const chains: { ids: string[]; start: number; end: number }[] = []
 
+        const pushMap = new Map(pushes.map(p => [p.tempId, p]))
+
+        // 1. Identify Chains
         const rootPushes = pushes
-            .filter(p => !p.dependsOn)
+            .filter(p => !p.dependsOn || !pushMap.has(p.dependsOn))
             .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
         for (const root of rootPushes) {
-            const chain: string[] = [root.tempId]
+            if (processed.has(root.tempId)) continue
+
+            const chainIds: string[] = [root.tempId]
             processed.add(root.tempId)
+
+            let chainStart = root.startDate.getTime()
+            let chainEnd = (root.endDate || addDays(root.startDate, 14)).getTime()
 
             let current = root
             while (true) {
+                // Find next in chain: must depend on current AND not be processed
                 const next = pushes.find(p => p.dependsOn === current.tempId && !processed.has(p.tempId))
                 if (!next) break
-                chain.push(next.tempId)
+
+                chainIds.push(next.tempId)
                 processed.add(next.tempId)
+                const nextEnd = (next.endDate || addDays(next.startDate, 14)).getTime()
+                chainEnd = Math.max(chainEnd, nextEnd)
                 current = next
             }
 
-            chains.push(chain)
+            chains.push({ ids: chainIds, start: chainStart, end: chainEnd })
         }
 
+        // Catch any remaining pushes that might have circular dependencies or were missed
         for (const push of pushes) {
             if (!processed.has(push.tempId)) {
-                chains.push([push.tempId])
+                const start = push.startDate.getTime()
+                const end = (push.endDate || addDays(push.startDate, 14)).getTime()
+                chains.push({ ids: [push.tempId], start, end })
+                processed.add(push.tempId)
             }
         }
 
-        chains.forEach((chain, rowIndex) => {
-            chain.forEach(pushId => {
-                assignments[pushId] = rowIndex
-            })
+        // 2. Pack Chains into Rows
+        // Sort chains by start date to pack effectively
+        chains.sort((a, b) => a.start - b.start)
+
+        const rowEnds: number[] = [] // Keeps track of the end time of the last push in each row
+
+        chains.forEach(chain => {
+            // Find the first row where this chain fits (starts after the row's last push ends)
+            const assignedRow = rowEnds.findIndex(rowEnd => chain.start >= rowEnd)
+
+            if (assignedRow === -1) {
+                // No room in existing rows, create a new one
+                const newRowIndex = rowEnds.length
+                rowEnds.push(chain.end)
+                chain.ids.forEach(id => { assignments[id] = newRowIndex })
+            } else {
+                // Update the end time for this row
+                rowEnds[assignedRow] = chain.end
+                chain.ids.forEach(id => { assignments[id] = assignedRow })
+            }
         })
 
         return assignments
@@ -173,16 +204,16 @@ export function TimelineEditor({
 
         for (const push of pushes) {
             const hasNext = pushes.some(p => p.dependsOn === push.tempId)
-            const pushEnd = push.endDate || addDays(push.startDate, 14)
+            const pushEnd = (push.endDate || addDays(push.startDate, 14)).getTime()
 
             // Check if touching previous (this push starts exactly when its dependency ends)
             let isTouchingPrevious = false
             if (push.dependsOn) {
                 const prevPush = pushes.find(p => p.tempId === push.dependsOn)
                 if (prevPush) {
-                    const prevEnd = prevPush.endDate || addDays(prevPush.startDate, 14)
-                    // Same day = touching
-                    isTouchingPrevious = Math.abs(prevEnd.getTime() - push.startDate.getTime()) < 1000 * 60 * 60 * 24
+                    const prevEnd = (prevPush.endDate || addDays(prevPush.startDate, 14)).getTime()
+                    // Same day = touching (1ms buffer)
+                    isTouchingPrevious = Math.abs(prevEnd - push.startDate.getTime()) < 1000 * 60 * 60
                 }
             }
 
@@ -190,7 +221,8 @@ export function TimelineEditor({
             let isTouchingNext = false
             const nextPush = pushes.find(p => p.dependsOn === push.tempId)
             if (nextPush) {
-                isTouchingNext = Math.abs(pushEnd.getTime() - nextPush.startDate.getTime()) < 1000 * 60 * 60 * 24
+                const nextStart = nextPush.startDate.getTime()
+                isTouchingNext = Math.abs(pushEnd - nextStart) < 1000 * 60 * 60
             }
 
             info[push.tempId] = { isChainedWithNext: hasNext, isTouchingPrevious, isTouchingNext }
@@ -198,7 +230,6 @@ export function TimelineEditor({
 
         return info
     }, [pushes])
-
     // Handlers for creating new pushes by dragging
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (readOnly) return
@@ -237,7 +268,7 @@ export function TimelineEditor({
                 setCreatePreview({ start, end })
             }
         }
-    }, [isCreating, createStart, getDateFromClientX])
+    }, [isCreating, createStart, getDateFromClientX, pushes, rowAssignments, numRows])
 
     const handleMouseUp = useCallback(() => {
         if (!isCreating) return
@@ -281,14 +312,13 @@ export function TimelineEditor({
             name: "",
             startDate: sourceEnd,
             endDate: defaultEnd,
-            color: sourcePush.color,
+            color: sourcePush.color, // Inherit color
             dependsOn: afterPushId
         }
 
         setPendingPush(newPush)
-        setNewPushName("") // No autofill
+        setNewPushName("")
         setNewPushEndDate(formatDateISO(defaultEnd))
-        // Store preview for chained push
         setPendingPreview({ start: sourceEnd, end: defaultEnd, row })
         setNamePromptOpen(true)
     }, [pushes, rowAssignments])

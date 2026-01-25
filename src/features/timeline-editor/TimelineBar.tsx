@@ -363,8 +363,8 @@ export function TimelineBar({
                     />
                 )}
 
-                {/* Add chained push button - hide tooltip while dragging */}
-                {!readOnly && onAddChained && !isChainedWithNext && (
+                {/* Add chained push button - hide if isTouchingNext is true to prevent redundancy */}
+                {!readOnly && onAddChained && !isChainedWithNext && !isTouchingNext && (
                     <Tooltip open={isChainDragging ? false : undefined}>
                         <TooltipTrigger asChild>
                             <div

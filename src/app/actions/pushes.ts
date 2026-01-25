@@ -48,7 +48,9 @@ export async function createPush(formData: FormData) {
             }
         }
 
-        // Get count of existing pushes to assign color
+        const color = formData.get('color') as string | null
+
+        // Get count of existing pushes to assign fallback color
         const existingCount = await prisma.push.count({
             where: { projectId }
         })
@@ -59,7 +61,7 @@ export async function createPush(formData: FormData) {
                 projectId,
                 startDate: start,
                 endDate: end,
-                color: PUSH_COLORS[existingCount % PUSH_COLORS.length],
+                color: color || PUSH_COLORS[existingCount % PUSH_COLORS.length],
                 status: 'Active',
                 dependsOnId: dependsOnId || null
             } as any

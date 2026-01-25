@@ -195,7 +195,7 @@ export async function POST(request: Request) {
                         if (realId && dependsOnRealId) {
                             await tx.push.update({
                                 where: { id: realId },
-                                data: { dependsOnId: dependsOnRealId }
+                                data: { dependsOnId: dependsOnRealId } as any
                             })
                         }
                     }
@@ -208,6 +208,12 @@ export async function POST(request: Request) {
         return NextResponse.json(project, { status: 201 })
     } catch (error: any) {
         console.error('[API] Failed to create project:', error)
-        return NextResponse.json({ error: error.message || 'Failed to create project' }, { status: 500 })
+        if (error.code) console.error('[API] Error Code:', error.code)
+        if (error.meta) console.error('[API] Error Meta:', error.meta)
+
+        return NextResponse.json({
+            error: error.message || 'Failed to create project',
+            details: error.meta || error.code || undefined
+        }, { status: 500 })
     }
 }
