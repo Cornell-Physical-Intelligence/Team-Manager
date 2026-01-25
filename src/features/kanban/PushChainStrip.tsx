@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { cn } from "@/lib/utils"
-import { Check, ChevronDown, Pencil, Plus } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
+import { Check, ChevronDown, Pencil, Plus, Lock } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 
 type PushType = {
     id: string
@@ -30,8 +30,8 @@ type PushChainStripProps = {
     renderPushBoard: (pushId: string) => React.ReactNode
 }
 
-const COLLAPSED_SIZE = 44
-const ANIMATION_DURATION = 350
+const COLLAPSED_SIZE = 48
+const BAR_HEIGHT = 48
 
 export function PushChainStrip({
     chain,
@@ -55,12 +55,18 @@ export function PushChainStrip({
         return chain[chain.length - 1]?.id ?? null
     }, [chain, isComplete])
 
+    // Check if a push is locked (its dependency is not complete)
+    const isLocked = useCallback((push: PushType) => {
+        if (!push.dependsOnId) return false
+        return !isComplete(push.dependsOnId)
+    }, [isComplete])
+
     // Track which push is currently expanded
     const [expandedPushId, setExpandedPushId] = useState<string | null>(activePushId)
     // Track if content panel is open
     const [isContentOpen, setIsContentOpen] = useState(true)
-    // Track animation state
-    const [isAnimating, setIsAnimating] = useState(false)
+    // Track which square is being hovered
+    const [hoveredId, setHoveredId] = useState<string | null>(null)
 
     // Sync expandedPushId when activePushId changes
     useEffect(() => {
@@ -76,190 +82,230 @@ export function PushChainStrip({
         }
     }, [expandedPushId, loadedPushes, loadPushTasks])
 
-    const handlePushClick = useCallback((pushId: string) => {
-        if (pushId === expandedPushId) {
+    const handlePushClick = useCallback((push: PushType) => {
+        // If locked, don't allow interaction
+        if (isLocked(push)) return
+
+        if (push.id === expandedPushId) {
             // Toggle content open/close
             setIsContentOpen(prev => !prev)
         } else {
-            // Switch to different push with animation
-            setIsAnimating(true)
-            setExpandedPushId(pushId)
+            // Switch to different push
+            setExpandedPushId(push.id)
             setIsContentOpen(true)
-            setTimeout(() => setIsAnimating(false), ANIMATION_DURATION)
         }
-    }, [expandedPushId])
+    }, [expandedPushId, isLocked])
 
     const expandedPush = chain.find(p => p.id === expandedPushId)
 
     if (!expandedPush || chain.length < 2) return null
 
     return (
-        <TooltipProvider delayDuration={200}>
-            <div className="w-full">
-                {/* Chain Strip Header */}
-                <div className="flex items-stretch gap-2 p-2">
-                    {chain.map((push) => {
-                        const isExpanded = push.id === expandedPushId
-                        const pushIsComplete = isComplete(push.id)
-                        const isUpcoming = !pushIsComplete && push.id !== activePushId
+        <div className="w-full">
+            {/* Chain Strip Header */}
+            <div
+                className="flex items-center gap-2 p-2"
+                style={{ height: BAR_HEIGHT + 16 }}
+            >
+                {chain.map((push, index) => {
+                    const isExpanded = push.id === expandedPushId
+                    const pushIsComplete = isComplete(push.id)
+                    const pushIsLocked = isLocked(push)
+                    const isHovered = hoveredId === push.id
 
-                        if (isExpanded) {
-                            // Expanded push - takes remaining space
-                            return (
-                                <div
-                                    key={push.id}
-                                    className={cn(
-                                        "relative flex-1 min-w-0 rounded-xl overflow-hidden",
-                                        "transition-all ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-                                        isAnimating ? "duration-350" : "duration-200"
+                    if (isExpanded) {
+                        // Expanded push - takes remaining space
+                        return (
+                            <motion.div
+                                key={push.id}
+                                layout
+                                initial={false}
+                                animate={{ flex: 1 }}
+                                transition={{
+                                    type: "spring",
+                                    stiffness: 400,
+                                    damping: 30
+                                }}
+                                className="relative min-w-0 rounded-xl overflow-hidden cursor-pointer"
+                                style={{
+                                    height: BAR_HEIGHT,
+                                    background: `linear-gradient(135deg, ${push.color}dd, ${push.color}99)`,
+                                }}
+                                onClick={() => handlePushClick(push)}
+                            >
+                                <div className="h-full flex items-center gap-3 px-4">
+                                    {/* Completion badge */}
+                                    {pushIsComplete && (
+                                        <motion.span
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            className="bg-white/25 backdrop-blur-sm px-2 py-0.5 rounded-md text-[10px] font-bold text-white tracking-wide shrink-0"
+                                        >
+                                            DONE
+                                        </motion.span>
                                     )}
-                                    style={{
-                                        background: `linear-gradient(135deg, ${push.color}dd, ${push.color}99)`,
-                                        boxShadow: `0 4px 20px ${push.color}40`
-                                    }}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => handlePushClick(push.id)}
-                                        className="w-full flex items-center gap-3 p-3 hover:brightness-105 transition-all"
-                                    >
-                                        {/* Completion badge */}
-                                        {pushIsComplete && (
-                                            <span className="bg-white/25 backdrop-blur-sm px-2 py-1 rounded-lg text-[11px] font-bold text-white tracking-wide shrink-0">
-                                                DONE
-                                            </span>
+
+                                    {/* Push name */}
+                                    <span className="text-sm font-semibold text-white truncate">
+                                        {push.name}
+                                    </span>
+
+                                    {/* Progress & controls */}
+                                    <div className="ml-auto flex items-center gap-3 shrink-0">
+                                        {!pushIsComplete && push.taskCount > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-14 h-1.5 bg-white/30 rounded-full overflow-hidden">
+                                                    <motion.div
+                                                        className="h-full bg-white rounded-full"
+                                                        initial={false}
+                                                        animate={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
+                                                        transition={{ duration: 0.5 }}
+                                                    />
+                                                </div>
+                                                <span className="text-[11px] text-white/80 font-medium tabular-nums">
+                                                    {push.completedCount}/{push.taskCount}
+                                                </span>
+                                            </div>
                                         )}
 
-                                        {/* Push name */}
-                                        <span className="text-base font-semibold text-white truncate">
-                                            {push.name}
+                                        <span className="text-[11px] text-white/50 font-medium">
+                                            {index + 1}/{chain.length}
                                         </span>
 
-                                        {/* Progress & position */}
-                                        <div className="ml-auto flex items-center gap-3 shrink-0">
-                                            {!pushIsComplete && push.taskCount > 0 && (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-16 h-1.5 bg-white/30 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-white rounded-full transition-all duration-500"
-                                                            style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-xs text-white/80 font-medium">
-                                                        {push.completedCount}/{push.taskCount}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            <span className="text-xs text-white/60 font-medium">
-                                                {chain.indexOf(push) + 1}/{chain.length}
-                                            </span>
-
-                                            {isAdmin && (
-                                                <>
-                                                    <div
-                                                        role="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            onAddTask(push)
-                                                        }}
-                                                        className="h-7 flex items-center gap-1 px-2 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-white text-xs font-medium"
-                                                    >
-                                                        <Plus className="h-3.5 w-3.5" />
-                                                        <span className="hidden sm:inline">Task</span>
-                                                    </div>
-                                                    <div
-                                                        role="button"
-                                                        onClick={(e) => onEditPush(e, push)}
-                                                        className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/20 transition-colors text-white/80"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </div>
-                                                </>
-                                            )}
-
-                                            <ChevronDown
-                                                className={cn(
-                                                    "h-4 w-4 text-white/70 transition-transform duration-300",
-                                                    isContentOpen && "rotate-180"
-                                                )}
-                                            />
-                                        </div>
-                                    </button>
-                                </div>
-                            )
-                        }
-
-                        // Collapsed push - fixed size square
-                        return (
-                            <Tooltip key={push.id}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={() => handlePushClick(push.id)}
-                                        className={cn(
-                                            "relative flex items-center justify-center rounded-xl",
-                                            "transition-all ease-[cubic-bezier(0.34,1.56,0.64,1)]",
-                                            isAnimating ? "duration-350" : "duration-200",
-                                            "hover:scale-110 hover:shadow-lg",
-                                            "focus:outline-none focus:ring-2 focus:ring-white/50"
+                                        {isAdmin && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onAddTask(push)
+                                                    }}
+                                                    className="h-7 flex items-center gap-1 px-2 rounded-md bg-white/20 hover:bg-white/30 transition-colors text-white text-xs font-medium"
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    <span className="hidden sm:inline">Task</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => onEditPush(e, push)}
+                                                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-white/20 transition-colors text-white/80"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </button>
+                                            </>
                                         )}
-                                        style={{
-                                            width: COLLAPSED_SIZE,
-                                            height: COLLAPSED_SIZE,
-                                            background: pushIsComplete
-                                                ? `linear-gradient(135deg, ${push.color}cc, ${push.color}99)`
-                                                : isUpcoming
-                                                    ? `repeating-linear-gradient(
-                                                        -45deg,
-                                                        ${push.color}40,
-                                                        ${push.color}40 4px,
-                                                        ${push.color}20 4px,
-                                                        ${push.color}20 8px
-                                                      )`
-                                                    : `linear-gradient(135deg, ${push.color}99, ${push.color}66)`,
-                                            boxShadow: pushIsComplete
-                                                ? `0 2px 8px ${push.color}50`
-                                                : 'none'
-                                        }}
+
+                                        <motion.div
+                                            animate={{ rotate: isContentOpen ? 180 : 0 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            <ChevronDown className="h-4 w-4 text-white/60" />
+                                        </motion.div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )
+                    }
+
+                    // Collapsed push - grows on hover to show name
+                    const isUpcoming = !pushIsComplete && push.id !== activePushId
+
+                    return (
+                        <motion.button
+                            key={push.id}
+                            type="button"
+                            layout
+                            initial={false}
+                            animate={{
+                                width: isHovered && !pushIsLocked ? 'auto' : COLLAPSED_SIZE,
+                                minWidth: isHovered && !pushIsLocked ? 120 : COLLAPSED_SIZE,
+                            }}
+                            transition={{
+                                type: "spring",
+                                stiffness: 500,
+                                damping: 35
+                            }}
+                            onClick={() => handlePushClick(push)}
+                            onMouseEnter={() => setHoveredId(push.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            disabled={pushIsLocked}
+                            className={cn(
+                                "relative flex items-center justify-center rounded-xl overflow-hidden",
+                                pushIsLocked
+                                    ? "cursor-not-allowed opacity-50"
+                                    : "cursor-pointer hover:shadow-lg"
+                            )}
+                            style={{
+                                height: BAR_HEIGHT,
+                                background: pushIsComplete
+                                    ? `linear-gradient(135deg, ${push.color}cc, ${push.color}99)`
+                                    : isUpcoming || pushIsLocked
+                                        ? `repeating-linear-gradient(
+                                            -45deg,
+                                            ${push.color}35,
+                                            ${push.color}35 4px,
+                                            ${push.color}18 4px,
+                                            ${push.color}18 8px
+                                          )`
+                                        : `linear-gradient(135deg, ${push.color}99, ${push.color}66)`,
+                            }}
+                        >
+                            <AnimatePresence mode="wait">
+                                {isHovered && !pushIsLocked ? (
+                                    <motion.div
+                                        key="expanded"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="flex items-center gap-2 px-3"
                                     >
                                         {pushIsComplete && (
-                                            <Check
-                                                className="h-5 w-5 text-white animate-checkmark-appear drop-shadow-sm"
-                                                strokeWidth={3}
-                                            />
+                                            <Check className="h-4 w-4 text-white shrink-0" strokeWidth={3} />
                                         )}
-                                        {!pushIsComplete && (
-                                            <span className="text-xs font-bold text-white/70">
-                                                {chain.indexOf(push) + 1}
+                                        <span className="text-xs font-semibold text-white truncate">
+                                            {push.name}
+                                        </span>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="collapsed"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="flex items-center justify-center"
+                                    >
+                                        {pushIsLocked ? (
+                                            <Lock className="h-4 w-4 text-white/50" />
+                                        ) : pushIsComplete ? (
+                                            <Check className="h-5 w-5 text-white" strokeWidth={3} />
+                                        ) : (
+                                            <span className="text-sm font-bold text-white/60">
+                                                {index + 1}
                                             </span>
                                         )}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                    side="bottom"
-                                    className="text-xs font-medium"
-                                    sideOffset={8}
-                                >
-                                    <div>{push.name}</div>
-                                    <div className="text-muted-foreground">
-                                        {pushIsComplete ? 'Completed' : isUpcoming ? 'Upcoming' : 'Active'} • {push.completedCount}/{push.taskCount}
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        )
-                    })}
-                </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.button>
+                    )
+                })}
+            </div>
 
-                {/* Content Panel */}
-                <div
-                    className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                    style={{ gridTemplateRows: isContentOpen ? "1fr" : "0fr" }}
-                >
-                    <div className={cn(
-                        "min-h-0 overflow-hidden",
-                        isContentOpen ? "opacity-100" : "opacity-0"
-                    )}>
+            {/* Content Panel */}
+            <AnimatePresence initial={false}>
+                {isContentOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{
+                            height: { type: "spring", stiffness: 300, damping: 30 },
+                            opacity: { duration: 0.2 }
+                        }}
+                        className="overflow-hidden"
+                    >
                         <div className="p-4 pt-2">
                             {loadingPushes[expandedPush.id] ? (
                                 <div className="h-[200px] rounded-xl bg-muted/30 animate-pulse" />
@@ -267,9 +313,9 @@ export function PushChainStrip({
                                 renderPushBoard(expandedPush.id)
                             )}
                         </div>
-                    </div>
-                </div>
-            </div>
-        </TooltipProvider>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     )
 }
