@@ -123,7 +123,9 @@ export function TimelineEditor({
         const chains: string[][] = []
         const processed = new Set<string>()
 
-        const rootPushes = pushes.filter(p => !p.dependsOn)
+        const rootPushes = pushes
+            .filter(p => !p.dependsOn)
+            .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
         for (const root of rootPushes) {
             const chain: string[] = [root.tempId]
@@ -219,13 +221,21 @@ export function TimelineEditor({
         if (distanceDragged >= MIN_DRAG_DISTANCE) {
             setHasDragged(true)
             const currentDate = getDateFromClientX(e.clientX)
-            const start = currentDate < createStart.date ? currentDate : createStart.date
-            const end = currentDate < createStart.date ? createStart.date : currentDate
+            let start = currentDate < createStart.date ? currentDate : createStart.date
+            let end = currentDate < createStart.date ? createStart.date : currentDate
+            end = addDays(end, 1)
 
-            setCreatePreview({
-                start,
-                end: addDays(end, 1)
+            // Collision check for creation preview
+            const isOverlapping = pushes.some(other => {
+                const otherRow = rowAssignments[other.tempId]
+                if (otherRow !== numRows) return false // Previews are on a new row
+                const otherEnd = other.endDate || addDays(other.startDate, 14)
+                return start < otherEnd && end > other.startDate
             })
+
+            if (!isOverlapping) {
+                setCreatePreview({ start, end })
+            }
         }
     }, [isCreating, createStart, getDateFromClientX])
 
@@ -451,6 +461,10 @@ export function TimelineEditor({
                                 isTouchingPrevious={pushInfo[push.tempId]?.isTouchingPrevious || false}
                                 isTouchingNext={pushInfo[push.tempId]?.isTouchingNext || false}
                                 getDateFromX={getDateFromClientX}
+                                otherPushesOnSameRow={pushes.filter(p =>
+                                    p.tempId !== push.tempId &&
+                                    rowAssignments[p.tempId] === rowAssignments[push.tempId]
+                                )}
                             />
                         ))}
                     </div>

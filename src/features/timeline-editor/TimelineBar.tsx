@@ -24,6 +24,7 @@ type TimelineBarProps = {
     isTouchingPrevious?: boolean
     isTouchingNext?: boolean
     getDateFromX?: (clientX: number) => Date
+    otherPushesOnSameRow?: PushDraft[]
 }
 
 const ROW_HEIGHT = 48
@@ -46,7 +47,8 @@ export function TimelineBar({
     isChainedWithNext = false,
     isTouchingPrevious = false,
     isTouchingNext = false,
-    getDateFromX
+    getDateFromX,
+    otherPushesOnSameRow = []
 }: TimelineBarProps) {
     const barRef = useRef<HTMLDivElement>(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -118,16 +120,39 @@ export function TimelineBar({
                 if (dragType === 'move') {
                     const newStart = addDays(push.startDate, daysDelta)
                     const newEnd = push.endDate ? addDays(push.endDate, daysDelta) : null
-                    onUpdate(push.tempId, { startDate: newStart, endDate: newEnd })
+
+                    // Final move collision check
+                    const currentEnd = push.endDate || addDays(push.startDate, 14)
+                    const durationDays = differenceInDays(currentEnd, push.startDate)
+                    const finalEnd = newEnd || addDays(newStart, durationDays)
+
+                    const isOverlapping = otherPushesOnSameRow.some(other => {
+                        const otherEnd = other.endDate || addDays(other.startDate, 14)
+                        return newStart < otherEnd && finalEnd > other.startDate
+                    })
+
+                    if (!isOverlapping) {
+                        onUpdate(push.tempId, { startDate: newStart, endDate: newEnd })
+                    }
                 } else if (dragType === 'resize-start') {
                     const newStart = addDays(push.startDate, daysDelta)
-                    if (newStart < pushEnd) {
+                    // Check if newStart overlaps with any other push or passes current end
+                    const isOverlapping = otherPushesOnSameRow.some(other => {
+                        const otherEnd = other.endDate || addDays(other.startDate, 14)
+                        return newStart < otherEnd && pushEnd > other.startDate
+                    })
+                    if (newStart < pushEnd && !isOverlapping) {
                         onUpdate(push.tempId, { startDate: newStart })
                     }
                 } else if (dragType === 'resize-end') {
                     const currentEnd = push.endDate || addDays(push.startDate, 14)
                     const newEnd = addDays(currentEnd, daysDelta)
-                    if (newEnd > push.startDate) {
+                    // Check if newEnd overlaps with any other push or passes current start
+                    const isOverlapping = otherPushesOnSameRow.some(other => {
+                        const otherEnd = other.endDate || addDays(other.startDate, 14)
+                        return push.startDate < otherEnd && newEnd > other.startDate
+                    })
+                    if (newEnd > push.startDate && !isOverlapping) {
                         onUpdate(push.tempId, { endDate: newEnd })
                     }
                 }
@@ -191,12 +216,55 @@ export function TimelineBar({
 
     if (isDragging && hasMoved && dragOffset.x !== 0) {
         if (dragType === 'move') {
-            visualLeft = leftPercent + dragOffset.x
+            const nextLeft = leftPercent + dragOffset.x
+            const currentWidth = widthPercent
+
+            // Check collisions for move
+            let clampedLeft = nextLeft
+            otherPushesOnSameRow.forEach(other => {
+                const otherEnd = getPositionPercent(other.endDate || addDays(other.startDate, 14))
+                const otherStart = getPositionPercent(other.startDate)
+
+                // If moving left and hitting something
+                if (dragOffset.x < 0 && nextLeft < otherEnd && nextLeft > otherStart - currentWidth) {
+                    clampedLeft = Math.max(clampedLeft, otherEnd)
+                }
+                // If moving right and hitting something
+                if (dragOffset.x > 0 && nextLeft + currentWidth > otherStart && nextLeft < otherEnd) {
+                    clampedLeft = Math.min(clampedLeft, otherStart - currentWidth)
+                }
+            })
+
+            visualLeft = clampedLeft
         } else if (dragType === 'resize-start') {
-            visualLeft = leftPercent + dragOffset.x
-            visualWidth = widthPercent - dragOffset.x
+            const nextLeft = leftPercent + dragOffset.x
+            const nextWidth = widthPercent - dragOffset.x
+
+            // Check collisions for resize-start
+            let clampedLeft = nextLeft
+            otherPushesOnSameRow.forEach(other => {
+                const otherEnd = getPositionPercent(other.endDate || addDays(other.startDate, 14))
+                if (nextLeft < otherEnd && leftPercent >= otherEnd) {
+                    clampedLeft = Math.max(clampedLeft, otherEnd)
+                }
+            })
+
+            visualLeft = clampedLeft
+            visualWidth = widthPercent - (visualLeft - leftPercent)
         } else if (dragType === 'resize-end') {
-            visualWidth = widthPercent + dragOffset.x
+            const nextWidth = widthPercent + dragOffset.x
+            const nextEnd = leftPercent + nextWidth
+
+            // Check collisions for resize-end
+            let clampedEnd = nextEnd
+            otherPushesOnSameRow.forEach(other => {
+                const otherStart = getPositionPercent(other.startDate)
+                if (nextEnd > otherStart && (leftPercent + widthPercent) <= otherStart) {
+                    clampedEnd = Math.min(clampedEnd, otherStart)
+                }
+            })
+
+            visualWidth = clampedEnd - leftPercent
         }
     }
 
@@ -221,7 +289,6 @@ export function TimelineBar({
                     isDragging && hasMoved && "z-50 shadow-lg scale-[1.02]",
                     isSelected && !isDragging && "ring-2 ring-primary ring-offset-1",
                     !isDragging && "hover:brightness-110",
-                    isGreyedOut && "opacity-50",
                     leftEdgeRounded ? "rounded-l-lg" : "rounded-l-none",
                     rightEdgeRounded ? "rounded-r-lg" : "rounded-r-none"
                 )}
@@ -254,7 +321,8 @@ export function TimelineBar({
                 <div
                     className={cn(
                         "absolute inset-0 mx-2 flex items-center gap-1 overflow-hidden",
-                        !readOnly && "cursor-grab active:cursor-grabbing"
+                        !readOnly && "cursor-grab active:cursor-grabbing",
+                        isGreyedOut && "opacity-50"
                     )}
                     onPointerDown={(e) => !readOnly && handlePointerDown(e, 'move')}
                 >
