@@ -510,3 +510,62 @@
   background-size: 200% 200%;
   animation: progress-shimmer 3s ease infinite;
 }
+
+/* Chain strip animations */
+@keyframes checkmark-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-checkmark-appear {
+  animation: checkmark-appear 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Chain expand/collapse with playful overshoot */
+@keyframes chain-expand {
+  0% {
+    flex: 0 0 32px;
+    opacity: 0.8;
+  }
+
+  70% {
+    flex: 1.05 1 auto;
+  }
+
+  100% {
+    flex: 1 1 auto;
+    opacity: 1;
+  }
+}
+
+@keyframes chain-collapse {
+  0% {
+    flex: 1 1 auto;
+    opacity: 1;
+  }
+
+  100% {
+    flex: 0 0 32px;
+    opacity: 0.8;
+  }
+}
+
+.animate-chain-expand {
+  animation: chain-expand 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-chain-collapse {
+  animation: chain-collapse 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

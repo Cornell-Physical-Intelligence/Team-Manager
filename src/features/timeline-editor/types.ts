@@ -7,6 +7,7 @@ export type PushDraft = {
     endDate: Date | null
     color: string
     dependsOn?: string | null // tempId of the push this depends on
+    status?: 'Active' | 'Completed' // Push completion status
 }
 
 export type TimelineViewRange = {

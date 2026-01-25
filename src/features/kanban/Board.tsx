@@ -10,16 +10,14 @@ import {
     DragStartEvent,
     DragOverEvent,
 } from "@dnd-kit/core"
-import { arrayMove } from "@dnd-kit/sortable"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { createPortal } from "react-dom"
-import { Plus, ChevronDown, CheckCircle2, Pencil, Link, Lock } from "lucide-react"
+import { Plus, ChevronDown, CheckCircle2, Pencil, Lock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 import { PushDialog } from "@/features/pushes/PushDialog"
-import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import {
     AlertDialog,
@@ -39,6 +37,7 @@ import { TaskCard } from "./TaskCard"
 import { TaskDialog } from "./TaskDialog"
 import { TaskPreview } from "./TaskPreview"
 import { useConfetti } from "./Confetti"
+import { PushChainStrip } from "./PushChainStrip"
 
 type Task = {
     id: string
@@ -115,7 +114,6 @@ export function Board({
     const [previewingTask, setPreviewingTask] = useState<Task | null>(null)
     const [editingTask, setEditingTask] = useState<Task | null>(null)
     const [isDragging, setIsDragging] = useState(false)
-    const [isPersisting, setIsPersisting] = useState(false)
     const [flashingColumnId, setFlashingColumnId] = useState<string | null>(null)
     const [collapsedPushes, setCollapsedPushes] = useState<Set<string>>(() =>
         new Set(pushes.filter(p => p.id !== expandPushId).map(p => p.id))
@@ -150,7 +148,6 @@ export function Board({
 
     const isAdmin = userRole === 'Admin' || userRole === 'Team Lead'
     const { triggerConfetti } = useConfetti()
-    const searchParams = useSearchParams()
 
     // Handle initial new task creation from URL
     useEffect(() => {
@@ -268,7 +265,7 @@ export function Board({
         // If task is in a push, check if it's collapsed
         // (For Kanban board, tasks have a push property)
         // If task has no push (Backlog), pushId might be undefined/null effectively
-        const pushId = task.push?.id || ((task as any).pushId as string) || 'backlog'
+        const pushId = task.push?.id || (task as { pushId?: string }).pushId || 'backlog'
 
         // 1. Ensure push is expanded
         let didExpand = false
@@ -366,7 +363,7 @@ export function Board({
                         const newColumns = prev.map(col => ({
                             ...col,
                             tasks: col.tasks.map(task => {
-                                const updated = data.tasks.find((t: any) => t.id === task.id)
+                                const updated = data.tasks.find((t: { id: string }) => t.id === task.id)
                                 if (updated) {
                                     // Task was updated - merge changes
                                     return {
@@ -654,7 +651,6 @@ export function Board({
         setActiveTask(null)
 
         // 4. Server Persistence
-        setIsPersisting(true)
         let success = true
         try {
             if (pushChanged) {
@@ -682,8 +678,6 @@ export function Board({
         } catch (error) {
             console.error(error)
             setColumns(board.columns) // Revert
-        } finally {
-            setIsPersisting(false)
         }
     }
 
@@ -952,40 +946,147 @@ export function Board({
                     )}
 
                     {(() => {
+                        // Build chains from pushes
                         const pushMap = new Map(pushes.map(p => [p.id, p]))
-                        const childrenMap = new Map<string, PushType[]>()
-                        const roots: PushType[] = []
+                        const processed = new Set<string>()
+                        const chains: PushType[][] = []
 
-                        pushes.forEach(p => {
-                            if (p.dependsOnId && pushMap.has(p.dependsOnId)) {
-                                const children = childrenMap.get(p.dependsOnId) || []
-                                children.push(p)
-                                childrenMap.set(p.dependsOnId, children)
-                            } else {
-                                roots.push(p)
+                        // Find root pushes (no parent or parent doesn't exist)
+                        const roots = pushes
+                            .filter(p => !p.dependsOnId || !pushMap.has(p.dependsOnId))
+                            .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+
+                        // Build chains by following dependency links
+                        for (const root of roots) {
+                            if (processed.has(root.id)) continue
+
+                            const chain: PushType[] = [root]
+                            processed.add(root.id)
+
+                            let current = root
+                            while (true) {
+                                const next = pushes.find(p => p.dependsOnId === current.id && !processed.has(p.id))
+                                if (!next) break
+                                chain.push(next)
+                                processed.add(next.id)
+                                current = next
                             }
-                        })
 
-                        const sortByDate = (a: PushType, b: PushType) => {
-                            const aComplete = isPushComplete(a.id)
-                            const bComplete = isPushComplete(b.id)
-                            if (aComplete !== bComplete) return aComplete ? 1 : -1
-                            return new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+                            chains.push(chain)
                         }
 
-                        roots.sort(sortByDate)
-
-                        const sortedPushes: PushType[] = []
-                        const addWithChildren = (push: PushType) => {
-                            sortedPushes.push(push)
-                            const children = childrenMap.get(push.id) || []
-                            children.sort(sortByDate)
-                            children.forEach(addWithChildren)
+                        // Catch any remaining pushes
+                        for (const push of pushes) {
+                            if (!processed.has(push.id)) {
+                                chains.push([push])
+                                processed.add(push.id)
+                            }
                         }
 
-                        roots.forEach(addWithChildren)
-                        return sortedPushes
-                    })().map(push => {
+                        return chains
+                    })().map((chain) => {
+                        // For chains with 2+ pushes, render PushChainStrip
+                        if (chain.length >= 2) {
+                            const firstPush = chain[0]
+                            const activePush = chain.find(p => !isPushComplete(p.id)) || chain[chain.length - 1]
+                            const activeIsCollapsed = collapsedPushes.has(activePush.id)
+                            const isOpen = !activeIsCollapsed
+                            const contentId = `chain-${firstPush.id}-content`
+                            const pushColumns = getPushTasks(activePush.id)
+
+                            return (
+                                <div key={`chain-${firstPush.id}`} className="relative">
+                                    <div className={cn(
+                                        "w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200",
+                                        isPushComplete(activePush.id) ? "bg-muted/40 border-border/50" : "bg-card"
+                                    )}>
+                                        <div
+                                            className={cn(
+                                                "w-full flex items-center justify-between transition-colors relative overflow-hidden",
+                                                isOpen ? "rounded-t-lg" : "rounded-lg",
+                                                "hover:bg-accent/50 dark:hover:bg-accent/20"
+                                            )}
+                                        >
+                                            <PushChainStrip
+                                                chain={chain}
+                                                isComplete={isPushComplete}
+                                                onPushClick={(push) => {
+                                                    // Toggle expand/collapse for this push
+                                                    if (collapsedPushes.has(push.id)) {
+                                                        setCollapsedPushes(prev => {
+                                                            const next = new Set(prev)
+                                                            next.delete(push.id)
+                                                            return next
+                                                        })
+                                                        loadPushTasks(push.id)
+                                                    } else {
+                                                        setCollapsedPushes(prev => new Set([...prev, push.id]))
+                                                    }
+                                                }}
+                                                onExpandChange={(pushId) => {
+                                                    // When a different push in chain is selected, load its tasks
+                                                    if (!loadedPushes[pushId]) {
+                                                        loadPushTasks(pushId)
+                                                    }
+                                                }}
+                                            />
+
+                                            <div className="flex items-center gap-1.5 pr-3 shrink-0">
+                                                {isAdmin && (
+                                                    <div
+                                                        role="button"
+                                                        onClick={(e) => handleEditPush(e, activePush)}
+                                                        className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
+                                                        title="Edit Push"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </div>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (collapsedPushes.has(activePush.id)) {
+                                                            setCollapsedPushes(prev => {
+                                                                const next = new Set(prev)
+                                                                next.delete(activePush.id)
+                                                                return next
+                                                            })
+                                                            loadPushTasks(activePush.id)
+                                                        } else {
+                                                            setCollapsedPushes(prev => new Set([...prev, activePush.id]))
+                                                        }
+                                                    }}
+                                                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
+                                                >
+                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            id={contentId}
+                                            className="grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                                            style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+                                        >
+                                            <div className={`min-h-0 ${isOpen ? "overflow-visible" : "overflow-hidden"}`}>
+                                                <div className={`p-4 pt-0 border-t rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"} ${isPushComplete(activePush.id) ? "bg-muted/20 border-border/30" : "bg-muted/10"}`}>
+                                                    <div className="pt-4">
+                                                        {loadingPushes[activePush.id] ? (
+                                                            <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
+                                                        ) : (
+                                                            renderPushBoard(pushColumns, activePush.id)
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        // For single pushes, use original rendering
+                        const push = chain[0]
                         const pushColumns = getPushTasks(push.id)
                         const isComplete = isPushComplete(push.id)
                         const isLocked = isPushLocked(push)
@@ -1009,7 +1110,7 @@ export function Board({
                                         type="button"
                                         aria-expanded={isOpen}
                                         aria-controls={contentId}
-                                        onClick={() => togglePushCollapse(push.id)}
+                                        onClick={() => !isLocked && togglePushCollapse(push.id)}
                                         className={cn(
                                             "w-full flex items-center justify-between p-3 md:p-4 transition-colors relative overflow-hidden",
                                             isOpen ? "rounded-t-lg" : "rounded-lg",
@@ -1025,17 +1126,22 @@ export function Board({
                                                 )}>
                                                     {push.name}
                                                 </span>
+                                                {isComplete && (
+                                                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                                )}
                                             </div>
 
-                                            {isLocked && (
+                                            {isLocked && !isComplete && (
                                                 <Lock className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                                             )}
 
-                                            {isAdmin && !isLocked && (
+                                            {isAdmin && (
                                                 <div
                                                     role="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
+                                                        if (isLocked) return
+
                                                         // Expand push if collapsed
                                                         if (collapsedPushes.has(push.id)) {
                                                             setCollapsedPushes(prev => {
@@ -1051,10 +1157,14 @@ export function Board({
                                                             setCreatingPushId(push.id)
                                                         }
                                                     }}
-                                                    className={`h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs ${isComplete
-                                                        ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
-                                                        : "border-border bg-background hover:bg-muted/50"
-                                                        }`}
+                                                    className={cn(
+                                                        "h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs",
+                                                        isLocked
+                                                            ? "cursor-not-allowed opacity-50 bg-muted text-muted-foreground border-transparent"
+                                                            : isComplete
+                                                                ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
+                                                                : "border-border bg-background hover:bg-muted/50"
+                                                    )}
                                                 >
                                                     <Plus className="h-3.5 w-3.5" />
                                                     <span className="hidden sm:inline">Add Task</span>
@@ -1063,9 +1173,6 @@ export function Board({
                                         </div>
 
                                         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                                            {isComplete && (
-                                                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                                            )}
                                             {!isComplete && push.taskCount > 0 && (
                                                 <TooltipProvider delayDuration={100}>
                                                     <Tooltip>
@@ -1098,11 +1205,13 @@ export function Board({
                                                     <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                                 </div>
                                             )}
-                                            {(!isLocked || isOpen) && (
-                                                <div className={`h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}>
-                                                    <ChevronDown className={`h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                                                </div>
-                                            )}
+                                            <div className={cn(
+                                                "h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md transition-colors relative z-10",
+                                                isComplete ? "text-muted-foreground/50" : "",
+                                                !isLocked && "hover:bg-accent"
+                                            )}>
+                                                <ChevronDown className={`h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                                            </div>
                                         </div>
                                     </button>
 
@@ -1117,6 +1226,7 @@ export function Board({
                                                     {loadingPushes[push.id] ? (
                                                         <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
                                                     ) : (
+
                                                         renderPushBoard(pushColumns, push.id)
                                                     )}
                                                 </div>
