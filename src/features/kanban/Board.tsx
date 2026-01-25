@@ -988,99 +988,29 @@ export function Board({
                         // For chains with 2+ pushes, render PushChainStrip
                         if (chain.length >= 2) {
                             const firstPush = chain[0]
-                            const activePush = chain.find(p => !isPushComplete(p.id)) || chain[chain.length - 1]
-                            const activeIsCollapsed = collapsedPushes.has(activePush.id)
-                            const isOpen = !activeIsCollapsed
-                            const contentId = `chain-${firstPush.id}-content`
-                            const pushColumns = getPushTasks(activePush.id)
 
                             return (
-                                <div key={`chain-${firstPush.id}`} className="relative">
-                                    <div className={cn(
-                                        "w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200",
-                                        isPushComplete(activePush.id) ? "bg-muted/40 border-border/50" : "bg-card"
-                                    )}>
-                                        <div
-                                            className={cn(
-                                                "w-full flex items-center justify-between transition-colors relative overflow-hidden",
-                                                isOpen ? "rounded-t-lg" : "rounded-lg",
-                                                "hover:bg-accent/50 dark:hover:bg-accent/20"
-                                            )}
-                                        >
-                                            <PushChainStrip
-                                                chain={chain}
-                                                isComplete={isPushComplete}
-                                                onPushClick={(push) => {
-                                                    // Toggle expand/collapse for this push
-                                                    if (collapsedPushes.has(push.id)) {
-                                                        setCollapsedPushes(prev => {
-                                                            const next = new Set(prev)
-                                                            next.delete(push.id)
-                                                            return next
-                                                        })
-                                                        loadPushTasks(push.id)
-                                                    } else {
-                                                        setCollapsedPushes(prev => new Set([...prev, push.id]))
-                                                    }
-                                                }}
-                                                onExpandChange={(pushId) => {
-                                                    // When a different push in chain is selected, load its tasks
-                                                    if (!loadedPushes[pushId]) {
-                                                        loadPushTasks(pushId)
-                                                    }
-                                                }}
-                                            />
-
-                                            <div className="flex items-center gap-1.5 pr-3 shrink-0">
-                                                {isAdmin && (
-                                                    <div
-                                                        role="button"
-                                                        onClick={(e) => handleEditPush(e, activePush)}
-                                                        className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors"
-                                                        title="Edit Push"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                    </div>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (collapsedPushes.has(activePush.id)) {
-                                                            setCollapsedPushes(prev => {
-                                                                const next = new Set(prev)
-                                                                next.delete(activePush.id)
-                                                                return next
-                                                            })
-                                                            loadPushTasks(activePush.id)
-                                                        } else {
-                                                            setCollapsedPushes(prev => new Set([...prev, activePush.id]))
-                                                        }
-                                                    }}
-                                                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
-                                                >
-                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            id={contentId}
-                                            className="grid transition-[grid-template-rows] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
-                                            style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
-                                        >
-                                            <div className={`min-h-0 ${isOpen ? "overflow-visible" : "overflow-hidden"}`}>
-                                                <div className={`p-4 pt-0 border-t rounded-b-lg transition-opacity duration-150 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"} ${isPushComplete(activePush.id) ? "bg-muted/20 border-border/30" : "bg-muted/10"}`}>
-                                                    <div className="pt-4">
-                                                        {loadingPushes[activePush.id] ? (
-                                                            <div className="h-[180px] rounded-lg border bg-background/60 animate-pulse" />
-                                                        ) : (
-                                                            renderPushBoard(pushColumns, activePush.id)
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div key={`chain-${firstPush.id}`} className="rounded-xl border bg-card shadow-sm">
+                                    <PushChainStrip
+                                        chain={chain}
+                                        isComplete={isPushComplete}
+                                        isAdmin={isAdmin}
+                                        onEditPush={handleEditPush}
+                                        onAddTask={(push) => {
+                                            const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
+                                            if (todoColumn) {
+                                                setCreatingColumnId(todoColumn.id)
+                                                setCreatingPushId(push.id)
+                                            }
+                                        }}
+                                        loadPushTasks={loadPushTasks}
+                                        loadedPushes={loadedPushes}
+                                        loadingPushes={loadingPushes}
+                                        renderPushBoard={(pushId) => {
+                                            const pushColumns = getPushTasks(pushId)
+                                            return renderPushBoard(pushColumns, pushId)
+                                        }}
+                                    />
                                 </div>
                             )
                         }
