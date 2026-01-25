@@ -304,9 +304,10 @@ export function TimelineBar({
                                     "absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full",
                                     "bg-background border-2 border-muted-foreground/40 flex items-center justify-center",
                                     "opacity-0 group-hover:opacity-100 transition-all duration-200",
-                                    "hover:bg-primary hover:border-primary hover:scale-110 cursor-pointer z-10",
+                                    "hover:bg-primary hover:border-primary hover:scale-110 cursor-pointer z-20 shadow-sm",
                                     isChainDragging && "opacity-100 bg-primary border-primary scale-110"
                                 )}
+                                style={{ backgroundColor: 'hsl(var(--background))', opacity: 1 }}
                                 onPointerDown={handleChainPointerDown}
                                 onPointerMove={handleChainPointerMove}
                                 onPointerUp={handleChainPointerUp}

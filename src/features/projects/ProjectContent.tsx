@@ -10,6 +10,7 @@ import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
 import { PushDialog } from "@/features/pushes/PushDialog"
+import { TimelineManagerDialog } from "@/features/projects/TimelineManagerDialog"
 
 function hexToRgba(hex: string, alpha: number) {
     const clampedAlpha = Math.max(0, Math.min(1, alpha))
@@ -97,6 +98,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
     const [previewTask, setPreviewTask] = useState<TaskType | null>(null)
     const [editTask, setEditTask] = useState<TaskType | null>(null)
     const [showPushDialog, setShowPushDialog] = useState(false)
+    const [showTimelineDialog, setShowTimelineDialog] = useState(false)
     const [userRole, setUserRole] = useState<string>('Member')
 
     // Handle view change
@@ -206,7 +208,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                                             variant="outline"
                                             size="sm"
                                             className={`h-7 px-2 shrink-0 transition-opacity ${canManagePushes ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                                            onClick={() => setShowPushDialog(true)}
+                                            onClick={() => setShowTimelineDialog(true)}
                                         >
                                             <Plus className="w-3.5 h-3.5 mr-1" />
                                             <span className="text-xs">Add Push</span>
@@ -319,12 +321,20 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                 )
             }
 
-            {/* Push Dialog */}
+            {/* Push Dialog (keep for individual edits if needed from Kanban) */}
             <PushDialog
                 projectId={project.id}
                 open={showPushDialog}
                 onOpenChange={setShowPushDialog}
             />
-        </div >
+
+            {/* Timeline Manager Dialog */}
+            <TimelineManagerDialog
+                projectId={project.id}
+                open={showTimelineDialog}
+                onOpenChange={setShowTimelineDialog}
+                initialPushes={pushes}
+            />
+        </div>
     )
 }

@@ -65,6 +65,8 @@ export function TimelineEditor({
     const [pendingPush, setPendingPush] = useState<PushDraft | null>(null)
     const [newPushName, setNewPushName] = useState("")
     const [newPushEndDate, setNewPushEndDate] = useState("")
+    // Preview state for showing dotted box during dialog
+    const [pendingPreview, setPendingPreview] = useState<{ start: Date; end: Date; row: number } | null>(null)
 
     // Edit popup state
     const [editingPush, setEditingPush] = useState<PushDraft | null>(null)
@@ -242,6 +244,8 @@ export function TimelineEditor({
                 setPendingPush(newPush)
                 setNewPushName("") // No autofill
                 setNewPushEndDate(formatDateISO(createPreview.end))
+                // Store preview for display during dialog
+                setPendingPreview({ start: createPreview.start, end: createPreview.end, row: numRows })
                 setNamePromptOpen(true)
             }
         }
@@ -250,7 +254,7 @@ export function TimelineEditor({
         setCreateStart(null)
         setCreatePreview(null)
         setHasDragged(false)
-    }, [isCreating, hasDragged, createPreview, pushes.length])
+    }, [isCreating, hasDragged, createPreview, pushes.length, numRows])
 
     // Handle adding a chained push after an existing one
     const handleAddChained = useCallback((afterPushId: string, endDate?: Date) => {
@@ -259,6 +263,7 @@ export function TimelineEditor({
 
         const sourceEnd = sourcePush.endDate || addDays(sourcePush.startDate, 14)
         const defaultEnd = endDate || addDays(sourceEnd, DEFAULT_CHAINED_DURATION)
+        const row = rowAssignments[afterPushId] ?? 0
 
         const newPush: PushDraft = {
             tempId: generateTempId(),
@@ -272,8 +277,10 @@ export function TimelineEditor({
         setPendingPush(newPush)
         setNewPushName("") // No autofill
         setNewPushEndDate(formatDateISO(defaultEnd))
+        // Store preview for chained push
+        setPendingPreview({ start: sourceEnd, end: defaultEnd, row })
         setNamePromptOpen(true)
-    }, [pushes])
+    }, [pushes, rowAssignments])
 
     // Handle name prompt submission
     const handleNameSubmit = useCallback(() => {
@@ -290,7 +297,17 @@ export function TimelineEditor({
         setPendingPush(null)
         setNewPushName("")
         setNewPushEndDate("")
+        setPendingPreview(null) // Clear preview when done
     }, [pendingPush, newPushName, newPushEndDate, pushes, onPushesChange])
+
+    // Handle dialog close without submission
+    const handleDialogClose = useCallback(() => {
+        setNamePromptOpen(false)
+        setPendingPush(null)
+        setNewPushName("")
+        setNewPushEndDate("")
+        setPendingPreview(null) // Clear preview on cancel
+    }, [])
 
     // Handle push click to open edit popup
     const handlePushClick = useCallback((push: PushDraft) => {
@@ -389,6 +406,30 @@ export function TimelineEditor({
                         className="absolute left-0 right-0"
                         style={{ top: `${HEADER_HEIGHT}px`, height: `${gridHeight}px` }}
                     >
+                        {/* Active drag preview (Render before map for correct layering) */}
+                        {isCreating && hasDragged && createPreview && (
+                            <div
+                                className="absolute h-9 rounded-lg bg-primary/40 border-2 border-dashed border-primary pointer-events-none z-0"
+                                style={{
+                                    left: `${getPositionPercent(createPreview.start)}%`,
+                                    width: `${Math.max(getPositionPercent(createPreview.end) - getPositionPercent(createPreview.start), 2)}%`,
+                                    top: `${numRows * ROW_HEIGHT + 6}px`
+                                }}
+                            />
+                        )}
+
+                        {/* Pending preview during dialog (Render before map for correct layering) */}
+                        {pendingPreview && namePromptOpen && (
+                            <div
+                                className="absolute h-9 rounded-lg bg-primary/40 border-2 border-dashed border-primary pointer-events-none z-0"
+                                style={{
+                                    left: `${getPositionPercent(pendingPreview.start)}%`,
+                                    width: `${Math.max(getPositionPercent(pendingPreview.end) - getPositionPercent(pendingPreview.start), 2)}%`,
+                                    top: `${pendingPreview.row * ROW_HEIGHT + 6}px`
+                                }}
+                            />
+                        )}
+
                         {pushes.map((push) => (
                             <TimelineBar
                                 key={push.tempId}
@@ -411,17 +452,6 @@ export function TimelineEditor({
                                 getDateFromX={getDateFromClientX}
                             />
                         ))}
-
-                        {isCreating && hasDragged && createPreview && (
-                            <div
-                                className="absolute h-9 rounded-lg bg-primary/40 border-2 border-dashed border-primary pointer-events-none"
-                                style={{
-                                    left: `${getPositionPercent(createPreview.start)}%`,
-                                    width: `${Math.max(getPositionPercent(createPreview.end) - getPositionPercent(createPreview.start), 2)}%`,
-                                    top: `${numRows * ROW_HEIGHT + 6}px`
-                                }}
-                            />
-                        )}
                     </div>
 
                     {pushes.length === 0 && !isCreating && (
@@ -436,10 +466,7 @@ export function TimelineEditor({
 
             {/* Name prompt dialog */}
             <Dialog open={namePromptOpen} onOpenChange={(open) => {
-                if (!open) {
-                    setNamePromptOpen(false)
-                    setPendingPush(null)
-                }
+                if (!open) handleDialogClose()
             }}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
