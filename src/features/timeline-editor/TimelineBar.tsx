@@ -217,7 +217,7 @@ export function TimelineBar({
                 ref={barRef}
                 data-timeline-bar
                 className={cn(
-                    "absolute h-9 cursor-pointer transition-all select-none group",
+                    "absolute h-9 cursor-pointer transition-all select-none group z-10",
                     isDragging && hasMoved && "z-50 shadow-lg scale-[1.02]",
                     isSelected && !isDragging && "ring-2 ring-primary ring-offset-1",
                     !isDragging && "hover:brightness-110",
@@ -302,18 +302,17 @@ export function TimelineBar({
                             <div
                                 className={cn(
                                     "absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full",
-                                    "bg-background border-2 border-muted-foreground/40 flex items-center justify-center",
+                                    "bg-white border-2 border-muted-foreground/40 flex items-center justify-center",
                                     "opacity-0 group-hover:opacity-100 transition-all duration-200",
                                     "hover:bg-primary hover:border-primary hover:scale-110 cursor-pointer z-30 shadow-md",
                                     isChainDragging && "opacity-100 bg-primary border-primary scale-110"
                                 )}
-                                style={{ backgroundColor: 'white', opacity: 1 }}
                                 onPointerDown={handleChainPointerDown}
                                 onPointerMove={handleChainPointerMove}
                                 onPointerUp={handleChainPointerUp}
                                 onPointerCancel={handleChainPointerUp}
                             >
-                                <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary-foreground" />
+                                <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-foreground" />
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="text-xs">
