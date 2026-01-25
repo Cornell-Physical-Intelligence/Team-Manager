@@ -197,7 +197,7 @@ export function CondensedTimeline({ pushes, projectId, onPushUpdate }: Condensed
                         />
 
                         <p className="text-xs text-muted-foreground">
-                            Drag pushes to adjust dates. Double-click to rename.
+                            Drag to move • Resize edges • Click to edit • Hover for link
                         </p>
                     </div>
                 </div>

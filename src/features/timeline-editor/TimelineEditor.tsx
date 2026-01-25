@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { useState, useRef, useCallback, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,8 +13,7 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar, Link2, Link2Off, Trash2 } from "lucide-react"
+import { Calendar, Trash2 } from "lucide-react"
 import { TimelineGrid } from "./TimelineGrid"
 import { TimelineBar } from "./TimelineBar"
 import {
@@ -42,7 +41,7 @@ type TimelineEditorProps = {
 const ROW_HEIGHT = 48
 const MIN_ROWS = 3
 const HEADER_HEIGHT = 48
-const MIN_DRAG_DISTANCE = 20 // Minimum pixels to drag before creating a push
+const MIN_DRAG_DISTANCE = 20
 
 export function TimelineEditor({
     pushes,
@@ -71,7 +70,7 @@ export function TimelineEditor({
     const [editStartDate, setEditStartDate] = useState("")
     const [editEndDate, setEditEndDate] = useState("")
 
-    // Connection mode state
+    // Connection state - which push we're connecting FROM
     const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
 
     // Calculate dynamic view range based on pushes with extra space
@@ -81,7 +80,7 @@ export function TimelineEditor({
         if (pushes.length === 0) {
             return {
                 start: addDays(today, -7),
-                end: addDays(today, 42) // 6 weeks ahead
+                end: addDays(today, 42)
             }
         }
 
@@ -94,7 +93,6 @@ export function TimelineEditor({
         const minDate = new Date(Math.min(...dates.map(d => d.getTime()), today.getTime()))
         const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
 
-        // Add padding: 2 weeks before, 4 weeks after
         return {
             start: addDays(minDate, -14),
             end: addDays(maxDate, 28)
@@ -102,7 +100,6 @@ export function TimelineEditor({
     }, [pushes])
 
     const viewRange = externalViewRange || calculatedViewRange
-
     const totalDuration = viewRange.end.getTime() - viewRange.start.getTime()
 
     const getDateFromClientX = useCallback((clientX: number) => {
@@ -121,7 +118,13 @@ export function TimelineEditor({
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (readOnly) return
         if ((e.target as HTMLElement).closest('[data-timeline-bar]')) return
-        if ((e.target as HTMLElement).closest('[data-popover]')) return
+        if ((e.target as HTMLElement).closest('button')) return
+
+        // If connecting, cancel connection mode on background click
+        if (connectingFrom) {
+            setConnectingFrom(null)
+            return
+        }
 
         const date = getDateFromClientX(e.clientX)
         setIsCreating(true)
@@ -129,7 +132,7 @@ export function TimelineEditor({
         setCreatePreview(null)
         setHasDragged(false)
         setSelectedPushId(null)
-    }, [readOnly, getDateFromClientX])
+    }, [readOnly, getDateFromClientX, connectingFrom])
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         if (!isCreating || !createStart) return
@@ -152,11 +155,9 @@ export function TimelineEditor({
     const handleMouseUp = useCallback(() => {
         if (!isCreating) return
 
-        // Only create push if user actually dragged
         if (hasDragged && createPreview) {
             const duration = differenceInDays(createPreview.end, createPreview.start)
             if (duration >= 1) {
-                // Create push and show name prompt
                 const newPush: PushDraft = {
                     tempId: generateTempId(),
                     name: "",
@@ -190,13 +191,13 @@ export function TimelineEditor({
 
     // Handle push click to open edit popup
     const handlePushClick = useCallback((push: PushDraft) => {
+        // If we're in connection mode, complete the connection
         if (connectingFrom) {
-            // Handle connection
             if (connectingFrom !== push.tempId) {
                 const fromPush = pushes.find(p => p.tempId === connectingFrom)
                 if (fromPush) {
                     const fromEnd = fromPush.endDate || addDays(fromPush.startDate, 14)
-                    // Check if this push starts after the 'from' push ends
+                    // Only allow connection if this push starts after the source ends
                     if (push.startDate >= fromEnd) {
                         onPushesChange(pushes.map(p =>
                             p.tempId === push.tempId ? { ...p, dependsOn: connectingFrom } : p
@@ -208,11 +209,22 @@ export function TimelineEditor({
             return
         }
 
+        // Otherwise open edit dialog
         setEditingPush(push)
         setEditName(push.name)
         setEditStartDate(formatDateISO(push.startDate))
         setEditEndDate(push.endDate ? formatDateISO(push.endDate) : "")
     }, [connectingFrom, pushes, onPushesChange])
+
+    // Handle starting a connection from a push
+    const handleStartConnection = useCallback((pushId: string) => {
+        if (connectingFrom === pushId) {
+            // Toggle off
+            setConnectingFrom(null)
+        } else {
+            setConnectingFrom(pushId)
+        }
+    }, [connectingFrom])
 
     // Handle edit save
     const handleEditSave = useCallback(() => {
@@ -248,18 +260,14 @@ export function TimelineEditor({
         setEditingPush(null)
     }, [pushes, onPushesChange, selectedPushId])
 
-    // Start connection mode
-    const handleStartConnection = useCallback((pushId: string) => {
-        setConnectingFrom(pushId)
-        setEditingPush(null)
-    }, [])
-
-    // Remove connection
-    const handleRemoveConnection = useCallback((pushId: string) => {
+    // Remove dependency from push
+    const handleRemoveDependency = useCallback(() => {
+        if (!editingPush) return
         onPushesChange(pushes.map(p =>
-            p.tempId === pushId ? { ...p, dependsOn: null } : p
+            p.tempId === editingPush.tempId ? { ...p, dependsOn: null } : p
         ))
-    }, [pushes, onPushesChange])
+        setEditingPush({ ...editingPush, dependsOn: null })
+    }, [editingPush, pushes, onPushesChange])
 
     // Calculate grid height with extra row for new pushes
     const gridHeight = Math.max((pushes.length + 1) * ROW_HEIGHT, MIN_ROWS * ROW_HEIGHT)
@@ -290,20 +298,27 @@ export function TimelineEditor({
             .filter(Boolean) as { fromX: number; fromY: number; toX: number; toY: number; pushId: string }[]
     }, [pushes, showConnections, getPositionPercent])
 
+    // Find dependency name for display
+    const getDependencyName = useCallback((dependsOnId: string | undefined | null) => {
+        if (!dependsOnId) return null
+        const dep = pushes.find(p => p.tempId === dependsOnId)
+        return dep?.name || 'Unknown'
+    }, [pushes])
+
     return (
         <TooltipProvider delayDuration={100}>
             <div className="flex flex-col rounded-lg border bg-card overflow-hidden">
-                {/* Toolbar - simplified */}
+                {/* Toolbar */}
                 <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
                     <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
                         <span className="text-xs font-medium text-muted-foreground">
-                            {formatDateShort(viewRange.start)} - {formatDateShort(viewRange.end)}
+                            {formatDateShort(viewRange.start)} − {formatDateShort(viewRange.end)}
                         </span>
                     </div>
-                    {connectingFrom && (
+                    {connectingFrom ? (
                         <div className="flex items-center gap-2">
-                            <span className="text-xs text-primary">Click a push to connect</span>
+                            <span className="text-xs text-primary">Select target push</span>
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -313,8 +328,7 @@ export function TimelineEditor({
                                 Cancel
                             </Button>
                         </div>
-                    )}
-                    {!connectingFrom && pushes.length > 0 && (
+                    ) : (
                         <span className="text-xs text-muted-foreground">
                             {pushes.length} push{pushes.length !== 1 ? 'es' : ''}
                         </span>
@@ -326,7 +340,7 @@ export function TimelineEditor({
                     ref={containerRef}
                     className={cn(
                         "relative select-none",
-                        !readOnly && "cursor-crosshair",
+                        !readOnly && !connectingFrom && "cursor-crosshair",
                         connectingFrom && "cursor-pointer"
                     )}
                     style={{ minHeight: `${Math.max(totalHeight, minHeight)}px` }}
@@ -374,7 +388,6 @@ export function TimelineEditor({
                         {pushes.map((push, index) => (
                             <TimelineBar
                                 key={push.tempId}
-                                data-timeline-bar
                                 push={push}
                                 timelineStart={viewRange.start}
                                 timelineEnd={viewRange.end}
@@ -385,9 +398,11 @@ export function TimelineEditor({
                                 onClick={() => handlePushClick(push)}
                                 rowIndex={index}
                                 readOnly={readOnly}
-                                isConnecting={connectingFrom !== null}
                                 isDependent={!!push.dependsOn}
-                                dependencyCompleted={false} // TODO: check actual completion status
+                                dependencyCompleted={false}
+                                onStartConnection={showConnections ? handleStartConnection : undefined}
+                                isConnectionSource={connectingFrom === push.tempId}
+                                isConnectionTarget={connectingFrom !== null && connectingFrom !== push.tempId}
                             />
                         ))}
 
@@ -407,12 +422,9 @@ export function TimelineEditor({
                     {/* Empty state */}
                     {pushes.length === 0 && !isCreating && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: `${HEADER_HEIGHT}px` }}>
-                            <div className="text-center text-muted-foreground">
-                                <p className="text-sm font-medium">No pushes yet</p>
-                                <p className="text-xs mt-1">
-                                    {readOnly ? 'No pushes to display' : 'Drag on the timeline to create a push'}
-                                </p>
-                            </div>
+                            <p className="text-sm text-muted-foreground">
+                                {readOnly ? 'No pushes' : 'Drag to create a push'}
+                            </p>
                         </div>
                     )}
                 </div>
@@ -433,7 +445,7 @@ export function TimelineEditor({
                         <Input
                             value={newPushName}
                             onChange={(e) => setNewPushName(e.target.value)}
-                            placeholder="Enter push name"
+                            placeholder="Push name"
                             autoFocus
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') handleNameSubmit()
@@ -441,7 +453,7 @@ export function TimelineEditor({
                         />
                         {pendingPush && (
                             <p className="text-xs text-muted-foreground mt-2">
-                                {formatDateShort(pendingPush.startDate)} - {formatDateShort(pendingPush.endDate || addDays(pendingPush.startDate, 14))}
+                                {formatDateShort(pendingPush.startDate)} − {formatDateShort(pendingPush.endDate || addDays(pendingPush.startDate, 14))}
                             </p>
                         )}
                     </div>
@@ -452,7 +464,7 @@ export function TimelineEditor({
                 </DialogContent>
             </Dialog>
 
-            {/* Edit push popup */}
+            {/* Edit push dialog */}
             <Dialog open={!!editingPush} onOpenChange={(open) => !open && setEditingPush(null)}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
@@ -470,7 +482,7 @@ export function TimelineEditor({
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="edit-start">Start Date</Label>
+                                <Label htmlFor="edit-start">Start</Label>
                                 <Input
                                     id="edit-start"
                                     type="date"
@@ -479,7 +491,7 @@ export function TimelineEditor({
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="edit-end">End Date</Label>
+                                <Label htmlFor="edit-end">End</Label>
                                 <Input
                                     id="edit-end"
                                     type="date"
@@ -489,32 +501,21 @@ export function TimelineEditor({
                             </div>
                         </div>
 
-                        {/* Connection controls */}
-                        {showConnections && editingPush && (
+                        {/* Show dependency if exists */}
+                        {editingPush?.dependsOn && (
                             <div className="pt-2 border-t">
-                                <Label className="text-xs text-muted-foreground">Dependencies</Label>
-                                <div className="flex gap-2 mt-2">
-                                    {editingPush.dependsOn ? (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs"
-                                            onClick={() => handleRemoveConnection(editingPush.tempId)}
-                                        >
-                                            <Link2Off className="h-3 w-3 mr-1" />
-                                            Remove dependency
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs"
-                                            onClick={() => handleStartConnection(editingPush.tempId)}
-                                        >
-                                            <Link2 className="h-3 w-3 mr-1" />
-                                            Connect to push
-                                        </Button>
-                                    )}
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground">
+                                        Depends on: <span className="font-medium text-foreground">{getDependencyName(editingPush.dependsOn)}</span>
+                                    </span>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs text-destructive hover:text-destructive"
+                                        onClick={handleRemoveDependency}
+                                    >
+                                        Remove
+                                    </Button>
                                 </div>
                             </div>
                         )}
