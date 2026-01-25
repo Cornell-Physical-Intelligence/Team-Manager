@@ -123,7 +123,7 @@ export function TimelineManagerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
+            <DialogContent showCloseButton={false} className="sm:max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-0">
                     <div className="flex items-center justify-between">
                         <DialogTitle>Project Timeline</DialogTitle>
