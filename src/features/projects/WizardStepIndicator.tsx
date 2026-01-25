@@ -12,15 +12,17 @@ type WizardStepIndicatorProps = {
     steps: Step[]
     currentStep: number
     onStepClick?: (stepIndex: number) => void
+    isSubmitting?: boolean
 }
 
-export function WizardStepIndicator({ steps, currentStep, onStepClick }: WizardStepIndicatorProps) {
+export function WizardStepIndicator({ steps, currentStep, onStepClick, isSubmitting = false }: WizardStepIndicatorProps) {
     return (
         <div className="flex items-center justify-center gap-2">
             {steps.map((step, index) => {
-                const isCompleted = index < currentStep
-                const isCurrent = index === currentStep
-                const isClickable = onStepClick && index < currentStep
+                // When submitting on last step, show all as completed
+                const isCompleted = index < currentStep || (isSubmitting && index === currentStep)
+                const isCurrent = index === currentStep && !isSubmitting
+                const isClickable = onStepClick && index < currentStep && !isSubmitting
 
                 return (
                     <div key={step.id} className="flex items-center">
@@ -60,10 +62,10 @@ export function WizardStepIndicator({ steps, currentStep, onStepClick }: WizardS
                                 <div
                                     className={cn(
                                         "h-0.5 w-12 transition-all duration-500",
-                                        index < currentStep ? "bg-primary" : "bg-muted"
+                                        index < currentStep || isSubmitting ? "bg-primary" : "bg-muted"
                                     )}
                                     style={{
-                                        background: index < currentStep
+                                        background: index < currentStep || isSubmitting
                                             ? 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)))'
                                             : undefined
                                     }}

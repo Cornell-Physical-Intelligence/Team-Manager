@@ -117,18 +117,15 @@ export function TimelineEditor({
     const rowAssignments = useMemo(() => {
         const assignments: Record<string, number> = {}
 
-        // Build dependency chains: find all root pushes (no dependencies) and their chains
         const chains: string[][] = []
         const processed = new Set<string>()
 
-        // Get all pushes that are roots (not dependent on anything)
         const rootPushes = pushes.filter(p => !p.dependsOn)
 
         for (const root of rootPushes) {
             const chain: string[] = [root.tempId]
             processed.add(root.tempId)
 
-            // Find all pushes that chain from this one
             let current = root
             while (true) {
                 const next = pushes.find(p => p.dependsOn === current.tempId && !processed.has(p.tempId))
@@ -141,14 +138,12 @@ export function TimelineEditor({
             chains.push(chain)
         }
 
-        // Add any remaining pushes (orphaned dependencies) as their own row
         for (const push of pushes) {
             if (!processed.has(push.tempId)) {
                 chains.push([push.tempId])
             }
         }
 
-        // Assign row indices
         chains.forEach((chain, rowIndex) => {
             chain.forEach(pushId => {
                 assignments[pushId] = rowIndex
@@ -158,24 +153,18 @@ export function TimelineEditor({
         return assignments
     }, [pushes])
 
-    // Get the number of unique rows
     const numRows = useMemo(() => {
         const rows = new Set(Object.values(rowAssignments))
         return Math.max(rows.size, 0)
     }, [rowAssignments])
 
-    // Calculate which pushes are chained
+    // Check if push has a chained push after it
     const chainInfo = useMemo(() => {
-        const info: Record<string, { isChainedWithNext: boolean; isChainedWithPrev: boolean }> = {}
+        const info: Record<string, { isChainedWithNext: boolean }> = {}
 
         for (const push of pushes) {
             const hasNext = pushes.some(p => p.dependsOn === push.tempId)
-            const hasPrev = !!push.dependsOn
-
-            info[push.tempId] = {
-                isChainedWithNext: hasNext,
-                isChainedWithPrev: hasPrev
-            }
+            info[push.tempId] = { isChainedWithNext: hasNext }
         }
 
         return info
@@ -227,7 +216,7 @@ export function TimelineEditor({
                     color: getNextPushColor(pushes.length)
                 }
                 setPendingPush(newPush)
-                setNewPushName(`Push ${pushes.length + 1}`)
+                setNewPushName("") // No autofill
                 setNewPushEndDate(formatDateISO(createPreview.end))
                 setNamePromptOpen(true)
             }
@@ -240,24 +229,24 @@ export function TimelineEditor({
     }, [isCreating, hasDragged, createPreview, pushes.length])
 
     // Handle adding a chained push after an existing one
-    const handleAddChained = useCallback((afterPushId: string) => {
+    const handleAddChained = useCallback((afterPushId: string, endDate?: Date) => {
         const sourcePush = pushes.find(p => p.tempId === afterPushId)
         if (!sourcePush) return
 
         const sourceEnd = sourcePush.endDate || addDays(sourcePush.startDate, 14)
-        const defaultEnd = addDays(sourceEnd, DEFAULT_CHAINED_DURATION)
+        const defaultEnd = endDate || addDays(sourceEnd, DEFAULT_CHAINED_DURATION)
 
         const newPush: PushDraft = {
             tempId: generateTempId(),
             name: "",
             startDate: sourceEnd,
             endDate: defaultEnd,
-            color: sourcePush.color, // Same color for visual continuity
+            color: sourcePush.color,
             dependsOn: afterPushId
         }
 
         setPendingPush(newPush)
-        setNewPushName(`Push ${pushes.length + 1}`)
+        setNewPushName("") // No autofill
         setNewPushEndDate(formatDateISO(defaultEnd))
         setNamePromptOpen(true)
     }, [pushes])
@@ -313,7 +302,6 @@ export function TimelineEditor({
     }, [pushes, onPushesChange])
 
     const handleDeletePush = useCallback((id: string) => {
-        // Also remove any dependencies on this push
         onPushesChange(pushes.filter(p => p.tempId !== id).map(p =>
             p.dependsOn === id ? { ...p, dependsOn: null } : p
         ))
@@ -321,7 +309,6 @@ export function TimelineEditor({
         setEditingPush(null)
     }, [pushes, onPushesChange, selectedPushId])
 
-    // Remove dependency from push
     const handleRemoveDependency = useCallback(() => {
         if (!editingPush) return
         onPushesChange(pushes.map(p =>
@@ -330,11 +317,9 @@ export function TimelineEditor({
         setEditingPush({ ...editingPush, dependsOn: null })
     }, [editingPush, pushes, onPushesChange])
 
-    // Calculate grid height - one row per chain, plus one for new pushes
     const gridHeight = Math.max((numRows + 1) * ROW_HEIGHT, MIN_ROWS * ROW_HEIGHT)
     const totalHeight = HEADER_HEIGHT + gridHeight
 
-    // Find dependency name for display
     const getDependencyName = useCallback((dependsOnId: string | undefined | null) => {
         if (!dependsOnId) return null
         const dep = pushes.find(p => p.tempId === dependsOnId)
@@ -370,14 +355,12 @@ export function TimelineEditor({
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
                 >
-                    {/* Grid with headers */}
                     <TimelineGrid
                         startDate={viewRange.start}
                         endDate={viewRange.end}
                         height={gridHeight}
                     />
 
-                    {/* Push bars */}
                     <div
                         className="absolute left-0 right-0"
                         style={{ top: `${HEADER_HEIGHT}px`, height: `${gridHeight}px` }}
@@ -399,11 +382,10 @@ export function TimelineEditor({
                                 dependencyCompleted={false}
                                 onAddChained={handleAddChained}
                                 isChainedWithNext={chainInfo[push.tempId]?.isChainedWithNext || false}
-                                isChainedWithPrev={chainInfo[push.tempId]?.isChainedWithPrev || false}
+                                getDateFromX={getDateFromClientX}
                             />
                         ))}
 
-                        {/* Creation preview */}
                         {isCreating && hasDragged && createPreview && (
                             <div
                                 className="absolute h-9 rounded-lg bg-primary/40 border-2 border-dashed border-primary pointer-events-none"
@@ -416,7 +398,6 @@ export function TimelineEditor({
                         )}
                     </div>
 
-                    {/* Empty state */}
                     {pushes.length === 0 && !isCreating && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: `${HEADER_HEIGHT}px` }}>
                             <p className="text-sm text-muted-foreground">
@@ -427,7 +408,7 @@ export function TimelineEditor({
                 </div>
             </div>
 
-            {/* Name prompt dialog - includes end date for chained pushes */}
+            {/* Name prompt dialog */}
             <Dialog open={namePromptOpen} onOpenChange={(open) => {
                 if (!open) {
                     setNamePromptOpen(false)
@@ -445,10 +426,10 @@ export function TimelineEditor({
                                 id="new-push-name"
                                 value={newPushName}
                                 onChange={(e) => setNewPushName(e.target.value)}
-                                placeholder="Push name"
+                                placeholder="Enter push name"
                                 autoFocus
                                 onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleNameSubmit()
+                                    if (e.key === 'Enter' && newPushName.trim()) handleNameSubmit()
                                 }}
                             />
                         </div>
@@ -516,7 +497,6 @@ export function TimelineEditor({
                             </div>
                         </div>
 
-                        {/* Show dependency if exists */}
                         {editingPush?.dependsOn && (
                             <div className="pt-2 border-t">
                                 <div className="flex items-center justify-between">

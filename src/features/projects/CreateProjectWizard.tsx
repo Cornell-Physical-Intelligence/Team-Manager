@@ -179,12 +179,12 @@ export function CreateProjectWizard({
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Step indicator */}
                 <div className="py-4 border-b">
                     <WizardStepIndicator
                         steps={STEPS}
                         currentStep={currentStep}
                         onStepClick={(step) => step < currentStep && setCurrentStep(step)}
+                        isSubmitting={isSubmitting}
                     />
                 </div>
 
@@ -361,14 +361,16 @@ export function CreateProjectWizard({
                             </Button>
                         ) : (
                             <>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={handleSkipTimeline}
-                                    disabled={isSubmitting}
-                                >
-                                    Skip & Create
-                                </Button>
+                                {pushes.length === 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleSkipTimeline}
+                                        disabled={isSubmitting}
+                                    >
+                                        Skip & Create
+                                    </Button>
+                                )}
                                 <Button
                                     type="button"
                                     onClick={handleSubmit}
