@@ -154,6 +154,8 @@ export async function removeUserFromWorkspace(userId: string) {
         // Use transaction to ensure atomic operation
         if (currentUser.workspaceId) {
             await prisma.$transaction(async (tx) => {
+                console.log(`[Users] User ${currentUser.id} is removing user ${userId} from workspace ${currentUser.workspaceId}`)
+
                 // Remove from WorkspaceMember
                 await tx.workspaceMember.delete({
                     where: {
@@ -166,6 +168,7 @@ export async function removeUserFromWorkspace(userId: string) {
 
                 // Also clear user's workspaceId and role if this was their main workspace
                 if (targetUser?.workspaceId === currentUser.workspaceId) {
+                    console.log(`[Users] Resetting user ${userId} role to 'Member' because they were removed from their main workspace.`)
                     await tx.user.update({
                         where: { id: userId },
                         data: {

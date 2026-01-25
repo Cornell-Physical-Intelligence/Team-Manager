@@ -66,6 +66,8 @@ export async function GET(request: Request) {
 
         // Store Discord info in cookie
         const cookieStore = await cookies()
+        const THIRTY_DAYS = 60 * 60 * 24 * 30
+
         cookieStore.set('discord_user', JSON.stringify({
             id: discordUser.id,
             username: discordUser.username,
@@ -76,16 +78,18 @@ export async function GET(request: Request) {
         }), {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: 60 * 60 * 24 * 7, // 1 week
+            maxAge: THIRTY_DAYS,
             path: '/',
         })
 
         cookieStore.set('discord_token', tokenData.access_token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: tokenData.expires_in,
+            maxAge: tokenData.expires_in, // Keep token expiry as is from provider
             path: '/',
         })
+
+        console.log(`[Auth] Processing login for Discord ID: ${discordUser.id} (${discordUser.username})`)
 
         // STRATEGY: Find existing user by Discord ID first, then Email.
         let user = await prisma.user.findUnique({
@@ -93,7 +97,10 @@ export async function GET(request: Request) {
             include: { workspace: true }
         })
 
-        if (!user) {
+        if (user) {
+            console.log(`[Auth] Found existing user by Discord ID. Role: ${user.role}`)
+        } else {
+            console.log(`[Auth] No user found by Discord ID. Checking email fallback...`)
             // Fallback: Check by email if Discord ID lookup failed (legacy users)
             const email = discordUser.email || `discord_${discordUser.id}@discord.user`
             user = await prisma.user.findFirst({
@@ -105,6 +112,10 @@ export async function GET(request: Request) {
                 },
                 include: { workspace: true }
             })
+
+            if (user) {
+                console.log(`[Auth] Found existing user by Email (${user.email}). Linking Discord ID. Role: ${user.role}`)
+            }
         }
 
         if (user) {
@@ -132,6 +143,8 @@ export async function GET(request: Request) {
                 data: nextUserData
             })
 
+            console.log(`[Auth] Logged in user ${user.id}. Session active.`)
+
             // Redirect to Workspaces
             const response = NextResponse.redirect(new URL('/workspaces', request.url))
 
@@ -139,7 +152,7 @@ export async function GET(request: Request) {
             response.cookies.set('user_id', user.id, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                maxAge: 60 * 60 * 24 * 7,
+                maxAge: THIRTY_DAYS,
                 path: '/',
             })
 
@@ -147,6 +160,7 @@ export async function GET(request: Request) {
         }
 
         // NEW USER: Create & Go to Onboarding
+        console.log(`[Auth] User not found. Creating NEW user.`)
         user = await prisma.user.create({
             data: {
                 email: discordUser.email || `discord_${discordUser.id}@discord.user`,
@@ -159,12 +173,14 @@ export async function GET(request: Request) {
             include: { workspace: true }
         })
 
+        console.log(`[Auth] Created new user ${user.id} with role Member.`)
+
         const response = NextResponse.redirect(new URL('/onboarding', request.url))
 
         response.cookies.set('user_id', user.id, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: 60 * 60 * 24 * 7,
+            maxAge: THIRTY_DAYS,
             path: '/',
         })
 
