@@ -62,7 +62,7 @@ export async function createPush(formData: FormData) {
                 color: PUSH_COLORS[existingCount % PUSH_COLORS.length],
                 status: 'Active',
                 dependsOnId: dependsOnId || null
-            }
+            } as any
         })
 
         revalidatePath('/dashboard')
@@ -122,7 +122,7 @@ export async function updatePush(input: {
 
         await prisma.push.update({
             where: { id: input.id },
-            data: updateData
+            data: updateData as any
         })
 
         revalidatePath('/dashboard')
@@ -256,11 +256,11 @@ export async function getPushes(projectId: string) {
             orderBy: { startDate: 'asc' }
         })
 
-        return pushes.map(push => ({
+        return pushes.map((push: any) => ({
             ...push,
             dependsOnId: push.dependsOnId,
             taskCount: push.tasks.length,
-            completedCount: push.tasks.filter(t => t.column?.name === 'Done').length
+            completedCount: push.tasks.filter((t: any) => t.column?.name === 'Done').length
         }))
     } catch (error) {
         console.error('Failed to get pushes:', error)

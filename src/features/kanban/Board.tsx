@@ -12,8 +12,9 @@ import {
 } from "@dnd-kit/core"
 import { arrayMove } from "@dnd-kit/sortable"
 import { useState, useEffect, useCallback, useRef } from "react"
+import { cn } from "@/lib/utils"
 import { createPortal } from "react-dom"
-import { Plus, ChevronDown, CheckCircle2, Pencil } from "lucide-react"
+import { Plus, ChevronDown, CheckCircle2, Pencil, Link, Lock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter, useSearchParams } from "next/navigation"
 
@@ -67,6 +68,7 @@ type PushType = {
     projectId: string
     taskCount: number
     completedCount: number
+    dependsOnId?: string | null
 }
 
 type ColumnData = {
@@ -830,9 +832,22 @@ export function Board({
         const pushCols = getPushTasks(pushId)
         const doneCol = pushCols.find(c => c.name === 'Done')
         const totalTasks = pushCols.reduce((sum, c) => sum + c.tasks.length, 0)
+
+        // A push is complete if it has tasks and all are in Done
         if (loadedPushes[pushId]) return totalTasks > 0 && doneCol?.tasks.length === totalTasks
+
         const push = pushes.find((p) => p.id === pushId)
         return !!push && push.taskCount > 0 && push.completedCount === push.taskCount
+    }
+
+    const isPushLocked = (push: PushType) => {
+        if (!push.dependsOnId) return false
+        // A push is locked if its parent is not complete
+        return !isPushComplete(push.dependsOnId)
+    }
+
+    const getParentPushName = (parentId: string) => {
+        return pushes.find(p => p.id === parentId)?.name || "Parent Push"
     }
 
     const handleEditPush = (e: React.MouseEvent, push: PushType) => {
@@ -935,22 +950,60 @@ export function Board({
                     }).map(push => {
                         const pushColumns = getPushTasks(push.id)
                         const isComplete = isPushComplete(push.id)
+                        const isLocked = isPushLocked(push)
                         const isCollapsed = collapsedPushes.has(push.id)
                         const isOpen = !isCollapsed
                         const contentId = `push-${push.id}-content`
 
                         return (
-                            <div key={push.id} className={`w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200 ${isComplete ? "bg-muted/40 border-border/50" : "bg-card"}`}>
+                            <div key={push.id} className={cn(
+                                "w-full min-w-0 max-w-full rounded-lg border shadow-sm hover:shadow-md transition-all duration-200",
+                                isComplete ? "bg-muted/40 border-border/50" : "bg-card",
+                                isLocked && "grayscale opacity-70 border-dashed"
+                            )}>
+                                <div className="absolute top-0 left-0 w-1 h-full rounded-l-lg" style={{ backgroundColor: push.color }} />
                                 <button
                                     type="button"
                                     aria-expanded={isOpen}
                                     aria-controls={contentId}
-                                    onClick={() => togglePushCollapse(push.id)}
-                                    className={`w-full flex items-center justify-between p-3 md:p-4 transition-colors ${isOpen ? "rounded-t-lg" : "rounded-lg"} relative overflow-hidden hover:bg-accent/50 dark:hover:bg-accent/20`}
+                                    onClick={() => !isLocked && togglePushCollapse(push.id)}
+                                    className={cn(
+                                        "w-full flex items-center justify-between p-3 md:p-4 transition-colors relative overflow-hidden",
+                                        isOpen ? "rounded-t-lg" : "rounded-lg",
+                                        isLocked ? "cursor-not-allowed bg-muted/30" : "hover:bg-accent/50 dark:hover:bg-accent/20"
+                                    )}
                                 >
                                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                                        <span className={`font-semibold text-base md:text-lg tracking-tight truncate ${isComplete ? "text-muted-foreground" : ""}`}>{push.name}</span>
-                                        {isAdmin && (
+                                        <div className="flex items-center gap-2">
+                                            {push.dependsOnId && (
+                                                <TooltipProvider delayDuration={100}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Link className="h-3.5 w-3.5 text-muted-foreground shrink-0 rotate-45" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top">
+                                                            Depends on {getParentPushName(push.dependsOnId)}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            )}
+                                            <span className={cn(
+                                                "font-semibold text-base md:text-lg tracking-tight truncate",
+                                                isComplete && "text-muted-foreground",
+                                                isLocked && "text-muted-foreground/80 italic"
+                                            )}>
+                                                {push.name}
+                                            </span>
+                                        </div>
+
+                                        {isLocked && (
+                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[10px] font-medium text-muted-foreground border shrink-0">
+                                                <Lock className="h-3 w-3" />
+                                                Locked
+                                            </div>
+                                        )}
+
+                                        {isAdmin && !isLocked && (
                                             <div
                                                 role="button"
                                                 onClick={(e) => {
