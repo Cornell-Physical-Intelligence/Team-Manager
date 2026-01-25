@@ -1,10 +1,8 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Trash2, GripVertical } from "lucide-react"
+import { GripVertical, Lock } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { type PushDraft, type DragType, formatDateShort, differenceInDays, addDays, startOfDay } from "./types"
 
@@ -16,8 +14,12 @@ type TimelineBarProps = {
     onDelete: (id: string) => void
     isSelected: boolean
     onSelect: (id: string | null) => void
+    onClick?: () => void
     rowIndex: number
     readOnly?: boolean
+    isConnecting?: boolean
+    isDependent?: boolean
+    dependencyCompleted?: boolean
 }
 
 const ROW_HEIGHT = 48
@@ -30,12 +32,14 @@ export function TimelineBar({
     onDelete,
     isSelected,
     onSelect,
+    onClick,
     rowIndex,
-    readOnly = false
+    readOnly = false,
+    isConnecting = false,
+    isDependent = false,
+    dependencyCompleted = true
 }: TimelineBarProps) {
     const barRef = useRef<HTMLDivElement>(null)
-    const [isEditing, setIsEditing] = useState(false)
-    const [editName, setEditName] = useState(push.name)
     const [isDragging, setIsDragging] = useState(false)
     const [dragType, setDragType] = useState<DragType>(null)
     const [dragOffset, setDragOffset] = useState({ x: 0 })
@@ -46,22 +50,9 @@ export function TimelineBar({
         return ((date.getTime() - timelineStart.getTime()) / totalDuration) * 100
     }, [timelineStart, totalDuration])
 
-    const getDateFromPercent = useCallback((percent: number) => {
-        const timestamp = timelineStart.getTime() + (percent / 100) * totalDuration
-        return startOfDay(new Date(timestamp))
-    }, [timelineStart, totalDuration])
-
     const pushEnd = push.endDate || addDays(push.startDate, 14)
     const leftPercent = getPositionPercent(push.startDate)
     const widthPercent = getPositionPercent(pushEnd) - leftPercent
-
-    // Handle name editing
-    const handleNameSubmit = () => {
-        if (editName.trim() && editName !== push.name) {
-            onUpdate(push.tempId, { name: editName.trim() })
-        }
-        setIsEditing(false)
-    }
 
     // Drag handlers
     const handlePointerDown = useCallback((e: React.PointerEvent, type: DragType) => {
@@ -124,6 +115,14 @@ export function TimelineBar({
         setDragOffset({ x: 0 })
     }, [isDragging, dragOffset, dragType, push, pushEnd, totalDuration, onUpdate])
 
+    // Handle click (not drag) to open edit popup
+    const handleClick = useCallback((e: React.MouseEvent) => {
+        if (!isDragging && onClick) {
+            e.stopPropagation()
+            onClick()
+        }
+    }, [isDragging, onClick])
+
     // Calculate visual position during drag
     let visualLeft = leftPercent
     let visualWidth = widthPercent
@@ -141,24 +140,32 @@ export function TimelineBar({
 
     const duration = differenceInDays(pushEnd, push.startDate)
 
+    // Determine if push is greyed out (dependent and dependency not completed)
+    const isGreyedOut = isDependent && !dependencyCompleted
+
     return (
         <div
             ref={barRef}
+            data-timeline-bar
             className={cn(
                 "absolute h-9 rounded-lg cursor-pointer transition-all select-none",
                 isDragging && "z-50 shadow-lg scale-[1.02]",
                 isSelected && !isDragging && "ring-2 ring-primary ring-offset-1",
-                !isDragging && "hover:brightness-110"
+                !isDragging && "hover:brightness-110",
+                isConnecting && "ring-2 ring-primary/50 animate-pulse",
+                isGreyedOut && "opacity-50"
             )}
             style={{
                 left: `${visualLeft}%`,
                 width: `${Math.max(visualWidth, 2)}%`,
                 top: `${rowIndex * ROW_HEIGHT + 6}px`,
-                background: `linear-gradient(90deg, ${push.color}ee, ${push.color}bb)`,
+                background: isGreyedOut
+                    ? `linear-gradient(90deg, #94a3b8dd, #94a3b8bb)`
+                    : `linear-gradient(90deg, ${push.color}ee, ${push.color}bb)`,
                 transform: isDragging ? 'scale(1.02)' : undefined,
                 transition: isDragging ? 'none' : 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)'
             }}
-            onClick={() => !readOnly && onSelect(isSelected ? null : push.tempId)}
+            onClick={handleClick}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
@@ -183,41 +190,27 @@ export function TimelineBar({
                     <GripVertical className="h-3 w-3 text-white/60 shrink-0" />
                 )}
 
-                {isEditing ? (
-                    <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onBlur={handleNameSubmit}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleNameSubmit()
-                            if (e.key === 'Escape') {
-                                setEditName(push.name)
-                                setIsEditing(false)
-                            }
-                        }}
-                        className="h-6 text-xs bg-white/20 border-white/30 text-white placeholder:text-white/50"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                    />
-                ) : (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span
-                                className="text-xs font-medium text-white truncate"
-                                onDoubleClick={() => !readOnly && setIsEditing(true)}
-                            >
-                                {push.name || 'Untitled Push'}
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                            <div className="font-medium">{push.name || 'Untitled Push'}</div>
-                            <div className="text-muted-foreground">
-                                {formatDateShort(push.startDate)} - {formatDateShort(pushEnd)}
-                            </div>
-                            <div className="text-muted-foreground">{duration} days</div>
-                        </TooltipContent>
-                    </Tooltip>
+                {isGreyedOut && (
+                    <Lock className="h-3 w-3 text-white/60 shrink-0" />
                 )}
+
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span className="text-xs font-medium text-white truncate">
+                            {push.name || 'Untitled Push'}
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                        <div className="font-medium">{push.name || 'Untitled Push'}</div>
+                        <div className="text-muted-foreground">
+                            {formatDateShort(push.startDate)} - {formatDateShort(pushEnd)}
+                        </div>
+                        <div className="text-muted-foreground">{duration} days</div>
+                        {isDependent && !dependencyCompleted && (
+                            <div className="text-amber-500 mt-1">Waiting for dependency</div>
+                        )}
+                    </TooltipContent>
+                </Tooltip>
             </div>
 
             {/* Right resize handle */}
@@ -228,19 +221,9 @@ export function TimelineBar({
                 />
             )}
 
-            {/* Delete button - only show when selected */}
-            {isSelected && !readOnly && !isDragging && (
-                <Button
-                    variant="destructive"
-                    size="icon"
-                    className="absolute -right-2 -top-2 h-5 w-5 rounded-full shadow-md"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete(push.tempId)
-                    }}
-                >
-                    <Trash2 className="h-3 w-3" />
-                </Button>
+            {/* Dependency indicator dot */}
+            {isDependent && (
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-muted-foreground/70 border border-white" />
             )}
         </div>
     )

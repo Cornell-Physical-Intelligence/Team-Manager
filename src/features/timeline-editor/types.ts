@@ -6,6 +6,7 @@ export type PushDraft = {
     startDate: Date
     endDate: Date | null
     color: string
+    dependsOn?: string | null // tempId of the push this depends on
 }
 
 export type TimelineViewRange = {

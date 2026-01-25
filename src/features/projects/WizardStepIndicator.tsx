@@ -42,11 +42,6 @@ export function WizardStepIndicator({ steps, currentStep, onStepClick }: WizardS
                             ) : (
                                 <span className="text-sm font-medium">{index + 1}</span>
                             )}
-
-                            {/* Animated pulse for current step */}
-                            {isCurrent && (
-                                <span className="absolute inset-0 rounded-full bg-primary/30 animate-ping" />
-                            )}
                         </button>
 
                         {/* Step label */}
