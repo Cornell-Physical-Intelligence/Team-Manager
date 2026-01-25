@@ -11,6 +11,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog"
 import { Calendar, Trash2 } from "lucide-react"
@@ -469,6 +470,8 @@ export function TimelineEditor({
                 if (!open) handleDialogClose()
             }}>
                 <DialogContent showCloseButton={false} className="sm:max-w-[280px] p-4">
+                    <DialogTitle className="sr-only">Name this push</DialogTitle>
+                    <DialogDescription className="sr-only">Enter a name for the new push you just created.</DialogDescription>
                     <div className="space-y-3">
                         <Input
                             id="new-push-name"

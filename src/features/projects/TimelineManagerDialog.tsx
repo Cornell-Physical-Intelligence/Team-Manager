@@ -7,6 +7,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { TimelineEditor } from "@/features/timeline-editor/TimelineEditor"
@@ -127,6 +128,7 @@ export function TimelineManagerDialog({
                 <DialogHeader className="p-6 pb-0">
                     <div className="flex items-center justify-between">
                         <DialogTitle>Project Timeline</DialogTitle>
+                        <DialogDescription className="sr-only">Visual editor for managing project pushes and their timeline.</DialogDescription>
                         <div className="flex items-center gap-2 pr-8">
                             <Button
                                 variant="outline"
