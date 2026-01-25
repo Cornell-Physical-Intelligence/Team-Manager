@@ -402,10 +402,11 @@ export function TimelineEditor({
                         !readOnly && "cursor-crosshair"
                     )}
                     style={{ minHeight: `${Math.max(totalHeight, minHeight)}px` }}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
+                    onPointerDown={handleMouseDown}
+                    onPointerMove={handleMouseMove}
+                    onPointerUp={handleMouseUp}
+                    onPointerCancel={handleMouseUp}
+                    onLostPointerCapture={handleMouseUp}
                 >
                     <TimelineGrid
                         startDate={viewRange.start}

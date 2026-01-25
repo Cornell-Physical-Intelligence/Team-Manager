@@ -371,7 +371,7 @@ export function TimelineBar({
                                 className={cn(
                                     "absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full",
                                     "bg-white border-2 border-muted-foreground/40 flex items-center justify-center",
-                                    "opacity-0 group-hover:opacity-100 transition-all duration-200",
+                                    "opacity-0 group-hover:opacity-100 transition-all duration-200 group/plus",
                                     "hover:bg-primary hover:border-primary hover:scale-110 cursor-pointer z-30 shadow-md",
                                     isChainDragging && "opacity-100 bg-primary border-primary scale-110"
                                 )}
@@ -379,8 +379,19 @@ export function TimelineBar({
                                 onPointerMove={handleChainPointerMove}
                                 onPointerUp={handleChainPointerUp}
                                 onPointerCancel={handleChainPointerUp}
+                                onLostPointerCapture={() => {
+                                    setIsChainDragging(false)
+                                    setChainDragEnd(null)
+                                    setHasMoved(false)
+                                }}
                             >
-                                <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-primary-foreground" />
+                                <Plus
+                                    className={cn(
+                                        "h-3.5 w-3.5 text-muted-foreground transition-colors",
+                                        "group-hover/plus:text-primary-foreground",
+                                        isChainDragging && "text-primary-foreground"
+                                    )}
+                                />
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="text-xs">
