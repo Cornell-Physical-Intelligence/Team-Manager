@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { TimelineEditor } from "@/features/timeline-editor/TimelineEditor"
 import { type PushDraft } from "@/features/timeline-editor/types"
 import { createPush, updatePush, deletePush } from "@/app/actions/pushes"
-import { Loader2, Save } from "lucide-react"
+import { Loader2, Save, Sparkles } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 type PushType = {
@@ -23,6 +23,7 @@ type PushType = {
     endDate: Date | string | null
     status: string
     color?: string
+    dependsOnId?: string | null
 }
 
 interface TimelineManagerDialogProps {
@@ -53,8 +54,7 @@ export function TimelineManagerDialog({
                 startDate: new Date(p.startDate),
                 endDate: p.endDate ? new Date(p.endDate) : null,
                 color: p.color || "#3b82f6",
-                // We don't have dependency info in current PushType, 
-                // but we could add it if the API supports it.
+                dependsOn: p.dependsOnId || null
             })))
             setHasChanges(false)
         }
@@ -90,7 +90,8 @@ export function TimelineManagerDialog({
                         name: p.name,
                         startDate: p.startDate.toISOString().split('T')[0],
                         endDate: p.endDate?.toISOString().split('T')[0] || null,
-                        color: p.color
+                        color: p.color,
+                        dependsOnId: p.dependsOn || null
                     })
                 }
 
@@ -102,6 +103,7 @@ export function TimelineManagerDialog({
                     formData.append('startDate', p.startDate.toISOString().split('T')[0])
                     if (p.endDate) formData.append('endDate', p.endDate.toISOString().split('T')[0])
                     if (p.color) formData.append('color', p.color)
+                    if (p.dependsOn) formData.append('dependsOnId', p.dependsOn)
                     await createPush(formData)
                 }
 
@@ -124,8 +126,8 @@ export function TimelineManagerDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent showCloseButton={false} className="sm:max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
-                <DialogHeader className="p-6 pb-0">
+            <DialogContent showCloseButton={false} className="sm:max-w-3xl h-[85vh] flex flex-col p-0 overflow-hidden">
+                <DialogHeader className="p-6 pb-2">
                     <div className="flex items-center justify-between">
                         <DialogTitle>Project Timeline</DialogTitle>
                         <DialogDescription className="sr-only">Visual editor for managing project pushes and their timeline.</DialogDescription>
@@ -154,12 +156,27 @@ export function TimelineManagerDialog({
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-auto p-6">
-                    <TimelineEditor
-                        pushes={pushes}
-                        onPushesChange={handlePushesChange}
-                        minHeight={500}
-                    />
+                <div className="flex-1 overflow-auto p-6 pt-0">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            <span>
+                                Drag to create pushes. Click to edit. Hover for + to chain.
+                            </span>
+                        </div>
+
+                        <TimelineEditor
+                            pushes={pushes}
+                            onPushesChange={handlePushesChange}
+                            minHeight={400}
+                        />
+
+                        {pushes.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                {pushes.length} push{pushes.length !== 1 ? 'es' : ''} planned
+                            </p>
+                        )}
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

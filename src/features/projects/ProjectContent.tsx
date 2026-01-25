@@ -43,6 +43,7 @@ type PushType = {
     projectId: string
     taskCount: number
     completedCount: number
+    dependsOnId?: string | null
 }
 
 type TaskType = {

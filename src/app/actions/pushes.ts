@@ -31,6 +31,7 @@ export async function createPush(formData: FormData) {
         const projectId = formData.get('projectId') as string
         const startDate = formData.get('startDate') as string
         const endDate = formData.get('endDate') as string
+        const dependsOnId = formData.get('dependsOnId') as string | null
 
         if (!name?.trim()) return { error: 'Push name is required' }
         if (!projectId) return { error: 'Project ID is required' }
@@ -59,7 +60,8 @@ export async function createPush(formData: FormData) {
                 startDate: start,
                 endDate: end,
                 color: PUSH_COLORS[existingCount % PUSH_COLORS.length],
-                status: 'Active'
+                status: 'Active',
+                dependsOnId: dependsOnId || null
             }
         })
 
