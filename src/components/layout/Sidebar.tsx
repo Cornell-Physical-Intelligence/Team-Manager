@@ -148,7 +148,7 @@ const SortableProjectRow = React.memo(({
             ref={setNodeRef}
             style={style}
             className={cn(
-                "group relative w-full flex items-center rounded-md transition-all duration-300",
+                "group relative flex items-center rounded-md transition-all duration-300",
                 !isActive && "hover:bg-muted/50"
             )}
         >
@@ -177,19 +177,19 @@ const SortableProjectRow = React.memo(({
                 href={`/dashboard/projects/${project.id}`}
                 onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
                 className={cn(
-                    "relative z-10 flex-1 min-w-0 rounded-md pl-3 pr-8 py-1.5 text-sm transition-colors",
+                    "relative z-10 rounded-md pl-2 py-1.5 text-sm transition-colors",
                     isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
                 )}
                 title={project.name}
             >
-                <span className="block truncate">{project.name}</span>
+                <span className="block truncate max-w-[100px]">{project.name}</span>
             </Link>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-0 z-20 h-6 w-6 text-muted-foreground/50 hover:text-muted-foreground"
+                        className="relative z-20 h-6 w-6 shrink-0 ml-auto text-muted-foreground/50 hover:text-muted-foreground"
                     >
                         {navigatingTo === `/dashboard/projects/${project.id}` ? (
                             <div className="flex items-center gap-[3px]">
