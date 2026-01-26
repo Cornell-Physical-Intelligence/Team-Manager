@@ -7,6 +7,7 @@ import { CopyButton } from "./CopyButton"
 import { DiscordChannelSettings } from "./DiscordChannelSettings"
 import { DisplayNameSettings } from "./DisplayNameSettings"
 import { AppearanceSettings } from "./AppearanceSettings"
+import { WorkloadSettings } from "./WorkloadSettings"
 import prisma from "@/lib/prisma"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -180,6 +181,16 @@ export default async function SettingsPage() {
                     </div>
                 </div>
             </section>
+
+            {/* Workload Scoring - Admin Only */}
+            {user.role === 'Admin' && (
+                <>
+                    <Separator />
+                    <section>
+                        <WorkloadSettings />
+                    </section>
+                </>
+            )}
 
             <Separator />
 
