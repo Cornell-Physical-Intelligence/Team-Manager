@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react"
+import { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Pencil, Plus, Lock, CheckCircle2 } from "lucide-react"
 
@@ -59,24 +59,22 @@ export function PushChainStrip({
     const [userSelectedPushId, setUserSelectedPushId] = useState<string | null>(null)
     const [isContentOpen, setIsContentOpen] = useState(false)
     const [hoveredId, setHoveredId] = useState<string | null>(null)
-    // Track automatic transitions for slower animation
-    const [isAutoTransitioning, setIsAutoTransitioning] = useState(false)
-    // Flag to use slow animation during the actual motion
-    const [useSlowMotion, setUseSlowMotion] = useState(false)
-    // Track which push is showing the green completion fill animation
+    // Track which push is showing the green fill animation (only one at a time)
     const [completionFillId, setCompletionFillId] = useState<string | null>(null)
-    // Track the previous activePushId to detect auto-transitions
     const prevActivePushIdRef = useRef<string | null>(activePushId)
     const containerRef = useRef<HTMLDivElement>(null)
 
+    // Which push is expanded right now
     const expandedPushId = useMemo(() => {
-        // During auto-transition delay, keep showing the old push (the one being filled green)
+        // During fill animation, keep showing the completing push
         if (completionFillId) {
             return completionFillId
         }
+        // User manually selected a push
         if (userSelectedPushId && chain.find(p => p.id === userSelectedPushId)) {
             return userSelectedPushId
         }
+        // Default to active (first incomplete) push
         return activePushId
     }, [userSelectedPushId, activePushId, chain, completionFillId])
 
@@ -86,45 +84,27 @@ export function PushChainStrip({
         }
     }, [loadedPushes, loadPushTasks])
 
-    // Clear slow motion after the animation completes
-    useEffect(() => {
-        if (useSlowMotion && !completionFillId) {
-            const timer = setTimeout(() => setUseSlowMotion(false), 1200)
-            return () => clearTimeout(timer)
-        }
-    }, [useSlowMotion, completionFillId])
-
-    // Detect automatic push changes (when a push is completed and we auto-advance)
-    // Use useLayoutEffect to set state BEFORE the browser paints
+    // Detect when a push is completed and trigger fill animation
     useLayoutEffect(() => {
         const prevId = prevActivePushIdRef.current
 
         if (prevId && activePushId && prevId !== activePushId) {
-            // Active push changed - a push was just completed!
-            // Only trigger if user hasn't manually selected a DIFFERENT push
-            if (!userSelectedPushId || userSelectedPushId === prevId) {
-                // Start the green fill animation on the just-completed push
-                setCompletionFillId(prevId)
-                setIsAutoTransitioning(true)
-                setUseSlowMotion(true)
-                setUserSelectedPushId(null)
+            // A push was just completed - start fill animation
+            setCompletionFillId(prevId)
+            setUserSelectedPushId(null)
+            ensureTasksLoaded(activePushId)
 
-                // Preload new push tasks
-                ensureTasksLoaded(activePushId)
+            // After fill animation, clear and let it collapse
+            const timer = setTimeout(() => {
+                setCompletionFillId(null)
+            }, 1000) // 1s fill animation
 
-                // After green fill completes, transition to next push
-                const timer = setTimeout(() => {
-                    setCompletionFillId(null)
-                    setIsAutoTransitioning(false)
-                }, 1200) // 1.2s for green fill animation
-
-                return () => clearTimeout(timer)
-            }
+            prevActivePushIdRef.current = activePushId
+            return () => clearTimeout(timer)
         }
 
-        // Always update the ref AFTER the effect body runs
         prevActivePushIdRef.current = activePushId
-    }, [activePushId, userSelectedPushId, ensureTasksLoaded])
+    }, [activePushId, ensureTasksLoaded])
 
     const handlePushClick = useCallback((push: PushType) => {
         // Locked pushes can't be clicked
@@ -174,14 +154,12 @@ export function PushChainStrip({
                             key={push.id}
                             className={cn(
                                 "relative rounded-lg border shadow-sm overflow-hidden",
-                                // Slower, more dramatic animation for auto-transitions
-                                useSlowMotion
-                                    ? "transition-all duration-1000 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
-                                    : "transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1.2)]",
-                                // Green background only AFTER fill animation completes (not during)
-                                pushIsComplete && !showingCompletionFill
-                                    ? "bg-green-400 border-green-500/50"
-                                    : "bg-card border-border",
+                                // Transition width smoothly (800ms when completing, 300ms normally)
+                                completionFillId
+                                    ? "transition-[width] duration-[800ms] ease-out"
+                                    : "transition-[width] duration-300 ease-out",
+                                // Completed pushes are green (instant, no transition)
+                                pushIsComplete ? "bg-green-400 border-green-500/50" : "bg-card border-border",
                                 isExpanded ? "min-w-0 flex-1" : "shrink-0 flex-none",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
