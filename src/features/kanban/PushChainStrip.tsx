@@ -203,32 +203,35 @@ export function PushChainStrip({
                         >
                             {/* Green completion fill overlay - sweeps from bottom to top, fully opaque */}
                             {showingCompletionFill && (
-                                <div className="absolute inset-0 bg-green-500 z-20 pointer-events-none animate-completion-fill" />
+                                <div className="absolute inset-0 bg-green-400 z-20 pointer-events-none animate-completion-fill" />
                             )}
                             {/* COLLAPSED CONTENT */}
                             {!isExpanded && (
                                 <div className="flex items-stretch h-full w-full">
                                     {/* Vertical Progress Bar Area (Fixed Width) */}
                                     <div className={cn(
-                                        "relative w-[56px] shrink-0 h-full bg-muted/20 border-r border-transparent transition-colors flex items-center justify-center", // Added flex center for lock icon
+                                        "relative w-[56px] shrink-0 h-full border-r border-transparent transition-colors flex items-center justify-center",
+                                        // Completed pushes get full green background, others get muted
+                                        pushIsComplete ? "bg-green-400" : "bg-muted/20",
                                         isHovered && "border-border/50"
                                     )}>
-                                        {/* Vertical Fill */}
-                                        <div
-                                            className={cn(
-                                                "absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out",
-                                                pushIsComplete ? "bg-green-500/80" : "bg-primary/80",
-                                                pushIsLocked && "bg-muted-foreground/30" // Greyed out fill if locked/inactive
-                                            )}
-                                            style={{ height: `${pushIsLocked ? 0 : percent}%` }}
-                                        />
+                                        {/* Vertical Fill - only show for non-complete pushes */}
+                                        {!pushIsComplete && (
+                                            <div
+                                                className={cn(
+                                                    "absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out",
+                                                    pushIsLocked ? "bg-muted-foreground/30" : "bg-primary/80"
+                                                )}
+                                                style={{ height: `${pushIsLocked ? 0 : percent}%` }}
+                                            />
+                                        )}
 
                                         {/* Progress Text - Very Subtle, for all unlocked pushes */}
                                         {!pushIsLocked && (
                                             <div className="absolute inset-0 flex items-center justify-center z-10">
                                                 <span className={cn(
                                                     "text-[9px] font-medium tabular-nums select-none",
-                                                    pushIsComplete ? "text-white/90" : "text-foreground/80 mix-blend-difference" // improved contrast
+                                                    pushIsComplete ? "text-white" : "text-foreground/80 mix-blend-difference"
                                                 )}>
                                                     {push.completedCount}/{push.taskCount}
                                                 </span>
