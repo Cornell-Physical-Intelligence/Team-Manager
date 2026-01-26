@@ -178,8 +178,8 @@ export function PushChainStrip({
                                 useSlowMotion
                                     ? "transition-all duration-1000 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
                                     : "transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1.2)]",
-                                // Completed pushes stay green, others use card background
-                                pushIsComplete
+                                // Green background only AFTER fill animation completes (not during)
+                                pushIsComplete && !showingCompletionFill
                                     ? "bg-green-400 border-green-500/50"
                                     : "bg-card border-border",
                                 isExpanded ? "min-w-0 flex-1" : "shrink-0 flex-none",
