@@ -163,6 +163,12 @@ export function PushChainStrip({
                     // Check if this push is showing the completion fill animation
                     const showingCompletionFill = completionFillId === push.id
 
+                    // Calculate explicit widths for smooth animation
+                    // Expanded: takes remaining space after collapsed items
+                    // Collapsed: COLLAPSED_WIDTH (or wider on hover)
+                    const collapsedWidth = isHovered ? 160 : COLLAPSED_WIDTH
+                    const expandedWidth = `calc(100% - ${totalCollapsedWidth}px)`
+
                     return (
                         <div
                             key={push.id}
@@ -170,25 +176,19 @@ export function PushChainStrip({
                                 "relative rounded-lg border shadow-sm overflow-hidden",
                                 // Slower, more dramatic animation for auto-transitions
                                 useSlowMotion
-                                    ? "transition-all duration-1000 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                                    ? "transition-all duration-1000 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
                                     : "transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1.2)]",
                                 pushIsComplete
                                     ? "bg-muted/40 border-border/50"
                                     : "bg-card border-border",
-                                isExpanded ? "min-w-0" : "shrink-0",
+                                isExpanded ? "min-w-0 flex-1" : "shrink-0 flex-none",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
                                     : !isExpanded && "hover:shadow-md cursor-pointer"
                             )}
                             style={{
-                                // Use maxWidth for hover transition (avoid width: auto which prevents animation)
-                                width: isExpanded
-                                    ? `calc(100% - ${totalCollapsedWidth}px)`
-                                    : undefined, // Let flex/maxWidth control it
-                                minWidth: isExpanded ? 0 : COLLAPSED_WIDTH,
-                                maxWidth: isExpanded
-                                    ? '100%'
-                                    : isHovered ? 160 : COLLAPSED_WIDTH, // Cap at ~10 chars (56px bar + ~100px text)
+                                // Use explicit width for both states to enable smooth animation
+                                width: isExpanded ? expandedWidth : collapsedWidth,
                             }}
                             onMouseEnter={() => setHoveredId(push.id)}
                             onMouseLeave={() => setHoveredId(null)}
@@ -201,9 +201,9 @@ export function PushChainStrip({
                             role={!isExpanded ? "button" : undefined}
                             tabIndex={!isExpanded && !pushIsLocked ? 0 : -1}
                         >
-                            {/* Green completion fill overlay - sweeps from bottom to top */}
+                            {/* Green completion fill overlay - sweeps from bottom to top, fully opaque */}
                             {showingCompletionFill && (
-                                <div className="absolute inset-0 bg-green-500/50 z-20 pointer-events-none animate-completion-fill" />
+                                <div className="absolute inset-0 bg-green-500 z-20 pointer-events-none animate-completion-fill" />
                             )}
                             {/* COLLAPSED CONTENT */}
                             {!isExpanded && (
