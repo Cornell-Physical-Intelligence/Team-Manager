@@ -187,7 +187,7 @@ export function PushChainStrip({
                             key={push.id}
                             className={cn(
                                 "relative rounded-lg border shadow-sm overflow-hidden",
-                                "transition-[width] ease-out",
+                                "transition-[width,background-color,border-color] ease-out",
                                 isExpanded ? "min-w-0" : "shrink-0",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
@@ -196,8 +196,7 @@ export function PushChainStrip({
                             style={{
                                 width: isExpanded ? expandedWidth : collapsedWidth,
                                 transitionDuration: `${transitionDuration}ms`,
-                                // Instant background change - no transition
-                                backgroundColor: showGreenBg ? 'rgb(34 197 94 / 0.9)' : pushIsComplete && !isFillingAnimation ? 'hsl(var(--muted) / 0.4)' : undefined,
+                                backgroundColor: showGreenBg ? 'rgb(34 197 94 / 0.9)' : undefined,
                                 borderColor: showGreenBg ? 'rgb(34 197 94 / 0.5)' : undefined,
                             }}
                             onMouseEnter={() => setHoveredId(push.id)}
@@ -236,35 +235,37 @@ export function PushChainStrip({
                             )}
                             {/* COLLAPSED CONTENT */}
                             {!isExpanded && (
-                                <div className="flex items-center justify-center h-full w-full relative">
-                                    {/* Vertical fill for incomplete pushes */}
-                                    {!pushIsComplete && !pushIsLocked && !showGreenBg && (
-                                        <div
-                                            className="absolute bottom-0 left-0 right-0 bg-primary/40 transition-all duration-500"
-                                            style={{ height: `${percent}%` }}
-                                        />
-                                    )}
-
-                                    {/* Icon/text overlay */}
-                                    <div className="flex items-center justify-center z-10">
-                                        {pushIsLocked ? (
-                                            <Lock className="w-4 h-4 text-muted-foreground/50" />
-                                        ) : showGreenBg ? (
-                                            // Show count on green background for completed cards
-                                            <span className="text-[10px] font-bold tabular-nums text-white">
-                                                {push.completedCount}/{push.taskCount}
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] font-medium tabular-nums text-foreground/70">
-                                                {push.completedCount}/{push.taskCount}
-                                            </span>
+                                <div className="flex items-stretch h-full w-full">
+                                    {/* Left section - count/icon (fixed width) */}
+                                    <div className="relative w-[56px] shrink-0 flex items-center justify-center">
+                                        {/* Vertical fill for incomplete pushes */}
+                                        {!pushIsComplete && !pushIsLocked && !showGreenBg && (
+                                            <div
+                                                className="absolute bottom-0 left-0 right-0 bg-primary/40 transition-all duration-500"
+                                                style={{ height: `${percent}%` }}
+                                            />
                                         )}
+
+                                        {/* Icon/text overlay */}
+                                        <div className="relative z-10">
+                                            {pushIsLocked ? (
+                                                <Lock className="w-4 h-4 text-muted-foreground/50" />
+                                            ) : showGreenBg ? (
+                                                <span className="text-[10px] font-bold tabular-nums text-white">
+                                                    {push.completedCount}/{push.taskCount}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] font-medium tabular-nums text-foreground/70">
+                                                    {push.completedCount}/{push.taskCount}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    {/* Name on hover */}
+                                    {/* Right section - name on hover */}
                                     <div className={cn(
-                                        "absolute left-[56px] flex items-center px-3 overflow-hidden whitespace-nowrap transition-all duration-300",
-                                        isHovered ? "opacity-100" : "opacity-0"
+                                        "flex items-center overflow-hidden whitespace-nowrap transition-all duration-300",
+                                        isHovered ? "opacity-100 px-2" : "opacity-0 w-0 px-0"
                                     )}>
                                         <span className={cn(
                                             "text-sm font-semibold truncate",
