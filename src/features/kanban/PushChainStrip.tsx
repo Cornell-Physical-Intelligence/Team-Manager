@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react"
+import { useState, useMemo, useCallback, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Pencil, Plus, Lock, CheckCircle2 } from "lucide-react"
 
@@ -42,6 +42,7 @@ export function PushChainStrip({
     loadingPushes,
     renderPushBoard
 }: PushChainStripProps) {
+    // Active push = first incomplete push in chain
     const activePushId = useMemo(() => {
         for (const push of chain) {
             if (!isComplete(push.id)) {
@@ -51,6 +52,7 @@ export function PushChainStrip({
         return chain[chain.length - 1]?.id ?? null
     }, [chain, isComplete])
 
+    // Check if a push is locked (dependency not complete)
     const isLocked = useCallback((push: PushType) => {
         if (!push.dependsOnId) return false
         return !isComplete(push.dependsOnId)
@@ -59,24 +61,15 @@ export function PushChainStrip({
     const [userSelectedPushId, setUserSelectedPushId] = useState<string | null>(null)
     const [isContentOpen, setIsContentOpen] = useState(false)
     const [hoveredId, setHoveredId] = useState<string | null>(null)
-    // Track which push is showing the green fill animation (only one at a time)
-    const [completionFillId, setCompletionFillId] = useState<string | null>(null)
-    const prevActivePushIdRef = useRef<string | null>(activePushId)
     const containerRef = useRef<HTMLDivElement>(null)
 
-    // Which push is expanded right now
+    // Expanded push: user selection if valid, otherwise active
     const expandedPushId = useMemo(() => {
-        // During fill animation, keep showing the completing push
-        if (completionFillId) {
-            return completionFillId
-        }
-        // User manually selected a push
         if (userSelectedPushId && chain.find(p => p.id === userSelectedPushId)) {
             return userSelectedPushId
         }
-        // Default to active (first incomplete) push
         return activePushId
-    }, [userSelectedPushId, activePushId, chain, completionFillId])
+    }, [userSelectedPushId, activePushId, chain])
 
     const ensureTasksLoaded = useCallback((pushId: string) => {
         if (!loadedPushes[pushId]) {
@@ -84,40 +77,17 @@ export function PushChainStrip({
         }
     }, [loadedPushes, loadPushTasks])
 
-    // Detect when a push is completed and trigger fill animation
-    useLayoutEffect(() => {
-        const prevId = prevActivePushIdRef.current
-
-        if (prevId && activePushId && prevId !== activePushId) {
-            // A push was just completed - start fill animation
-            setCompletionFillId(prevId)
-            setUserSelectedPushId(null)
-            ensureTasksLoaded(activePushId)
-
-            // After fill animation, clear and let it collapse
-            const timer = setTimeout(() => {
-                setCompletionFillId(null)
-            }, 1000) // 1s fill animation
-
-            prevActivePushIdRef.current = activePushId
-            return () => clearTimeout(timer)
-        }
-
-        prevActivePushIdRef.current = activePushId
-    }, [activePushId, ensureTasksLoaded])
-
     const handlePushClick = useCallback((push: PushType) => {
-        // Locked pushes can't be clicked
         if (isLocked(push)) return
 
         if (push.id === expandedPushId) {
-            // Clicking the already-expanded push toggles content
+            // Toggle content panel
             setIsContentOpen(prev => !prev)
             if (!isContentOpen) {
                 ensureTasksLoaded(push.id)
             }
         } else {
-            // Switching to a different push - just switch, don't auto-open
+            // Switch to different push
             setUserSelectedPushId(push.id)
             ensureTasksLoaded(push.id)
         }
@@ -127,9 +97,9 @@ export function PushChainStrip({
 
     if (!expandedPush || chain.length < 2) return null
 
-    // Calculate the width for the expanded push
+    // Calculate widths
     const collapsedCount = chain.length - 1
-    const totalCollapsedWidth = collapsedCount * COLLAPSED_WIDTH + (collapsedCount * 8) // 8px gap
+    const totalCollapsedWidth = collapsedCount * COLLAPSED_WIDTH + (collapsedCount * 8)
 
     return (
         <div className="w-full" ref={containerRef}>
@@ -140,12 +110,7 @@ export function PushChainStrip({
                     const pushIsLocked = isLocked(push)
                     const isHovered = hoveredId === push.id
                     const percent = push.taskCount > 0 ? (push.completedCount / push.taskCount) * 100 : 0
-                    // Check if this push is showing the completion fill animation
-                    const showingCompletionFill = completionFillId === push.id
 
-                    // Calculate explicit widths for smooth animation
-                    // Expanded: takes remaining space after collapsed items
-                    // Collapsed: COLLAPSED_WIDTH (or wider on hover)
                     const collapsedWidth = isHovered ? 160 : COLLAPSED_WIDTH
                     const expandedWidth = `calc(100% - ${totalCollapsedWidth}px)`
 
@@ -154,25 +119,19 @@ export function PushChainStrip({
                             key={push.id}
                             className={cn(
                                 "relative rounded-lg border shadow-sm overflow-hidden",
-                                // Transition width smoothly (800ms when completing, 300ms normally)
-                                completionFillId
-                                    ? "transition-[width] duration-[800ms] ease-out"
-                                    : "transition-[width] duration-300 ease-out",
-                                // Completed pushes are green (instant, no transition)
-                                pushIsComplete ? "bg-green-400 border-green-500/50" : "bg-card border-border",
-                                isExpanded ? "min-w-0 flex-1" : "shrink-0 flex-none",
+                                "transition-[width] duration-300 ease-out",
+                                pushIsComplete ? "bg-muted/40 border-border/50" : "bg-card border-border",
+                                isExpanded ? "min-w-0" : "shrink-0",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
                                     : !isExpanded && "hover:shadow-md cursor-pointer"
                             )}
                             style={{
-                                // Use explicit width for both states to enable smooth animation
                                 width: isExpanded ? expandedWidth : collapsedWidth,
                             }}
                             onMouseEnter={() => setHoveredId(push.id)}
                             onMouseLeave={() => setHoveredId(null)}
-                            onClick={(e) => {
-                                // Only handle click on wrapper if collapsed
+                            onClick={() => {
                                 if (!isExpanded && !pushIsLocked) {
                                     handlePushClick(push)
                                 }
@@ -180,52 +139,38 @@ export function PushChainStrip({
                             role={!isExpanded ? "button" : undefined}
                             tabIndex={!isExpanded && !pushIsLocked ? 0 : -1}
                         >
-                            {/* Green completion fill overlay - sweeps from bottom to top, fully opaque */}
-                            {showingCompletionFill && (
-                                <div className="absolute inset-0 bg-green-400 z-20 pointer-events-none animate-completion-fill" />
-                            )}
                             {/* COLLAPSED CONTENT */}
                             {!isExpanded && (
                                 <div className="flex items-stretch h-full w-full">
-                                    {/* Vertical Progress Bar Area (Fixed Width) */}
+                                    {/* Progress indicator area */}
                                     <div className={cn(
-                                        "relative w-[56px] shrink-0 h-full border-r border-transparent transition-colors flex items-center justify-center",
-                                        // Completed pushes get full green background, others get muted
-                                        pushIsComplete ? "bg-green-400" : "bg-muted/20",
-                                        isHovered && "border-border/50"
+                                        "relative w-[56px] shrink-0 h-full flex items-center justify-center",
+                                        pushIsComplete ? "bg-green-500/20" : "bg-muted/20",
+                                        isHovered && "border-r border-border/50"
                                     )}>
-                                        {/* Vertical Fill - only show for non-complete pushes */}
-                                        {!pushIsComplete && (
+                                        {/* Vertical fill for incomplete pushes */}
+                                        {!pushIsComplete && !pushIsLocked && (
                                             <div
-                                                className={cn(
-                                                    "absolute bottom-0 left-0 right-0 transition-all duration-500 ease-out",
-                                                    pushIsLocked ? "bg-muted-foreground/30" : "bg-primary/80"
-                                                )}
-                                                style={{ height: `${pushIsLocked ? 0 : percent}%` }}
+                                                className="absolute bottom-0 left-0 right-0 bg-primary/60 transition-all duration-500"
+                                                style={{ height: `${percent}%` }}
                                             />
                                         )}
 
-                                        {/* Progress Text - Very Subtle, for all unlocked pushes */}
-                                        {!pushIsLocked && (
-                                            <div className="absolute inset-0 flex items-center justify-center z-10">
-                                                <span className={cn(
-                                                    "text-[9px] font-medium tabular-nums select-none",
-                                                    pushIsComplete ? "text-white" : "text-foreground/80 mix-blend-difference"
-                                                )}>
+                                        {/* Icon/text overlay */}
+                                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                                            {pushIsLocked ? (
+                                                <Lock className="w-4 h-4 text-muted-foreground/50" />
+                                            ) : pushIsComplete ? (
+                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                            ) : (
+                                                <span className="text-[10px] font-medium tabular-nums text-foreground/70">
                                                     {push.completedCount}/{push.taskCount}
                                                 </span>
-                                            </div>
-                                        )}
-
-                                        {/* Lock Icon for Locked Pushes */}
-                                        {pushIsLocked && (
-                                            <div className="absolute inset-0 flex items-center justify-center z-10">
-                                                <Lock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </div>
 
-                                    {/* Name Label (Appears on Hover) */}
+                                    {/* Name on hover */}
                                     <div className={cn(
                                         "flex items-center px-3 overflow-hidden whitespace-nowrap transition-all duration-300",
                                         isHovered ? "opacity-100 max-w-[104px]" : "opacity-0 max-w-0 px-0"
@@ -243,102 +188,97 @@ export function PushChainStrip({
 
                             {/* EXPANDED CONTENT */}
                             {isExpanded && (
-                                <div className="flex flex-col h-full w-full">
-                                    <button
-                                        type="button"
-                                        onClick={() => handlePushClick(push)}
-                                        className={cn(
-                                            "w-full flex items-center justify-between p-3 md:p-4 transition-colors",
-                                            isContentOpen ? "rounded-t-lg" : "rounded-lg",
-                                            "hover:bg-accent/50 dark:hover:bg-accent/20"
+                                <button
+                                    type="button"
+                                    onClick={() => handlePushClick(push)}
+                                    className={cn(
+                                        "w-full flex items-center justify-between p-3 md:p-4 transition-colors",
+                                        isContentOpen ? "rounded-t-lg" : "rounded-lg",
+                                        "hover:bg-accent/50 dark:hover:bg-accent/20"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                                        <span className={cn(
+                                            "font-semibold text-base md:text-lg tracking-tight truncate",
+                                            pushIsComplete && "text-muted-foreground"
+                                        )}>
+                                            {push.name}
+                                        </span>
+                                        {pushIsComplete && (
+                                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                                         )}
-                                    >
-                                        <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className={cn(
-                                                    "font-semibold text-base md:text-lg tracking-tight truncate",
-                                                    pushIsComplete && "text-muted-foreground"
-                                                )}>
-                                                    {push.name}
-                                                </span>
-                                                {pushIsComplete && (
-                                                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+
+                                        {isAdmin && (
+                                            <div
+                                                role="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    onAddTask(push)
+                                                }}
+                                                className={cn(
+                                                    "h-7 flex items-center gap-1 px-2 rounded-md border transition-all shrink-0 text-xs",
+                                                    pushIsComplete
+                                                        ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50"
+                                                        : "border-border bg-background hover:bg-muted/50"
                                                 )}
+                                            >
+                                                <Plus className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline">Add Task</span>
                                             </div>
+                                        )}
+                                    </div>
 
-                                            {isAdmin && (
-                                                <div
-                                                    role="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        onAddTask(push)
-                                                    }}
-                                                    className={cn(
-                                                        "h-7 flex items-center gap-1 px-2 rounded-md border transition-all shrink-0 text-xs",
-                                                        pushIsComplete
-                                                            ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
-                                                            : "border-border bg-background hover:bg-muted/50"
-                                                    )}
-                                                >
-                                                    <Plus className="h-3.5 w-3.5" />
-                                                    <span className="hidden sm:inline">Add Task</span>
+                                    <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+                                        {!pushIsComplete && push.taskCount > 0 && (
+                                            <div className="hidden md:flex items-center gap-2">
+                                                <div className="w-20 md:w-24 h-2 bg-muted rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-primary/60 rounded-full transition-all duration-300"
+                                                        style={{ width: `${percent}%` }}
+                                                    />
                                                 </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                                            {!pushIsComplete && push.taskCount > 0 && (
-                                                <div className="hidden md:flex items-center gap-2">
-                                                    <div className="w-20 md:w-24 h-2 bg-muted rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-primary/60 rounded-full transition-all duration-300"
-                                                            style={{ width: `${(push.completedCount / push.taskCount) * 100}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {!pushIsComplete && (
-                                                <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
-                                                    {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
-                                                </span>
-                                            )}
-
-                                            {isAdmin && (
-                                                <div
-                                                    role="button"
-                                                    onClick={(e) => onEditPush(e, push)}
-                                                    className={cn(
-                                                        "flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors",
-                                                        pushIsComplete && "text-muted-foreground/50"
-                                                    )}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                                </div>
-                                            )}
-
-                                            <div className={cn(
-                                                "h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md transition-colors",
-                                                pushIsComplete ? "text-muted-foreground/50" : "",
-                                                "hover:bg-accent"
-                                            )}>
-                                                <ChevronDown
-                                                    className={cn(
-                                                        "h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200",
-                                                        isContentOpen && "rotate-180"
-                                                    )}
-                                                />
                                             </div>
+                                        )}
+
+                                        {!pushIsComplete && (
+                                            <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                                {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
+                                            </span>
+                                        )}
+
+                                        {isAdmin && (
+                                            <div
+                                                role="button"
+                                                onClick={(e) => onEditPush(e, push)}
+                                                className={cn(
+                                                    "flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors",
+                                                    pushIsComplete && "text-muted-foreground/50"
+                                                )}
+                                            >
+                                                <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                            </div>
+                                        )}
+
+                                        <div className={cn(
+                                            "h-7 w-7 md:h-8 md:w-8 flex items-center justify-center rounded-md transition-colors hover:bg-accent",
+                                            pushIsComplete && "text-muted-foreground/50"
+                                        )}>
+                                            <ChevronDown
+                                                className={cn(
+                                                    "h-4 w-4 md:h-5 md:w-5 text-muted-foreground transition-transform duration-200",
+                                                    isContentOpen && "rotate-180"
+                                                )}
+                                            />
                                         </div>
-                                    </button>
-                                </div>
+                                    </div>
+                                </button>
                             )}
                         </div>
                     )
                 })}
             </div>
 
-            {/* Separated Full-Width Content Panel */}
+            {/* Content Panel */}
             {expandedPush && (
                 <div
                     className="grid transition-[grid-template-rows] duration-300 ease-out"
@@ -350,7 +290,7 @@ export function PushChainStrip({
                     )}>
                         <div className={cn(
                             "mt-2 rounded-lg border shadow-sm transition-all duration-300",
-                            isContentOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none",
+                            isContentOpen ? "opacity-100" : "opacity-0 pointer-events-none",
                             isComplete(expandedPush.id) ? "bg-muted/30 border-border/50" : "bg-card border-border"
                         )}>
                             <div className="p-4">
