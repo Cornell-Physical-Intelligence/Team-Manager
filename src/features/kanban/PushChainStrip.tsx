@@ -177,10 +177,10 @@ export function PushChainStrip({
 
                     // Check if this push is currently in filling animation
                     const isFillingAnimation = completingPushId === push.id && animationPhase === 'filling'
-                    // Check if this push is in transition phase (green bg should show)
+                    // Check if this push is in transition phase
                     const isTransitioning = completingPushId === push.id && animationPhase === 'transitioning'
-                    // Green background ONLY during transition (not persisted)
-                    const showGreenBg = isTransitioning
+                    // Green background for completed collapsed cards (always) and during transition
+                    const showGreenBg = (!isExpanded && pushIsComplete && !isFillingAnimation) || isTransitioning
 
                     return (
                         <div
@@ -250,12 +250,10 @@ export function PushChainStrip({
                                         {pushIsLocked ? (
                                             <Lock className="w-4 h-4 text-muted-foreground/50" />
                                         ) : showGreenBg ? (
-                                            // Show count on green background during transition
+                                            // Show count on green background for completed cards
                                             <span className="text-[10px] font-bold tabular-nums text-white">
                                                 {push.completedCount}/{push.taskCount}
                                             </span>
-                                        ) : pushIsComplete ? (
-                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
                                         ) : (
                                             <span className="text-[10px] font-medium tabular-nums text-foreground/70">
                                                 {push.completedCount}/{push.taskCount}
