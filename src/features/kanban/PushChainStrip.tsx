@@ -59,14 +59,12 @@ export function PushChainStrip({
     const [userSelectedPushId, setUserSelectedPushId] = useState<string | null>(null)
     const [isContentOpen, setIsContentOpen] = useState(false)
     const [hoveredId, setHoveredId] = useState<string | null>(null)
-    // Add transition state for "juicy" animation feel
-    const [isTransitioning, setIsTransitioning] = useState(false)
-    // Track automatic transitions (push completed -> next push) for slower animation
+    // Track automatic transitions for slower animation
     const [isAutoTransitioning, setIsAutoTransitioning] = useState(false)
-    // Flag to use slow animation during the actual motion (persists after delay)
+    // Flag to use slow animation during the actual motion
     const [useSlowMotion, setUseSlowMotion] = useState(false)
-    // Track which auto-transitions have already fired to prevent repeats
-    const handledTransitionsRef = useRef<Set<string>>(new Set())
+    // Track which push is showing the green completion fill animation
+    const [completionFillId, setCompletionFillId] = useState<string | null>(null)
     const prevActivePushIdRef = useRef<string | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
@@ -87,18 +85,9 @@ export function PushChainStrip({
         }
     }, [loadedPushes, loadPushTasks])
 
-    // Handle transition end cleanup
-    useEffect(() => {
-        if (isTransitioning) {
-            const timer = setTimeout(() => setIsTransitioning(false), 400)
-            return () => clearTimeout(timer)
-        }
-    }, [isTransitioning])
-
     // Clear slow motion after the animation completes
     useEffect(() => {
         if (useSlowMotion && !isAutoTransitioning) {
-            // Keep slow motion active during the actual width transition, then clear
             const timer = setTimeout(() => setUseSlowMotion(false), 1200)
             return () => clearTimeout(timer)
         }
@@ -108,31 +97,25 @@ export function PushChainStrip({
     useEffect(() => {
         const prevId = prevActivePushIdRef.current
         if (prevId && activePushId && prevId !== activePushId) {
-            // Create a unique key for this transition
-            const transitionKey = `${prevId}->${activePushId}`
+            // Only trigger auto-transition if user hasn't manually selected a different push
+            if (!userSelectedPushId || userSelectedPushId === prevId) {
+                // Start the green fill animation on the just-completed push
+                setCompletionFillId(prevId)
+                setIsAutoTransitioning(true)
+                setUseSlowMotion(true)
+                setUserSelectedPushId(null)
 
-            // Only trigger if we haven't already handled this specific transition
-            if (!handledTransitionsRef.current.has(transitionKey)) {
-                // Only trigger if user hasn't manually selected a DIFFERENT push
-                if (!userSelectedPushId || userSelectedPushId === prevId) {
-                    handledTransitionsRef.current.add(transitionKey)
-                    setIsAutoTransitioning(true)
-                    setUseSlowMotion(true) // Enable slow motion for the actual transition
-                    // Clear user selection so we follow the new active push
-                    setUserSelectedPushId(null)
+                // Preload new push tasks
+                ensureTasksLoaded(activePushId)
 
-                    // Preload the new push's tasks
-                    ensureTasksLoaded(activePushId)
+                // After green fill completes, transition to next push
+                const timer = setTimeout(() => {
+                    setIsAutoTransitioning(false)
+                    setCompletionFillId(null)
+                }, 900) // 900ms for green fill before sliding
 
-                    // After a delay, complete the transition with animation
-                    const timer = setTimeout(() => {
-                        setIsAutoTransitioning(false)
-                        setIsTransitioning(true)
-                    }, 800) // 800ms delay before switching - gives time to see the completed state
-
-                    prevActivePushIdRef.current = activePushId
-                    return () => clearTimeout(timer)
-                }
+                prevActivePushIdRef.current = activePushId
+                return () => clearTimeout(timer)
             }
         }
         prevActivePushIdRef.current = activePushId
@@ -150,12 +133,8 @@ export function PushChainStrip({
             }
         } else {
             // Switching to a different push - just switch, don't auto-open
-            setIsTransitioning(true)
             setUserSelectedPushId(push.id)
             ensureTasksLoaded(push.id)
-            // Ensure content stays closed or follows previous state?
-            // User said: "Clicking collapsed push just switches selection, doesn't auto-open content"
-            // So we don't call setIsContentOpen(true) here.
         }
     }, [expandedPushId, isLocked, isContentOpen, ensureTasksLoaded])
 
@@ -176,8 +155,8 @@ export function PushChainStrip({
                     const pushIsLocked = isLocked(push)
                     const isHovered = hoveredId === push.id
                     const percent = push.taskCount > 0 ? (push.completedCount / push.taskCount) * 100 : 0
-                    // Check if this push just completed (we're in auto-transition and this was the previous active)
-                    const justCompleted = isAutoTransitioning && push.id === prevActivePushIdRef.current
+                    // Check if this push is showing the completion fill animation
+                    const showingCompletionFill = completionFillId === push.id
 
                     return (
                         <div
@@ -191,8 +170,6 @@ export function PushChainStrip({
                                 pushIsComplete
                                     ? "bg-muted/40 border-border/50"
                                     : "bg-card border-border",
-                                // Green pulse for just-completed push
-                                justCompleted && "ring-2 ring-green-500/60 animate-pulse",
                                 isExpanded ? "min-w-0" : "shrink-0",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
@@ -219,6 +196,10 @@ export function PushChainStrip({
                             role={!isExpanded ? "button" : undefined}
                             tabIndex={!isExpanded && !pushIsLocked ? 0 : -1}
                         >
+                            {/* Green completion fill overlay - sweeps from left to right */}
+                            {showingCompletionFill && (
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-500/30 via-green-400/40 to-green-500/30 z-20 pointer-events-none animate-completion-fill" />
+                            )}
                             {/* COLLAPSED CONTENT */}
                             {!isExpanded && (
                                 <div className="flex items-stretch h-full w-full">
