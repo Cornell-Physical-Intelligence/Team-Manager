@@ -99,20 +99,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Forbidden: Only Admins can create Admin users' }, { status: 403 })
         }
 
+        const workspaceId = currentUser.workspaceId
+
         const user = await prisma.$transaction(async (tx) => {
             const created = await tx.user.create({
                 data: {
                     email: email.trim().toLowerCase(),
                     name: name.trim(),
                     role: userRole,
-                    workspaceId: currentUser.workspaceId
+                    workspaceId
                 }
             })
 
             await tx.workspaceMember.create({
                 data: {
                     userId: created.id,
-                    workspaceId: currentUser.workspaceId,
+                    workspaceId,
                     role: userRole,
                     name: created.name
                 }
