@@ -25,6 +25,7 @@ type TimelineBarProps = {
     isTouchingNext?: boolean
     getDateFromX?: (clientX: number) => Date
     otherPushesOnSameRow?: PushDraft[]
+    onDragChange?: (info: { date: Date } | null) => void
 }
 
 const ROW_HEIGHT = 48
@@ -48,7 +49,8 @@ export function TimelineBar({
     isTouchingPrevious = false,
     isTouchingNext = false,
     getDateFromX,
-    otherPushesOnSameRow = []
+    otherPushesOnSameRow = [],
+    onDragChange
 }: TimelineBarProps) {
     const barRef = useRef<HTMLDivElement>(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -104,8 +106,25 @@ export function TimelineBar({
         const percentPerPixel = 100 / rect.width
         const deltaPercent = e.movementX * percentPerPixel
 
-        setDragOffset(prev => ({ x: prev.x + deltaPercent }))
-    }, [isDragging, startPos])
+        setDragOffset(prev => {
+            const newOffset = prev.x + deltaPercent
+
+            // Calculate snapped date for the indicator
+            if (onDragChange) {
+                const daysDelta = Math.round((newOffset / 100) * (totalDuration / (1000 * 60 * 60 * 24)))
+                if (dragType === 'move' || dragType === 'resize-start') {
+                    const snappedDate = addDays(push.startDate, daysDelta)
+                    onDragChange({ date: snappedDate })
+                } else if (dragType === 'resize-end') {
+                    const currentEnd = push.endDate || addDays(push.startDate, 14)
+                    const snappedDate = addDays(currentEnd, daysDelta)
+                    onDragChange({ date: snappedDate })
+                }
+            }
+
+            return { x: newOffset }
+        })
+    }, [isDragging, startPos, onDragChange, dragType, totalDuration, push.startDate, push.endDate])
 
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
         if (!isDragging) return
@@ -165,7 +184,10 @@ export function TimelineBar({
         setDragType(null)
         setDragOffset({ x: 0 })
         setHasMoved(false)
-    }, [isDragging, hasMoved, dragOffset, dragType, push, pushEnd, totalDuration, onUpdate, onClick])
+
+        // Clear drag indicator
+        onDragChange?.(null)
+    }, [isDragging, hasMoved, dragOffset, dragType, push, pushEnd, totalDuration, onUpdate, onClick, onDragChange])
 
     // Chain drag handlers
     const handleChainPointerDown = useCallback((e: React.PointerEvent) => {
@@ -215,51 +237,59 @@ export function TimelineBar({
     let visualWidth = widthPercent
 
     if (isDragging && hasMoved && dragOffset.x !== 0) {
+        // Calculate snapped days delta for visual positioning
+        const daysDelta = Math.round((dragOffset.x / 100) * (totalDuration / (1000 * 60 * 60 * 24)))
+
         if (dragType === 'move') {
-            const nextLeft = leftPercent + dragOffset.x
+            // Snap to day boundary
+            const snappedStart = addDays(push.startDate, daysDelta)
+            const snappedLeft = getPositionPercent(snappedStart)
             const currentWidth = widthPercent
 
             // Check collisions for move
-            let clampedLeft = nextLeft
+            let clampedLeft = snappedLeft
             otherPushesOnSameRow.forEach(other => {
                 const otherEnd = getPositionPercent(other.endDate || addDays(other.startDate, 14))
                 const otherStart = getPositionPercent(other.startDate)
 
                 // If moving left and hitting something
-                if (dragOffset.x < 0 && nextLeft < otherEnd && nextLeft > otherStart - currentWidth) {
+                if (daysDelta < 0 && snappedLeft < otherEnd && snappedLeft > otherStart - currentWidth) {
                     clampedLeft = Math.max(clampedLeft, otherEnd)
                 }
                 // If moving right and hitting something
-                if (dragOffset.x > 0 && nextLeft + currentWidth > otherStart && nextLeft < otherEnd) {
+                if (daysDelta > 0 && snappedLeft + currentWidth > otherStart && snappedLeft < otherEnd) {
                     clampedLeft = Math.min(clampedLeft, otherStart - currentWidth)
                 }
             })
 
             visualLeft = clampedLeft
         } else if (dragType === 'resize-start') {
-            const nextLeft = leftPercent + dragOffset.x
-            const nextWidth = widthPercent - dragOffset.x
+            // Snap to day boundary
+            const snappedStart = addDays(push.startDate, daysDelta)
+            const snappedLeft = getPositionPercent(snappedStart)
 
             // Check collisions for resize-start
-            let clampedLeft = nextLeft
+            let clampedLeft = snappedLeft
             otherPushesOnSameRow.forEach(other => {
                 const otherEnd = getPositionPercent(other.endDate || addDays(other.startDate, 14))
-                if (nextLeft < otherEnd && leftPercent >= otherEnd) {
+                if (snappedLeft < otherEnd && leftPercent >= otherEnd) {
                     clampedLeft = Math.max(clampedLeft, otherEnd)
                 }
             })
 
             visualLeft = clampedLeft
-            visualWidth = widthPercent - (visualLeft - leftPercent)
+            visualWidth = (leftPercent + widthPercent) - visualLeft
         } else if (dragType === 'resize-end') {
-            const nextWidth = widthPercent + dragOffset.x
-            const nextEnd = leftPercent + nextWidth
+            // Snap to day boundary
+            const currentEnd = push.endDate || addDays(push.startDate, 14)
+            const snappedEnd = addDays(currentEnd, daysDelta)
+            const snappedEndPercent = getPositionPercent(snappedEnd)
 
             // Check collisions for resize-end
-            let clampedEnd = nextEnd
+            let clampedEnd = snappedEndPercent
             otherPushesOnSameRow.forEach(other => {
                 const otherStart = getPositionPercent(other.startDate)
-                if (nextEnd > otherStart && (leftPercent + widthPercent) <= otherStart) {
+                if (snappedEndPercent > otherStart && (leftPercent + widthPercent) <= otherStart) {
                     clampedEnd = Math.min(clampedEnd, otherStart)
                 }
             })
