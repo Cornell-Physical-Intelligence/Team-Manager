@@ -17,7 +17,30 @@ interface Particle {
 }
 
 const REVIEW_COLORS = ['#8B5CF6', '#6366F1', '#3B82F6', '#06B6D4', '#A855F7']
-const DONE_COLORS = ['#F59E0B', '#EAB308', '#84CC16', '#22C55E', '#10B981']
+const DONE_COLORS = ['#FFFFFF', '#22C55E', '#86EFAC'] // default done colors (white + green)
+
+// Generate colors based on project color: white, project color, and complementary
+function generateColors(projectColor?: string): string[] {
+    const white = '#FFFFFF'
+
+    if (!projectColor) {
+        return [white, '#22C55E', '#86EFAC'] // default green palette
+    }
+
+    // Parse hex color to RGB
+    const hex = projectColor.replace('#', '')
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+
+    // Create a lighter tint of the project color
+    const tintR = Math.min(255, r + Math.round((255 - r) * 0.4))
+    const tintG = Math.min(255, g + Math.round((255 - g) * 0.4))
+    const tintB = Math.min(255, b + Math.round((255 - b) * 0.4))
+    const tint = `#${tintR.toString(16).padStart(2, '0')}${tintG.toString(16).padStart(2, '0')}${tintB.toString(16).padStart(2, '0')}`
+
+    return [white, projectColor, tint]
+}
 
 export function useConfetti() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -25,7 +48,7 @@ export function useConfetti() {
     const animationFrame = useRef<number | null>(null)
 
     useEffect(() => {
-        // Create canvas on mount - z-index 40 puts it behind drag overlay but above content
+        // Create canvas on mount - z-index 1 puts it behind task cards
         const canvas = document.createElement('canvas')
         canvas.style.cssText = `
             position: fixed;
@@ -34,7 +57,7 @@ export function useConfetti() {
             width: 100vw;
             height: 100vh;
             pointer-events: none;
-            z-index: 40;
+            z-index: 1;
         `
         canvas.width = window.innerWidth
         canvas.height = window.innerHeight
@@ -97,9 +120,9 @@ export function useConfetti() {
         }
     }, [])
 
-    const triggerConfetti = useCallback((type: ConfettiType, position?: { x: number, y: number }) => {
-        const colors = type === 'review' ? REVIEW_COLORS : DONE_COLORS
-        const particleCount = type === 'done' ? 100 : 50
+    const triggerConfetti = useCallback((type: ConfettiType, position?: { x: number, y: number }, projectColor?: string) => {
+        const colors = type === 'review' ? REVIEW_COLORS : generateColors(projectColor)
+        const particleCount = type === 'done' ? 60 : 40
         const canvas = canvasRef.current
         if (!canvas) return
 
@@ -110,10 +133,10 @@ export function useConfetti() {
         for (let i = 0; i < particleCount; i++) {
             // Burst in all directions from center (like exploding from behind)
             const angle = Math.random() * Math.PI * 2 // full 360 degrees
-            const velocity = 8 + Math.random() * 12 // faster initial burst
+            const velocity = 3 + Math.random() * 4 // gentler burst
 
             // Add slight offset so particles start slightly outside center
-            const offsetDistance = 5 + Math.random() * 10
+            const offsetDistance = 8 + Math.random() * 15
             const startX = originX + Math.cos(angle) * offsetDistance
             const startY = originY + Math.sin(angle) * offsetDistance
 
@@ -121,12 +144,12 @@ export function useConfetti() {
                 x: startX,
                 y: startY,
                 vx: Math.cos(angle) * velocity,
-                vy: Math.sin(angle) * velocity - 3, // slight upward bias
+                vy: Math.sin(angle) * velocity - 1, // slight upward bias
                 color: colors[Math.floor(Math.random() * colors.length)],
-                size: 6 + Math.random() * 5,
+                size: 5 + Math.random() * 4,
                 rotation: Math.random() * Math.PI * 2,
-                rotationSpeed: (Math.random() - 0.5) * 0.4,
-                life: 0.8 + Math.random() * 0.6
+                rotationSpeed: (Math.random() - 0.5) * 0.3,
+                life: 0.9 + Math.random() * 0.5
             })
         }
 

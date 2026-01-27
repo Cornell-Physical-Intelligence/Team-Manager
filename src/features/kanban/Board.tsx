@@ -576,7 +576,7 @@ export function Board({
 
         // Trigger confetti immediately on drop into Done (if requirements met)
         if (endColName === 'Done' && startColName !== 'Done' && meetsAttachmentRequirement && dropCenter) {
-            triggerConfetti('done', dropCenter)
+            triggerConfetti('done', dropCenter, activeTask.push?.color)
         }
 
         // Handle special dialogs
