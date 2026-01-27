@@ -187,7 +187,8 @@ export function PushChainStrip({
                             key={push.id}
                             className={cn(
                                 "relative rounded-lg border shadow-sm overflow-hidden",
-                                "transition-[width,background-color,border-color] ease-out",
+                                // Only transition width - background changes instantly
+                                "transition-[width] ease-out",
                                 isExpanded ? "min-w-0" : "shrink-0",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
@@ -196,7 +197,7 @@ export function PushChainStrip({
                             style={{
                                 width: isExpanded ? expandedWidth : collapsedWidth,
                                 transitionDuration: `${transitionDuration}ms`,
-                                backgroundColor: showGreenBg ? 'rgb(34 197 94 / 0.9)' : undefined,
+                                backgroundColor: showGreenBg ? 'rgb(34 197 94)' : undefined,
                                 borderColor: showGreenBg ? 'rgb(34 197 94 / 0.5)' : undefined,
                             }}
                             onMouseEnter={() => setHoveredId(push.id)}
@@ -209,27 +210,32 @@ export function PushChainStrip({
                             role={!isExpanded ? "button" : undefined}
                             tabIndex={!isExpanded && !pushIsLocked ? 0 : -1}
                         >
-                            {/* Water fill animation overlay */}
-                            {isFillingAnimation && (
+                            {/* Water fill animation overlay - keep visible during both filling and transitioning while expanded */}
+                            {(isFillingAnimation || (isTransitioning && isExpanded)) && (
                                 <div className="absolute inset-0 z-20 overflow-hidden rounded-lg">
                                     <div
-                                        className="absolute bottom-0 left-0 right-0 bg-green-500/90 animate-water-fill"
+                                        className={cn(
+                                            "absolute bottom-0 left-0 right-0 bg-green-500",
+                                            isFillingAnimation ? "animate-water-fill" : "h-full"
+                                        )}
                                         style={{
                                             willChange: 'height',
                                         }}
                                     >
-                                        {/* Wave effect at the top edge */}
-                                        <svg
-                                            className="absolute -top-2 left-0 w-[200%] h-3 animate-wave"
-                                            viewBox="0 0 200 12"
-                                            preserveAspectRatio="none"
-                                        >
-                                            <path
-                                                d="M0 6 Q25 0, 50 6 T100 6 T150 6 T200 6 V12 H0 Z"
-                                                fill="currentColor"
-                                                className="text-green-500/90"
-                                            />
-                                        </svg>
+                                        {/* Wave effect at the top edge - only during filling */}
+                                        {isFillingAnimation && (
+                                            <svg
+                                                className="absolute -top-2 left-0 w-[200%] h-3 animate-wave"
+                                                viewBox="0 0 200 12"
+                                                preserveAspectRatio="none"
+                                            >
+                                                <path
+                                                    d="M0 6 Q25 0, 50 6 T100 6 T150 6 T200 6 V12 H0 Z"
+                                                    fill="currentColor"
+                                                    className="text-green-500"
+                                                />
+                                            </svg>
+                                        )}
                                     </div>
                                 </div>
                             )}
