@@ -48,7 +48,7 @@ export function useConfetti() {
     const animationFrame = useRef<number | null>(null)
 
     useEffect(() => {
-        // Create canvas on mount - z-index 1 puts it behind task cards
+        // Create canvas on mount
         const canvas = document.createElement('canvas')
         canvas.style.cssText = `
             position: fixed;
@@ -57,7 +57,7 @@ export function useConfetti() {
             width: 100vw;
             height: 100vh;
             pointer-events: none;
-            z-index: 1;
+            z-index: 50;
         `
         canvas.width = window.innerWidth
         canvas.height = window.innerHeight
@@ -146,7 +146,7 @@ export function useConfetti() {
                 vx: Math.cos(angle) * velocity,
                 vy: Math.sin(angle) * velocity - 1, // slight upward bias
                 color: colors[Math.floor(Math.random() * colors.length)],
-                size: 5 + Math.random() * 4,
+                size: 10 + Math.random() * 8, // bigger particles
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.3,
                 life: 0.9 + Math.random() * 0.5

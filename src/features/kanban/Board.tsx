@@ -83,6 +83,7 @@ type BoardProps = {
         columns: ColumnData[]
     }
     projectId: string
+    projectColor?: string
     users: { id: string; name: string; isProjectMember?: boolean }[]
     pushes?: PushType[]
     highlightTaskId?: string | null
@@ -95,6 +96,7 @@ type BoardProps = {
 export function Board({
     board,
     projectId,
+    projectColor,
     users,
     pushes = [],
     highlightTaskId,
@@ -574,9 +576,12 @@ export function Board({
         const meetsAttachmentRequirement = !activeTask.requireAttachment ||
             (activeTask.attachments && activeTask.attachments.length > 0)
 
-        // Trigger confetti immediately on drop into Done (if requirements met)
+        // Trigger confetti on drop into Done (if requirements met)
+        // Small delay so it appears after DragOverlay is gone
         if (endColName === 'Done' && startColName !== 'Done' && meetsAttachmentRequirement && dropCenter) {
-            triggerConfetti('done', dropCenter, activeTask.push?.color)
+            setTimeout(() => {
+                triggerConfetti('done', dropCenter, projectColor)
+            }, 50)
         }
 
         // Handle special dialogs

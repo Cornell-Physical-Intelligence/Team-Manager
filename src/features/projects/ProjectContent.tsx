@@ -259,6 +259,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                         <Board
                             board={board}
                             projectId={project.id}
+                            projectColor={projectColor}
                             users={users}
                             pushes={pushes}
                             highlightTaskId={highlightTaskId}
