@@ -71,6 +71,9 @@ export function TimelineEditor({
     const [editStartDate, setEditStartDate] = useState("")
     const [editEndDate, setEditEndDate] = useState("")
 
+    // Hover date indicator state
+    const [hoverInfo, setHoverInfo] = useState<{ x: number; date: Date } | null>(null)
+
     // Calculate dynamic view range based on pushes with extra space
     const calculatedViewRange = useMemo(() => {
         const today = startOfDay(new Date())
@@ -241,6 +244,14 @@ export function TimelineEditor({
     }, [readOnly, getDateFromClientX])
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
+        // Always update hover info for date indicator
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect()
+            const relativeX = e.clientX - rect.left
+            const date = getDateFromClientX(e.clientX)
+            setHoverInfo({ x: relativeX, date })
+        }
+
         if (!isCreating || !createStart) return
 
         const distanceDragged = Math.abs(e.clientX - createStart.x)
@@ -264,6 +275,10 @@ export function TimelineEditor({
             }
         }
     }, [isCreating, createStart, getDateFromClientX, pushes, rowAssignments, numRows])
+
+    const handleMouseLeave = useCallback(() => {
+        setHoverInfo(null)
+    }, [])
 
     const handleMouseUp = useCallback(() => {
         if (!isCreating) return
@@ -432,12 +447,45 @@ export function TimelineEditor({
                     onPointerUp={handleMouseUp}
                     onPointerCancel={handleMouseUp}
                     onLostPointerCapture={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
                 >
                     <TimelineGrid
                         startDate={viewRange.start}
                         endDate={viewRange.end}
                         height={gridHeight}
                     />
+
+                    {/* Hover date indicator */}
+                    {hoverInfo && !isCreating && (
+                        <div
+                            className="absolute pointer-events-none z-20"
+                            style={{
+                                left: `${hoverInfo.x}px`,
+                                top: 0,
+                                height: '100%'
+                            }}
+                        >
+                            {/* Vertical line */}
+                            <div
+                                className="absolute w-px bg-primary/50"
+                                style={{
+                                    left: 0,
+                                    top: `${HEADER_HEIGHT}px`,
+                                    height: `${gridHeight}px`
+                                }}
+                            />
+                            {/* Date label */}
+                            <div
+                                className="absolute -translate-x-1/2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground whitespace-nowrap"
+                                style={{
+                                    left: 0,
+                                    top: `${HEADER_HEIGHT - 20}px`
+                                }}
+                            >
+                                {hoverInfo.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </div>
+                        </div>
+                    )}
 
                     <div
                         className="absolute left-0 right-0"

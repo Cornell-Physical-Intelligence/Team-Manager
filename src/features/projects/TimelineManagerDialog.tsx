@@ -141,7 +141,12 @@ export function TimelineManagerDialog({
             <DialogContent showCloseButton={false} className="sm:max-w-3xl h-[85vh] flex flex-col p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-2">
                     <div className="flex items-center justify-between">
-                        <DialogTitle>Project Timeline</DialogTitle>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            <DialogTitle className="text-sm font-normal text-muted-foreground">
+                                Drag to create projects. Click to edit. Hover for + to chain.
+                            </DialogTitle>
+                        </div>
                         <DialogDescription className="sr-only">Visual editor for managing project timelines.</DialogDescription>
                         <div className="flex items-center gap-2 pr-8">
                             <Button
@@ -170,12 +175,6 @@ export function TimelineManagerDialog({
 
                 <div className="flex-1 overflow-auto p-6 pt-0">
                     <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                            <span>
-                                Drag to create projects. Click to edit. Hover for + to chain.
-                            </span>
-                        </div>
 
                         <TimelineEditor
                             pushes={pushes}
