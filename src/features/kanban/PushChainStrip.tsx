@@ -213,13 +213,18 @@ export function PushChainStrip({
                         isTransitioning
                     )
 
+                    // During completion animation, don't transition bg (instant green)
+                    // During manual clicks, transition bg smoothly
+                    const shouldTransitionBg = !isTransitioning && !isFillingAnimation
+
                     return (
                         <div
                             key={push.id}
                             className={cn(
                                 "relative rounded-lg border shadow-sm overflow-hidden",
-                                // Transition width and background color smoothly
-                                "transition-[width,background-color,border-color] ease-out",
+                                "transition-[width] ease-out",
+                                // Only add bg transition for manual clicks, not completion animation
+                                shouldTransitionBg && "transition-[width,background-color,border-color]",
                                 isExpanded ? "min-w-0" : "shrink-0",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
@@ -228,9 +233,8 @@ export function PushChainStrip({
                             style={{
                                 width: isExpanded ? expandedWidth : collapsedWidth,
                                 transitionDuration: `${transitionDuration}ms`,
-                                // Green background only when collapsed and complete (not during expansion)
-                                backgroundColor: (!isExpanded && pushIsComplete && !isFillingAnimation) ? 'rgb(34 197 94)' : undefined,
-                                borderColor: (!isExpanded && pushIsComplete && !isFillingAnimation) ? 'rgb(34 197 94 / 0.5)' : undefined,
+                                backgroundColor: showGreenBg ? 'rgb(34 197 94)' : undefined,
+                                borderColor: showGreenBg ? 'rgb(34 197 94 / 0.5)' : undefined,
                             }}
                             onMouseEnter={() => setHoveredId(push.id)}
                             onMouseLeave={() => setHoveredId(null)}
