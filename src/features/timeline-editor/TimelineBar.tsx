@@ -25,7 +25,8 @@ type TimelineBarProps = {
     isTouchingNext?: boolean
     getDateFromX?: (clientX: number) => Date
     otherPushesOnSameRow?: PushDraft[]
-    onDragChange?: (info: { date: Date } | null) => void
+    onDragChange?: (info: { date: Date; row: number; isEnd?: boolean } | null) => void
+    onBreakChain?: (pushId: string) => void
 }
 
 const ROW_HEIGHT = 48
@@ -50,14 +51,18 @@ export function TimelineBar({
     isTouchingNext = false,
     getDateFromX,
     otherPushesOnSameRow = [],
-    onDragChange
+    onDragChange,
+    onBreakChain
 }: TimelineBarProps) {
     const barRef = useRef<HTMLDivElement>(null)
     const [isDragging, setIsDragging] = useState(false)
     const [dragType, setDragType] = useState<DragType>(null)
-    const [dragOffset, setDragOffset] = useState({ x: 0 })
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
     const [startPos, setStartPos] = useState({ x: 0, y: 0 })
     const [hasMoved, setHasMoved] = useState(false)
+    const [showBreakIndicator, setShowBreakIndicator] = useState(false)
+
+    const BREAK_CHAIN_THRESHOLD = ROW_HEIGHT * 0.6 // 60% of row height to break
 
     // Chain drag state
     const [isChainDragging, setIsChainDragging] = useState(false)
@@ -83,9 +88,10 @@ export function TimelineBar({
 
         setIsDragging(true)
         setDragType(type)
-        setDragOffset({ x: 0 })
+        setDragOffset({ x: 0, y: 0 })
         setStartPos({ x: e.clientX, y: e.clientY })
         setHasMoved(false)
+        setShowBreakIndicator(false)
         onSelect(push.tempId)
     }, [readOnly, push.tempId, onSelect])
 
@@ -106,6 +112,16 @@ export function TimelineBar({
         const percentPerPixel = 100 / rect.width
         const deltaPercent = e.movementX * percentPerPixel
 
+        // Track vertical movement for breaking chain
+        const verticalOffset = e.clientY - startPos.y
+
+        // Show break indicator if dragging down enough and this push has a dependency
+        if (isDependent && dragType === 'move' && verticalOffset > BREAK_CHAIN_THRESHOLD) {
+            setShowBreakIndicator(true)
+        } else {
+            setShowBreakIndicator(false)
+        }
+
         setDragOffset(prev => {
             const newOffset = prev.x + deltaPercent
 
@@ -114,23 +130,35 @@ export function TimelineBar({
                 const daysDelta = Math.round((newOffset / 100) * (totalDuration / (1000 * 60 * 60 * 24)))
                 if (dragType === 'move' || dragType === 'resize-start') {
                     const snappedDate = addDays(push.startDate, daysDelta)
-                    onDragChange({ date: snappedDate })
+                    onDragChange({ date: snappedDate, row: rowIndex, isEnd: false })
                 } else if (dragType === 'resize-end') {
                     const currentEnd = push.endDate || addDays(push.startDate, 14)
                     const snappedDate = addDays(currentEnd, daysDelta)
-                    onDragChange({ date: snappedDate })
+                    onDragChange({ date: snappedDate, row: rowIndex, isEnd: true })
                 }
             }
 
-            return { x: newOffset }
+            return { x: newOffset, y: verticalOffset }
         })
-    }, [isDragging, startPos, onDragChange, dragType, totalDuration, push.startDate, push.endDate])
+    }, [isDragging, startPos, onDragChange, dragType, totalDuration, push.startDate, push.endDate, rowIndex, isDependent, BREAK_CHAIN_THRESHOLD])
 
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
         if (!isDragging) return
 
         const target = e.currentTarget as HTMLElement
         target.releasePointerCapture(e.pointerId)
+
+        // Check if we should break the chain
+        if (showBreakIndicator && onBreakChain) {
+            onBreakChain(push.tempId)
+            setIsDragging(false)
+            setDragType(null)
+            setDragOffset({ x: 0, y: 0 })
+            setHasMoved(false)
+            setShowBreakIndicator(false)
+            onDragChange?.(null)
+            return
+        }
 
         if (hasMoved) {
             const daysDelta = Math.round((dragOffset.x / 100) * (totalDuration / (1000 * 60 * 60 * 24)))
@@ -182,12 +210,13 @@ export function TimelineBar({
 
         setIsDragging(false)
         setDragType(null)
-        setDragOffset({ x: 0 })
+        setDragOffset({ x: 0, y: 0 })
         setHasMoved(false)
+        setShowBreakIndicator(false)
 
         // Clear drag indicator
         onDragChange?.(null)
-    }, [isDragging, hasMoved, dragOffset, dragType, push, pushEnd, totalDuration, onUpdate, onClick, onDragChange])
+    }, [isDragging, hasMoved, dragOffset, dragType, push, pushEnd, totalDuration, onUpdate, onClick, onDragChange, showBreakIndicator, onBreakChain])
 
     // Chain drag handlers
     const handleChainPointerDown = useCallback((e: React.PointerEvent) => {
@@ -322,7 +351,9 @@ export function TimelineBar({
                     leftEdgeRounded ? "rounded-l-lg" : "rounded-l-none",
                     rightEdgeRounded ? "rounded-r-lg" : "rounded-r-none",
                     // Use standard card styling:
-                    push.status === 'Completed' ? "bg-muted/40 border border-border/50" : "bg-card border border-border"
+                    push.status === 'Completed' ? "bg-muted/40 border border-border/50" : "bg-card border border-border",
+                    // Break chain indicator
+                    showBreakIndicator && "ring-2 ring-amber-500 ring-offset-1 border-amber-500"
                 )}
                 style={{
                     left: `${visualLeft}%`,
@@ -336,7 +367,7 @@ export function TimelineBar({
                 onPointerCancel={handlePointerUp}
             >
                 {/* Subtle color tint for active pushes - slightly more vibrant */}
-                {push.status !== 'Completed' && (
+                {push.status !== 'Completed' && !showBreakIndicator && (
                     <div
                         className={cn(
                             "absolute inset-0 opacity-20 mix-blend-multiply dark:mix-blend-screen pointer-events-none",
@@ -347,6 +378,19 @@ export function TimelineBar({
                             backgroundColor: push.color,
                         }}
                     />
+                )}
+
+                {/* Break chain overlay */}
+                {showBreakIndicator && (
+                    <div className={cn(
+                        "absolute inset-0 flex items-center justify-center bg-amber-500/20 pointer-events-none z-30",
+                        leftEdgeRounded && "rounded-l-lg",
+                        rightEdgeRounded && "rounded-r-lg"
+                    )}>
+                        <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                            Release to unlink
+                        </span>
+                    </div>
                 )}
 
                 {/* Left resize handle */}

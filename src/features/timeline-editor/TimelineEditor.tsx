@@ -74,8 +74,8 @@ export function TimelineEditor({
     // Hover date indicator state
     const [hoverInfo, setHoverInfo] = useState<{ x: number; date: Date } | null>(null)
 
-    // Bar drag indicator state (shows start date when dragging a bar)
-    const [barDragInfo, setBarDragInfo] = useState<{ date: Date } | null>(null)
+    // Bar drag indicator state (shows date tag next to bar when dragging)
+    const [barDragInfo, setBarDragInfo] = useState<{ date: Date; row: number; isEnd?: boolean } | null>(null)
 
     // Calculate dynamic view range based on pushes with extra space
     const calculatedViewRange = useMemo(() => {
@@ -412,6 +412,27 @@ export function TimelineEditor({
         setEditingPush({ ...editingPush, dependsOn: null })
     }, [editingPush, pushes, onPushesChange])
 
+    // Handle breaking a push out of its chain by dragging down
+    // Any downstream pushes will now depend on this push's former dependency
+    const handleBreakChain = useCallback((pushId: string) => {
+        const push = pushes.find(p => p.tempId === pushId)
+        if (!push || !push.dependsOn) return
+
+        const formerDependency = push.dependsOn
+
+        onPushesChange(pushes.map(p => {
+            // Remove dependency from the dragged push
+            if (p.tempId === pushId) {
+                return { ...p, dependsOn: null }
+            }
+            // Update any push that depends on the dragged push to depend on the former dependency
+            if (p.dependsOn === pushId) {
+                return { ...p, dependsOn: formerDependency }
+            }
+            return p
+        }))
+    }, [pushes, onPushesChange])
+
     const gridHeight = Math.max((numRows + 1) * ROW_HEIGHT, MIN_ROWS * ROW_HEIGHT)
     const totalHeight = HEADER_HEIGHT + gridHeight
 
@@ -458,19 +479,17 @@ export function TimelineEditor({
                         height={gridHeight}
                     />
 
-                    {/* Hover/Drag date indicator */}
-                    {((hoverInfo && !isCreating && !barDragInfo) || barDragInfo) && (
+                    {/* Hover date indicator (only when not dragging a bar) */}
+                    {hoverInfo && !isCreating && !barDragInfo && (
                         <div
                             className="absolute pointer-events-none z-20"
                             style={{
-                                left: barDragInfo
-                                    ? `${getPositionPercent(barDragInfo.date)}%`
-                                    : `${hoverInfo!.x}px`,
-                                top: 0,
-                                height: '100%'
+                                left: `${hoverInfo.x}px`,
+                                top: `${HEADER_HEIGHT}px`,
+                                height: `${gridHeight}px`
                             }}
                         >
-                            {/* Vertical line - goes all the way down */}
+                            {/* Vertical line - starts below header */}
                             <div
                                 className="absolute w-px bg-primary/50"
                                 style={{
@@ -479,15 +498,15 @@ export function TimelineEditor({
                                     bottom: 0
                                 }}
                             />
-                            {/* Date label */}
+                            {/* Date label - positioned at top of line */}
                             <div
                                 className="absolute -translate-x-1/2 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground whitespace-nowrap"
                                 style={{
                                     left: 0,
-                                    top: `${HEADER_HEIGHT - 20}px`
+                                    top: '-18px'
                                 }}
                             >
-                                {(barDragInfo?.date || hoverInfo?.date)?.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                {hoverInfo.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </div>
                         </div>
                     )}
@@ -541,12 +560,29 @@ export function TimelineEditor({
                                 isTouchingNext={pushInfo[push.tempId]?.isTouchingNext || false}
                                 getDateFromX={getDateFromClientX}
                                 onDragChange={setBarDragInfo}
+                                onBreakChain={handleBreakChain}
                                 otherPushesOnSameRow={pushes.filter(p =>
                                     p.tempId !== push.tempId &&
                                     rowAssignments[p.tempId] === rowAssignments[push.tempId]
                                 )}
                             />
                         ))}
+
+                        {/* Date tag shown next to bar when dragging */}
+                        {barDragInfo && (
+                            <div
+                                className="absolute pointer-events-none z-50"
+                                style={{
+                                    left: `${getPositionPercent(barDragInfo.date)}%`,
+                                    top: `${barDragInfo.row * ROW_HEIGHT + 6}px`,
+                                    transform: barDragInfo.isEnd ? 'translateX(4px)' : 'translateX(-100%) translateX(-4px)'
+                                }}
+                            >
+                                <div className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground whitespace-nowrap shadow-md">
+                                    {barDragInfo.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {pushes.length === 0 && !isCreating && (
