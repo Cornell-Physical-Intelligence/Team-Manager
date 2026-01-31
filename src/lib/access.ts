@@ -62,14 +62,7 @@ export async function isUserInWorkspace(userId: string, workspaceId: string) {
         select: { userId: true }
     })
 
-    if (membership) return true
-
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { workspaceId: true }
-    })
-
-    return user?.workspaceId === workspaceId
+    return Boolean(membership)
 }
 
 export async function getWorkspaceUserIds(userIds: string[], workspaceId: string) {
@@ -84,19 +77,6 @@ export async function getWorkspaceUserIds(userIds: string[], workspaceId: string
     })
 
     const allowedIds = new Set(members.map((member) => member.userId))
-
-    if (allowedIds.size === uniqueIds.length) {
-        return uniqueIds
-    }
-
-    const users = await prisma.user.findMany({
-        where: { id: { in: uniqueIds }, workspaceId },
-        select: { id: true }
-    })
-
-    for (const user of users) {
-        allowedIds.add(user.id)
-    }
 
     return Array.from(allowedIds)
 }

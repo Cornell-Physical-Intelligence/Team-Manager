@@ -18,34 +18,55 @@ export async function GET(request: Request) {
         const page = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : null
         const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10) || 50)) : null
 
-        const where: Record<string, unknown> = {
+        const where = {
             workspaceId: currentUser.workspaceId
         }
 
         // If role=leads, return only Admin and Team Lead users
         if (role === 'leads') {
-            where.role = { in: ['Admin', 'Team Lead'] }
-
-            const users = await prisma.user.findMany({
-                where,
-                select: { id: true, name: true, role: true },
+            const memberships = await prisma.workspaceMember.findMany({
+                where: {
+                    ...where,
+                    role: { in: ['Admin', 'Team Lead'] }
+                },
+                select: {
+                    userId: true,
+                    role: true,
+                    name: true,
+                    user: { select: { name: true } }
+                },
                 orderBy: { name: 'asc' },
                 ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {})
             })
+
+            const users = memberships.map((membership) => ({
+                id: membership.userId,
+                name: membership.name || membership.user.name,
+                role: membership.role
+            }))
+
             return NextResponse.json(users)
         }
 
         // Build query with optional pagination
-        const [users, total] = await Promise.all([
-            prisma.user.findMany({
+        const [memberships, total] = await Promise.all([
+            prisma.workspaceMember.findMany({
                 where,
-                include: { subteams: true },
+                include: {
+                    user: { include: { subteams: true } }
+                },
                 orderBy: { name: 'asc' },
                 ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {})
             }),
             // Only count if paginating
-            page && limit ? prisma.user.count({ where }) : Promise.resolve(null)
+            page && limit ? prisma.workspaceMember.count({ where }) : Promise.resolve(null)
         ])
+
+        const users = memberships.map((membership) => ({
+            ...membership.user,
+            name: membership.name || membership.user.name,
+            role: membership.role
+        }))
 
         // Return paginated response if pagination params provided
         if (page && limit && total !== null) {

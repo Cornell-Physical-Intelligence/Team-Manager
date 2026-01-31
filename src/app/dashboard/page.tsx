@@ -102,10 +102,14 @@ export default async function DashboardPage() {
     const fetchTeamStats = async () => {
         if (!isLeadership) return null
 
-        const [users, tasks] = await Promise.all([
-            prisma.user.findMany({
+        const [memberships, tasks] = await Promise.all([
+            prisma.workspaceMember.findMany({
                 where: { workspaceId: dbUser.workspaceId },
-                select: { id: true, name: true, avatar: true }
+                select: {
+                    userId: true,
+                    name: true,
+                    user: { select: { name: true, avatar: true } }
+                }
             }),
             prisma.task.findMany({
                 where: { column: { board: { project: { workspaceId: dbUser.workspaceId } } } },
@@ -125,6 +129,12 @@ export default async function DashboardPage() {
                 }
             })
         ])
+
+        const users = memberships.map((member) => ({
+            id: member.userId,
+            name: member.name || member.user.name,
+            avatar: member.user.avatar
+        }))
 
         const stats = users.map(u => {
             const userTasks = tasks.filter(t =>
@@ -179,11 +189,16 @@ export default async function DashboardPage() {
 
         const workspaceId = dbUser.workspaceId
 
-        const [config, users, tasks] = await Promise.all([
+        const [config, memberships, tasks] = await Promise.all([
             getWorkloadConfig(workspaceId),
-            prisma.user.findMany({
+            prisma.workspaceMember.findMany({
                 where: { workspaceId: dbUser.workspaceId },
-                select: { id: true, name: true, avatar: true, role: true }
+                select: {
+                    userId: true,
+                    name: true,
+                    role: true,
+                    user: { select: { name: true, avatar: true } }
+                }
             }),
             prisma.task.findMany({
                 where: {
@@ -210,6 +225,13 @@ export default async function DashboardPage() {
                 }
             })
         ])
+
+        const users = memberships.map((member) => ({
+            id: member.userId,
+            name: member.name || member.user.name,
+            avatar: member.user.avatar,
+            role: member.role
+        }))
 
         const now = new Date()
         const workloadTasks = buildWorkloadTasks(tasks, now, config)

@@ -174,24 +174,24 @@ export async function POST(
             const mentionNames = mentions.map((m: string) => m.substring(1).toLowerCase())
 
             // Find users in the same workspace whose name contains any of the mentioned names
-            const mentionedUsers = await prisma.user.findMany({
+            const mentionedMembers = await prisma.workspaceMember.findMany({
                 where: {
                     workspaceId: user.workspaceId,
-                    id: { not: dbUser.id }, // Don't notify the commenter
+                    userId: { not: dbUser.id }, // Don't notify the commenter
                     OR: mentionNames.map((name: string) => ({
                         name: { contains: name, mode: 'insensitive' as const }
                     }))
                 },
-                select: { id: true, name: true }
+                select: { userId: true, name: true }
             })
 
             // Create notifications for mentioned users
-            if (mentionedUsers.length > 0) {
+            if (mentionedMembers.length > 0) {
                 const projectId = task.column?.board?.projectId
                 await prisma.notification.createMany({
-                    data: mentionedUsers.map(mentionedUser => ({
+                    data: mentionedMembers.map(mentionedUser => ({
                         workspaceId: user.workspaceId!,
-                        userId: mentionedUser.id,
+                        userId: mentionedUser.userId,
                         type: 'mention',
                         title: 'You were mentioned',
                         message: `${dbUser.name} mentioned you in a comment on "${task.title}"`,
@@ -296,4 +296,3 @@ export async function DELETE(
         return NextResponse.json({ error: 'Failed to delete comment' }, { status: 500 })
     }
 }
-

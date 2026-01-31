@@ -140,20 +140,20 @@ export async function POST(
             }
 
             // Notify admins in the workspace
-            const admins = await prisma.user.findMany({
+            const admins = await prisma.workspaceMember.findMany({
                 where: {
                     workspaceId,
                     role: 'Admin',
-                    id: { notIn: [user.id, project?.leadId || ''].filter(Boolean) }
+                    userId: { notIn: [user.id, project?.leadId || ''].filter(Boolean) }
                 },
-                select: { id: true }
+                select: { userId: true }
             })
 
             if (admins.length > 0) {
                 await prisma.notification.createMany({
                     data: admins.map(admin => ({
                         workspaceId,
-                        userId: admin.id,
+                        userId: admin.userId,
                         type: 'help_requested',
                         title: 'Help Requested',
                         message: `${user.name} needs help with "${task.title}"${message ? `: ${message}` : ''}`,
@@ -185,6 +185,11 @@ export async function PATCH(
 
         if (!user.workspaceId) {
             return NextResponse.json({ error: 'No workspace' }, { status: 403 })
+        }
+
+        const isLeadership = user.role === 'Admin' || user.role === 'Team Lead'
+        if (!isLeadership) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
         const body = await request.json()
@@ -229,9 +234,15 @@ export async function PATCH(
             return NextResponse.json({ error: 'Help request not found' }, { status: 404 })
         }
 
-        const updateData: any = { status }
+        const nextStatus = status as 'acknowledged' | 'resolved'
+        const updateData: {
+            status: 'acknowledged' | 'resolved'
+            resolvedBy?: string
+            resolvedByName?: string
+            resolvedAt?: Date
+        } = { status: nextStatus }
 
-        if (status === 'resolved') {
+        if (nextStatus === 'resolved') {
             updateData.resolvedBy = user.id
             updateData.resolvedByName = user.name || 'User'
             updateData.resolvedAt = new Date()
@@ -248,13 +259,13 @@ export async function PATCH(
                 data: {
                     taskId: id,
                     taskTitle: task.title,
-                    action: status === 'resolved' ? 'help_resolved' : 'help_acknowledged',
+                    action: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
                     field: 'help',
                     oldValue: helpRequest.status,
-                    newValue: status,
+                    newValue: nextStatus,
                     changedBy: user.id,
                     changedByName: user.name || 'User',
-                    details: status === 'resolved' ? 'Resolved help request' : 'Acknowledged help request'
+                    details: nextStatus === 'resolved' ? 'Resolved help request' : 'Acknowledged help request'
                 }
             })
 
@@ -265,9 +276,9 @@ export async function PATCH(
                     data: {
                         workspaceId: project.workspaceId,
                         userId: helpRequest.requestedBy,
-                        type: status === 'resolved' ? 'help_resolved' : 'help_acknowledged',
-                        title: status === 'resolved' ? 'Help Request Resolved' : 'Help Request Acknowledged',
-                        message: `${user.name} ${status === 'resolved' ? 'resolved' : 'acknowledged'} your help request on "${task.title}"`,
+                        type: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
+                        title: nextStatus === 'resolved' ? 'Help Request Resolved' : 'Help Request Acknowledged',
+                        message: `${user.name} ${nextStatus === 'resolved' ? 'resolved' : 'acknowledged'} your help request on "${task.title}"`,
                         link: `/dashboard/projects/${project.id}?task=${id}`
                     }
                 })

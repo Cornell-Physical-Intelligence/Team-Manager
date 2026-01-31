@@ -95,15 +95,15 @@ export async function PATCH(
         // Handle assignee updates
         if (assigneeIds && Array.isArray(assigneeIds)) {
             // Verify all assignees belong to the same workspace
-            const validUsers = await prisma.user.findMany({
+            const validUsers = await prisma.workspaceMember.findMany({
                 where: {
-                    id: { in: assigneeIds },
-                    workspaceId: user.workspaceId
+                    workspaceId: user.workspaceId,
+                    userId: { in: assigneeIds }
                 },
-                select: { id: true }
+                select: { userId: true }
             })
 
-            const validUserIds = validUsers.map(u => u.id)
+            const validUserIds = validUsers.map(u => u.userId)
 
             // Update task assignees
             await prisma.$transaction(async (tx) => {
@@ -136,4 +136,3 @@ export async function PATCH(
         return NextResponse.json({ error: "Failed to update task" }, { status: 500 })
     }
 }
-

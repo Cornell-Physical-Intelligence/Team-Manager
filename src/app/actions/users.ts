@@ -24,6 +24,8 @@ export async function updateUserRole(userId: string, newRole: string) {
         return { error: 'Invalid role' }
     }
 
+    const workspaceId = currentUser.workspaceId
+
     const targetUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { role: true, workspaceId: true, name: true }
@@ -33,13 +35,20 @@ export async function updateUserRole(userId: string, newRole: string) {
         return { error: 'User not found' }
     }
 
-    const isMember = await isUserInWorkspace(userId, currentUser.workspaceId)
+    const targetMembership = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId, workspaceId } },
+        select: { role: true }
+    })
+
+    const isMember = Boolean(targetMembership) || targetUser.workspaceId === workspaceId
     if (!isMember) {
         return { error: 'User not found' }
     }
 
+    const targetRole = targetMembership?.role ?? (targetUser.workspaceId === workspaceId ? targetUser.role : null)
+
     // PROTECT ADMINS: Only Admins can change role of other Admins
-    if (targetUser.role === 'Admin' && currentUser.role !== 'Admin') {
+    if (targetRole === 'Admin' && currentUser.role !== 'Admin') {
         return { error: 'Unauthorized: Only Admins can modify other Admins' }
     }
 
@@ -51,10 +60,10 @@ export async function updateUserRole(userId: string, newRole: string) {
     // Check if admin is trying to demote themselves
     if (currentUser.id === userId && newRole !== 'Admin') {
         // Count how many admins exist in the workspace
-        const adminCount = await prisma.user.count({
+        const adminCount = await prisma.workspaceMember.count({
             where: {
                 role: 'Admin',
-                workspaceId: currentUser.workspaceId
+                workspaceId
             }
         })
 
@@ -66,8 +75,6 @@ export async function updateUserRole(userId: string, newRole: string) {
             }
         }
     }
-
-    const workspaceId = currentUser.workspaceId
 
     try {
         await prisma.$transaction(async (tx) => {
@@ -94,12 +101,6 @@ export async function updateUserRole(userId: string, newRole: string) {
                 throw new Error('User not found')
             }
 
-            if (targetUser.workspaceId === workspaceId) {
-                await tx.user.update({
-                    where: { id: userId },
-                    data: { role: newRole }
-                })
-            }
         })
         revalidatePath('/dashboard/members')
         revalidatePath('/dashboard/projects')
@@ -143,9 +144,12 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
     try {
         // Use transaction to ensure atomic operation
         await prisma.$transaction(async (tx) => {
-            // Delete existing project memberships
+            // Delete existing project memberships for this workspace only
             await tx.projectMember.deleteMany({
-                where: { userId }
+                where: {
+                    userId,
+                    project: { workspaceId: currentUser.workspaceId }
+                }
             })
 
             // Create new project memberships
@@ -184,7 +188,7 @@ export async function removeUserFromWorkspace(userId: string) {
 
     const targetUser = await prisma.user.findUnique({
         where: { id: userId },
-        select: { role: true, workspaceId: true }
+        select: { workspaceId: true }
     })
 
     if (!targetUser) {
@@ -193,7 +197,7 @@ export async function removeUserFromWorkspace(userId: string) {
 
     const membership = await prisma.workspaceMember.findUnique({
         where: { userId_workspaceId: { userId, workspaceId: currentUser.workspaceId } },
-        select: { id: true }
+        select: { id: true, role: true }
     })
 
     if (!membership) {
@@ -201,7 +205,7 @@ export async function removeUserFromWorkspace(userId: string) {
     }
 
     // PROTECT ADMINS: Only Admins can remove other Admins
-    if (targetUser.role === 'Admin' && currentUser.role !== 'Admin') {
+    if (membership.role === 'Admin' && currentUser.role !== 'Admin') {
         return { error: 'Unauthorized: Only Admins can remove other Admins' }
     }
 
@@ -209,7 +213,7 @@ export async function removeUserFromWorkspace(userId: string) {
     if (currentUser.id === userId) {
         // Count how many admins exist in the workspace
         if (currentUser.role === 'Admin') {
-            const adminCount = await prisma.user.count({
+            const adminCount = await prisma.workspaceMember.count({
                 where: {
                     role: 'Admin',
                     workspaceId: currentUser.workspaceId
@@ -239,6 +243,14 @@ export async function removeUserFromWorkspace(userId: string) {
                             userId: userId,
                             workspaceId: currentUser.workspaceId!
                         }
+                    }
+                })
+
+                // Remove project memberships in this workspace
+                await tx.projectMember.deleteMany({
+                    where: {
+                        userId,
+                        project: { workspaceId: currentUser.workspaceId! }
                     }
                 })
 

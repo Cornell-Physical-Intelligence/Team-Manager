@@ -62,8 +62,7 @@ export async function createWorkspace(formData: FormData) {
         await prisma.user.update({
             where: { id: userId },
             data: {
-                workspaceId: workspace.id,
-                role: 'Admin'
+                workspaceId: workspace.id
             }
         })
 
@@ -155,8 +154,7 @@ export async function joinWorkspace(formData: FormData) {
         await prisma.user.update({
             where: { id: user.id },
             data: {
-                workspaceId: workspace.id,
-                role: existingMember ? existingMember.role : 'Member'
+                workspaceId: workspace.id
             }
         })
 
@@ -185,8 +183,7 @@ export async function switchWorkspace(workspaceId: string) {
     await prisma.user.update({
         where: { id: user.id },
         data: {
-            workspaceId,
-            role: membership.role
+            workspaceId
         }
     })
     return { success: true }

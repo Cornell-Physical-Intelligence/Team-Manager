@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from "@/lib/auth"
 
@@ -37,6 +36,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Only admins can change roles' }, { status: 403 })
         }
 
+        if (!currentUser.workspaceId) {
+            return NextResponse.json({ error: 'No workspace' }, { status: 403 })
+        }
+
         const body = await request.json()
         const { userId, role } = body
 
@@ -50,10 +53,10 @@ export async function POST(request: Request) {
 
         const targetUser = await prisma.user.findUnique({
             where: { id: userId },
-            select: { workspaceId: true, name: true }
+            select: { workspaceId: true, role: true, name: true }
         })
 
-        if (!targetUser || !currentUser.workspaceId) {
+        if (!targetUser) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
 
@@ -61,11 +64,38 @@ export async function POST(request: Request) {
 
         const membership = await prisma.workspaceMember.findUnique({
             where: { userId_workspaceId: { userId, workspaceId } },
-            select: { id: true }
+            select: { id: true, role: true }
         })
 
-        if (!membership && targetUser.workspaceId !== workspaceId) {
+        const isMember = Boolean(membership) || targetUser.workspaceId === workspaceId
+        if (!isMember) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
+        }
+
+        const targetRole = membership?.role ?? (targetUser.workspaceId === workspaceId ? targetUser.role : null)
+
+        if (targetRole === 'Admin' && currentUser.role !== 'Admin') {
+            return NextResponse.json({ error: 'Only admins can modify other Admins' }, { status: 403 })
+        }
+
+        if (role === 'Admin' && currentUser.role !== 'Admin') {
+            return NextResponse.json({ error: 'Only admins can promote users to Admin' }, { status: 403 })
+        }
+
+        if (currentUser.id === userId && role !== 'Admin') {
+            const adminCount = await prisma.workspaceMember.count({
+                where: {
+                    role: 'Admin',
+                    workspaceId
+                }
+            })
+
+            if (adminCount <= 1) {
+                return NextResponse.json({
+                    error: 'Cannot remove your admin role: You are the only admin. Please assign another admin first.',
+                    requiresAdminAssignment: true
+                }, { status: 400 })
+            }
         }
 
         await prisma.$transaction(async (tx) => {
@@ -87,12 +117,6 @@ export async function POST(request: Request) {
                 throw new Error('User not found')
             }
 
-            if (targetUser.workspaceId === workspaceId) {
-                await tx.user.update({
-                    where: { id: userId },
-                    data: { role }
-                })
-            }
         })
 
         return NextResponse.json({ success: true })

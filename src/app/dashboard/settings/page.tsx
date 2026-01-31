@@ -37,7 +37,7 @@ export default async function SettingsPage() {
     }
 
     // Fetch Members Data
-    const users = await prisma.user.findMany({
+    const usersRaw = await prisma.user.findMany({
         where: {
             memberships: {
                 some: {
@@ -46,6 +46,12 @@ export default async function SettingsPage() {
             }
         },
         include: {
+            memberships: {
+                where: {
+                    workspaceId: user.workspaceId || 'non-existent-id'
+                },
+                select: { role: true, name: true }
+            },
             projectMemberships: {
                 include: {
                     project: { select: { id: true, name: true } }
@@ -53,6 +59,15 @@ export default async function SettingsPage() {
             }
         },
         orderBy: { name: 'asc' }
+    })
+
+    const users = usersRaw.map((member) => {
+        const membership = member.memberships[0]
+        return {
+            ...member,
+            name: membership?.name || member.name,
+            role: membership?.role || 'Member'
+        }
     })
 
     const allProjects = await prisma.project.findMany({

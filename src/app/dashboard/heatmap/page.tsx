@@ -26,15 +26,15 @@ export default async function HeatmapPage() {
         return <div className="p-6 text-muted-foreground">Workspace not found.</div>
     }
 
-    const [config, users, tasks, projects] = await Promise.all([
+    const [config, memberships, tasks, projects] = await Promise.all([
         getWorkloadConfig(dbUser.workspaceId),
-        prisma.user.findMany({
+        prisma.workspaceMember.findMany({
             where: { workspaceId: dbUser.workspaceId },
             select: {
-                id: true,
+                userId: true,
                 name: true,
-                avatar: true,
-                role: true
+                role: true,
+                user: { select: { name: true, avatar: true } }
             },
             orderBy: { name: 'asc' }
         }),
@@ -95,6 +95,13 @@ export default async function HeatmapPage() {
             }
         })
     ])
+
+    const users = memberships.map((member) => ({
+        id: member.userId,
+        name: member.name || member.user.name,
+        avatar: member.user.avatar,
+        role: member.role
+    }))
 
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)

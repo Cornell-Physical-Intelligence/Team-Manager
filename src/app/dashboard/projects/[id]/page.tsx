@@ -88,17 +88,27 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     const usersRaw = project.workspaceId ? await prisma.user.findMany({
         where: { memberships: { some: { workspaceId: project.workspaceId } } },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, role: true }
+        select: {
+            id: true,
+            name: true,
+            memberships: {
+                where: { workspaceId: project.workspaceId },
+                select: { role: true, name: true }
+            }
+        }
     }) : []
 
     const projectMemberIds = new Set((project.members as any[]).map((m: any) => m.userId))
 
-    const users = usersRaw.map(u => ({
-        id: u.id,
-        name: u.name || 'Unknown',
-        role: u.role || 'Member',
-        isProjectMember: projectMemberIds.has(u.id)
-    }))
+    const users = usersRaw.map(u => {
+        const membership = u.memberships[0]
+        return {
+            id: u.id,
+            name: membership?.name || u.name || 'Unknown',
+            role: membership?.role || 'Member',
+            isProjectMember: projectMemberIds.has(u.id)
+        }
+    })
 
     const pushIds = projectPushes.map((p: any) => p.id)
     const counts = pushIds.length > 0

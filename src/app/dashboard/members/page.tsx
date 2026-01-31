@@ -20,7 +20,7 @@ export default async function MembersPage() {
     const canChangeRoles = currentUser.role === 'Admin' || currentUser.role === 'Team Lead'
 
     // Fetch users with their tasks
-    const users = await prisma.user.findMany({
+    const usersRaw = await prisma.user.findMany({
         where: {
             memberships: {
                 some: {
@@ -29,6 +29,12 @@ export default async function MembersPage() {
             }
         },
         include: {
+            memberships: {
+                where: {
+                    workspaceId: currentUser.workspaceId || 'non-existent-id'
+                },
+                select: { role: true, name: true }
+            },
             projectMemberships: {
                 include: {
                     project: { select: { id: true, name: true, color: true } }
@@ -71,6 +77,15 @@ export default async function MembersPage() {
             }
         },
         orderBy: { name: 'asc' }
+    })
+
+    const users = usersRaw.map((user) => {
+        const membership = user.memberships[0]
+        return {
+            ...user,
+            name: membership?.name || user.name,
+            role: membership?.role || 'Member'
+        }
     })
 
     // Fetch activity logs separately by user ID

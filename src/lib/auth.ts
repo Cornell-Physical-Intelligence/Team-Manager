@@ -14,13 +14,22 @@ export async function getCurrentUser() {
 
         if (session?.user) {
             const dbUser = session.user
+            const workspaceId = dbUser.workspaceId
+            const membershipRole = workspaceId
+                ? dbUser.memberships?.find((membership) => membership.workspaceId === workspaceId)?.role
+                : null
+            const resolvedRole = (membershipRole || (!workspaceId ? dbUser.role : 'Member')) as
+                | 'Admin'
+                | 'Team Lead'
+                | 'Member'
+
             return {
                 id: dbUser.id,
                 name: dbUser.name,
                 email: dbUser.email,
                 avatar: dbUser.avatar,
-                role: dbUser.role as 'Admin' | 'Team Lead' | 'Member',
-                workspaceId: dbUser.workspaceId,
+                role: resolvedRole,
+                workspaceId,
                 workspaceName: dbUser.workspace?.name,
                 workspace: dbUser.workspace,
                 memberships: dbUser.memberships,

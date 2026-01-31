@@ -15,12 +15,12 @@ export async function GET(
         const { id: targetUserId } = await params
 
         // Verify target user belongs to same workspace
-        const targetUser = await prisma.user.findUnique({
-            where: { id: targetUserId },
-            select: { workspaceId: true }
+        const membership = await prisma.workspaceMember.findUnique({
+            where: { userId_workspaceId: { userId: targetUserId, workspaceId: user.workspaceId } },
+            select: { userId: true }
         })
 
-        if (!targetUser || targetUser.workspaceId !== user.workspaceId) {
+        if (!membership) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
 
