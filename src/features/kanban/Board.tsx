@@ -42,6 +42,7 @@ import { PushChainStrip } from "./PushChainStrip"
 type Task = {
     id: string
     title: string
+    description?: string | null
     columnId: string | null
     difficulty?: string | null
     startDate?: Date | string | null
@@ -49,8 +50,11 @@ type Task = {
     updatedAt?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
+    assigneeId?: string | null
     assignee?: { id?: string; name: string } | null
     assignees?: { user: { id: string; name: string } }[]
+    instructionsFileUrl?: string | null
+    instructionsFileName?: string | null
     activityLogs?: { changedByName: string; createdAt: Date | string }[]
     comments?: { createdAt: Date | string }[]
     attachments?: { id: string; createdAt: Date | string }[]

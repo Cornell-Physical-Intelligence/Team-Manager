@@ -31,10 +31,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                                 select: {
                                     id: true,
                                     title: true,
+                                    description: true,
                                     columnId: true,
+                                    assigneeId: true,
                                     startDate: true,
                                     endDate: true,
                                     updatedAt: true,
+                                    requireAttachment: true,
+                                    enableProgress: true,
+                                    instructionsFileUrl: true,
+                                    instructionsFileName: true,
                                     push: {
                                         select: {
                                             id: true,
@@ -47,6 +53,16 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                                         select: {
                                             id: true,
                                             name: true
+                                        }
+                                    },
+                                    assignees: {
+                                        select: {
+                                            user: {
+                                                select: {
+                                                    id: true,
+                                                    name: true
+                                                }
+                                            }
                                         }
                                     }
                                 }

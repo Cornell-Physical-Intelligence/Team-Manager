@@ -8,6 +8,7 @@ import { Lock } from "lucide-react"
 type Task = {
     id: string
     title: string
+    description?: string | null
     columnId: string | null
     difficulty?: string | null
     startDate?: Date | string | null
@@ -15,6 +16,9 @@ type Task = {
     updatedAt?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
+    assigneeId?: string | null
+    instructionsFileUrl?: string | null
+    instructionsFileName?: string | null
     assignee?: { name: string } | null
     assignees?: { user: { id: string; name: string } }[]
     activityLogs?: { changedByName: string; createdAt: Date | string }[]

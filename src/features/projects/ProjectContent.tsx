@@ -58,6 +58,9 @@ type TaskType = {
     createdAt?: Date | string
     updatedAt?: Date | string | null
     requireAttachment?: boolean
+    enableProgress?: boolean
+    instructionsFileUrl?: string | null
+    instructionsFileName?: string | null
     assigneeId?: string | null
     assignee?: { id: string; name: string } | null
     assignees?: { user: { id: string; name: string } }[]
