@@ -78,9 +78,9 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
                 const data = await res.json().catch(() => null)
                 throw new Error(data?.error || "Failed to load folders")
             }
-            const data = await res.json()
-            const nextFolders = Array.isArray(data.folders) ? data.folders : []
-            if (config.folderId && config.folderName && !nextFolders.some((folder) => folder.id === config.folderId)) {
+            const data: { folders?: FolderOption[] } = await res.json()
+            const nextFolders: FolderOption[] = Array.isArray(data.folders) ? data.folders : []
+            if (config.folderId && config.folderName && !nextFolders.some((folder: FolderOption) => folder.id === config.folderId)) {
                 nextFolders.unshift({ id: config.folderId, name: `${config.folderName} (Current)` })
             }
             setFolders(nextFolders)
