@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -12,6 +12,10 @@ export async function GET() {
 
     if (user.role !== "Admin") {
         return NextResponse.json({ error: "Only admins can list folders" }, { status: 403 })
+    }
+
+    if (!(await driveConfigTableExists())) {
+        return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
 
     try {

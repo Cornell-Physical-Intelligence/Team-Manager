@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { getGoogleOAuthClient } from "@/lib/googleDrive"
+import { driveConfigTableExists, getGoogleOAuthClient } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -32,6 +32,10 @@ export async function GET(request: Request) {
 
     if (user.role !== "Admin") {
         return NextResponse.redirect(new URL("/dashboard?drive=error_forbidden", request.url))
+    }
+
+    if (!(await driveConfigTableExists())) {
+        return NextResponse.redirect(new URL("/dashboard?drive=error_table", request.url))
     }
 
     let oauthClient
@@ -80,4 +84,3 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL("/dashboard?drive=error_token", request.url))
     }
 }
-

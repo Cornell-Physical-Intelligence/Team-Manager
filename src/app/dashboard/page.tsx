@@ -11,6 +11,7 @@ import { TaskRow, ApprovalRow } from "./TaskRow"
 import { DashboardHeatmap } from "./DashboardHeatmap"
 import { ProjectActivityTracker } from "./ProjectActivityTracker"
 import { DriveUploadWidget } from "./DriveUploadWidget"
+import { driveConfigTableExists } from "@/lib/googleDrive"
 
 export const dynamic = 'force-dynamic'
 
@@ -328,6 +329,9 @@ export default async function DashboardPage() {
 
         const driveDelegate = (prisma as { workspaceDriveConfig?: { findUnique?: Function } }).workspaceDriveConfig
         if (!driveDelegate?.findUnique) return null
+
+        const hasTable = await driveConfigTableExists()
+        if (!hasTable) return null
 
         try {
             return await driveDelegate.findUnique({

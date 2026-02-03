@@ -77,3 +77,19 @@ export function getGoogleDriveScopes() {
     return ["https://www.googleapis.com/auth/drive"]
 }
 
+export async function driveConfigTableExists() {
+    try {
+        const rows = await prisma.$queryRaw<{ exists: boolean }[]>`
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name = 'WorkspaceDriveConfig'
+            ) as "exists"
+        `
+        return rows?.[0]?.exists === true
+    } catch (error) {
+        console.error("Drive config table check failed:", error)
+        return false
+    }
+}

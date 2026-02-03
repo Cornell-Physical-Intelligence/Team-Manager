@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -13,6 +13,10 @@ export async function POST(request: Request) {
 
     if (user.role !== "Admin") {
         return NextResponse.json({ error: "Only admins can update the folder" }, { status: 403 })
+    }
+
+    if (!(await driveConfigTableExists())) {
+        return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
 
     const body = await request.json().catch(() => null)

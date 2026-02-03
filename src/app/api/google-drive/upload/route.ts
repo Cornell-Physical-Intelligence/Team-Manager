@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -14,6 +14,10 @@ export async function POST(request: Request) {
     const canUpload = user.role === "Admin" || user.role === "Team Lead"
     if (!canUpload) {
         return NextResponse.json({ error: "Not authorized" }, { status: 403 })
+    }
+
+    if (!(await driveConfigTableExists())) {
+        return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
 
     const config = await prisma.workspaceDriveConfig.findUnique({

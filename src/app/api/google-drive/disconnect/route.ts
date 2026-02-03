@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { driveConfigTableExists } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -14,6 +15,10 @@ export async function POST() {
         return NextResponse.json({ error: "Only admins can disconnect" }, { status: 403 })
     }
 
+    if (!(await driveConfigTableExists())) {
+        return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
+    }
+
     try {
         await prisma.workspaceDriveConfig.deleteMany({
             where: { workspaceId: user.workspaceId },
@@ -25,4 +30,3 @@ export async function POST() {
         return NextResponse.json({ error: "Failed to disconnect" }, { status: 500 })
     }
 }
-
