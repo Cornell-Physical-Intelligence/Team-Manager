@@ -527,15 +527,15 @@ export default async function DashboardPage() {
 
                     {/* Right Column - Leadership Only */}
                     {isLeadership && (
-                        <div className="flex flex-col gap-5">
+                        <div className="flex flex-col gap-5 h-full">
                             {/* Project Activity Tracker */}
-                            <ProjectActivityTracker />
-
-                            {/* Spacer to push Drive widget down */}
-                            <div className="flex-1" />
+                            <div className="shrink-0">
+                                <ProjectActivityTracker />
+                            </div>
 
                             {/* Drive Uploads */}
                             <DriveUploadWidget
+                                className="flex-1"
                                 initialConfig={{
                                     connected: !!driveConfig?.refreshToken,
                                     folderId: driveConfig?.folderId || null,

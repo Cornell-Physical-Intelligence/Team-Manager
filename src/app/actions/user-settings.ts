@@ -133,6 +133,31 @@ export async function deleteAccount() {
     }
 }
 
+export async function updateMemberName(targetUserId: string, newName: string) {
+    const user = await getCurrentUser()
+    if (!user || !user.workspaceId) return { error: "Not authenticated" }
+    if (user.role !== "Admin" && user.role !== "Team Lead") return { error: "Not authorized" }
+
+    const trimmed = newName.trim()
+    if (!trimmed || trimmed.length > 50) return { error: "Invalid name" }
+
+    try {
+        await prisma.workspaceMember.updateMany({
+            where: { userId: targetUserId, workspaceId: user.workspaceId },
+            data: { name: trimmed }
+        })
+
+        revalidatePath('/dashboard/settings')
+        revalidatePath('/dashboard/members')
+        revalidatePath('/dashboard')
+
+        return { success: true }
+    } catch (error) {
+        console.error("Update member name error:", error)
+        return { error: "Failed to update name" }
+    }
+}
+
 export async function updateUserDeepDetails(skills: string[], interests: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Not authenticated" }

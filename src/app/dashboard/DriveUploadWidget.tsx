@@ -1,11 +1,12 @@
 "use client"
 
 import { useRef, useState, type DragEvent } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { ArrowLeft, Check, ChevronRight, FolderOpen, Loader2, MoreVertical, Settings2, UploadCloud, X, XCircle } from "lucide-react"
+import { ArrowLeft, Check, ChevronRight, FolderOpen, Loader2, MoreVertical, Settings, Settings2, UploadCloud, X, XCircle } from "lucide-react"
 
 type DriveConfig = {
     connected: boolean
@@ -17,6 +18,7 @@ type DriveConfig = {
 type DriveUploadWidgetProps = {
     initialConfig: DriveConfig
     canManage: boolean
+    className?: string
 }
 
 type FolderOption = {
@@ -40,7 +42,7 @@ function GoogleDriveLogo({ className }: { className?: string }) {
     )
 }
 
-export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidgetProps) {
+export function DriveUploadWidget({ initialConfig, canManage, className }: DriveUploadWidgetProps) {
     const [config, setConfig] = useState<DriveConfig>(initialConfig)
     const [uploading, setUploading] = useState(false)
     const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null)
@@ -308,54 +310,30 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
 
     if (!config.connected) {
         return (
-            <section className="border border-border rounded-lg overflow-hidden">
-                <div className="bg-gradient-to-br from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 p-6">
+            <section className={cn("border border-border rounded-lg overflow-hidden flex flex-col h-full", className)}>
+                <div className="bg-gradient-to-br from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 p-6 flex-1 flex items-center justify-center">
                     <div className="flex flex-col items-center text-center space-y-4">
                         <div className="w-12 h-12 rounded-xl bg-white dark:bg-zinc-900 shadow-sm flex items-center justify-center">
                             <GoogleDriveLogo className="w-7 h-7" />
                         </div>
                         <div className="space-y-1">
-                            <h3 className="font-medium text-sm">Connect Google Drive</h3>
+                            <h3 className="font-medium text-sm">Google Drive</h3>
                             <p className="text-xs text-muted-foreground max-w-[220px]">
-                                Upload files directly to a shared Drive folder
+                                {canManage
+                                    ? "Set up Google Drive in Settings to upload files"
+                                    : "Contact an admin to connect Google Drive"}
                             </p>
                         </div>
-                        {canManage ? (
-                            <Button
-                                onClick={handleConnect}
-                                disabled={connecting}
-                                className="bg-[#1a73e8] hover:bg-[#1557b0] text-white"
-                                size="sm"
-                            >
-                                {connecting ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                        Connecting...
-                                    </>
-                                ) : (
-                                    "Sign in"
-                                )}
-                            </Button>
-                        ) : (
-                            <div className="space-y-2">
-                                <Button disabled variant="secondary" size="sm">
-                                    Sign in
+                        {canManage && (
+                            <Link href="/dashboard/settings">
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <Settings className="h-3.5 w-3.5" />
+                                    Open Settings
                                 </Button>
-                                <p className="text-[10px] text-muted-foreground">
-                                    Contact an admin to connect Drive
-                                </p>
-                            </div>
+                            </Link>
                         )}
                     </div>
                 </div>
-                {status && (
-                    <div className="px-4 py-2 border-t">
-                        <p className={cn("text-xs flex items-center gap-2", status.type === "error" ? "text-red-500" : "text-green-600")}>
-                            {status.type === "error" ? <XCircle className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                            {status.message}
-                        </p>
-                    </div>
-                )}
             </section>
         )
     }
@@ -363,7 +341,7 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
     // ---------- Connected state ----------
 
     return (
-        <section className="border border-border rounded-lg p-3">
+        <section className={cn("border border-border rounded-lg p-3 flex flex-col h-full", className)}>
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -475,7 +453,7 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
 
             {/* Drop zone / Folder browser */}
             {browsing ? (
-                <div className="border-2 border-blue-500 rounded-lg overflow-hidden min-h-[200px] flex flex-col">
+                <div className="border-2 border-blue-500 rounded-lg overflow-hidden min-h-[200px] flex flex-col flex-1">
                     {/* Breadcrumb header */}
                     <div className="flex items-center gap-1 px-3 py-2 bg-muted/50 border-b text-xs">
                         <button
@@ -583,7 +561,7 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
             ) : (
                 <div
                     className={cn(
-                        "border-2 border-dashed rounded-lg transition-all cursor-pointer",
+                        "border-2 border-dashed rounded-lg transition-all cursor-pointer flex-1 flex",
                         "border-border hover:border-muted-foreground/60",
                         dragging && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
                     )}
@@ -595,7 +573,7 @@ export function DriveUploadWidget({ initialConfig, canManage }: DriveUploadWidge
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <div className="flex flex-col items-center justify-center py-10 px-4">
+                    <div className="flex flex-col items-center justify-center py-10 px-4 flex-1">
                         {uploading ? (
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
                         ) : (
