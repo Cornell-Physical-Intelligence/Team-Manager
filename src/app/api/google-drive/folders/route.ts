@@ -28,32 +28,59 @@ export async function GET(request: Request) {
     try {
         const drive = await getDriveClientForWorkspace(user.workspaceId)
         const folders: { id: string; name: string; modifiedTime?: string | null }[] = []
-        let pageToken: string | undefined
-        let totalFetched = 0
+        const seen = new Map<string, { id: string; name: string; modifiedTime?: string | null }>()
 
-        do {
-            const response = await drive.files.list({
-                q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-                fields: "nextPageToken, files(id, name, modifiedTime)",
-                orderBy: "name",
-                pageSize: 200,
-                pageToken,
-                supportsAllDrives: true,
-                includeItemsFromAllDrives: true,
-                corpora: "allDrives",
-            })
+        const listFolders = async (query: string) => {
+            let pageToken: string | undefined
+            let totalFetched = 0
 
-            const batch = (response.data.files || [])
-                .map((file) => ({
-                    id: file.id ?? "",
-                    name: file.name ?? "",
-                    modifiedTime: file.modifiedTime ?? null,
-                }))
-                .filter((file) => file.id && file.name)
-            folders.push(...batch)
-            totalFetched += batch.length
-            pageToken = response.data.nextPageToken || undefined
-        } while (pageToken && totalFetched < 500)
+            do {
+                const response = await drive.files.list({
+                    q: query,
+                    fields: "nextPageToken, files(id, name, modifiedTime, capabilities(canAddChildren, canEdit))",
+                    orderBy: "modifiedTime desc",
+                    pageSize: 200,
+                    pageToken,
+                    supportsAllDrives: true,
+                    includeItemsFromAllDrives: true,
+                    corpora: "allDrives",
+                })
+
+                const batch = (response.data.files || [])
+                    .map((file) => ({
+                        id: file.id ?? "",
+                        name: file.name ?? "",
+                        modifiedTime: file.modifiedTime ?? null,
+                        canEdit: file.capabilities?.canAddChildren || file.capabilities?.canEdit,
+                    }))
+                    .filter((file) => file.id && file.name && file.canEdit)
+
+                batch.forEach((file) => {
+                    if (!seen.has(file.id)) {
+                        seen.set(file.id, { id: file.id, name: file.name, modifiedTime: file.modifiedTime })
+                    }
+                })
+
+                totalFetched += batch.length
+                pageToken = response.data.nextPageToken || undefined
+            } while (pageToken && totalFetched < 800)
+        }
+
+        if (parentId === "root") {
+            await Promise.all([
+                listFolders(`'root' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`),
+                listFolders(`sharedWithMe = true and mimeType = 'application/vnd.google-apps.folder' and trashed = false`),
+            ])
+        } else {
+            await listFolders(`'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`)
+        }
+
+        folders.push(...seen.values())
+        folders.sort((a, b) => {
+            const aTime = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0
+            const bTime = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0
+            return bTime - aTime
+        })
 
         return NextResponse.json({ folders })
     } catch (error) {
