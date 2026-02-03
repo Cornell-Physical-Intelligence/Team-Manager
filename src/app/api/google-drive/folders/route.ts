@@ -4,18 +4,25 @@ import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/google
 
 export const runtime = "nodejs"
 
-export async function GET() {
+export async function GET(request: Request) {
     const user = await getCurrentUser()
     if (!user || !user.workspaceId) {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    if (user.role !== "Admin") {
-        return NextResponse.json({ error: "Only admins can list folders" }, { status: 403 })
+    if (user.role !== "Admin" && user.role !== "Team Lead") {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 })
     }
 
     if (!(await driveConfigTableExists())) {
         return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const parentId = searchParams.get("parentId") || "root"
+
+    if (parentId !== "root" && !/^[a-zA-Z0-9_-]+$/.test(parentId)) {
+        return NextResponse.json({ error: "Invalid parentId" }, { status: 400 })
     }
 
     try {
@@ -26,9 +33,9 @@ export async function GET() {
 
         do {
             const response = await drive.files.list({
-                q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
                 fields: "nextPageToken, files(id, name, modifiedTime)",
-                orderBy: "modifiedTime desc",
+                orderBy: "name",
                 pageSize: 200,
                 pageToken,
                 supportsAllDrives: true,
@@ -46,11 +53,9 @@ export async function GET() {
             folders.push(...batch)
             totalFetched += batch.length
             pageToken = response.data.nextPageToken || undefined
-        } while (pageToken && totalFetched < 2000)
+        } while (pageToken && totalFetched < 500)
 
-        return NextResponse.json({
-            folders,
-        })
+        return NextResponse.json({ folders })
     } catch (error) {
         console.error("Google Drive folder list error:", error)
         return NextResponse.json({ error: "Failed to load folders" }, { status: 500 })

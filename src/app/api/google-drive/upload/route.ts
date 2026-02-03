@@ -26,12 +26,17 @@ export async function POST(request: Request) {
         select: { folderId: true, refreshToken: true },
     })
 
-    if (!config?.refreshToken || !config.folderId) {
-        return NextResponse.json({ error: "Google Drive is not connected or folder not set" }, { status: 400 })
+    if (!config?.refreshToken) {
+        return NextResponse.json({ error: "Google Drive is not connected" }, { status: 400 })
     }
 
     const formData = await request.formData()
+    const targetFolderId = formData.get("folderId")?.toString()?.trim() || config.folderId
     const files = formData.getAll("files").filter(Boolean)
+
+    if (!targetFolderId) {
+        return NextResponse.json({ error: "No destination folder specified" }, { status: 400 })
+    }
 
     if (files.length === 0) {
         return NextResponse.json({ error: "No files provided" }, { status: 400 })
@@ -49,7 +54,7 @@ export async function POST(request: Request) {
             const response = await drive.files.create({
                 requestBody: {
                     name: entry.name,
-                    parents: [config.folderId],
+                    parents: [targetFolderId],
                 },
                 media: {
                     mimeType: entry.type || "application/octet-stream",
