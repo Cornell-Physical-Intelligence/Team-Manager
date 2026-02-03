@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { driveConfigTableExists, getDriveClientForWorkspace, getDriveFolderCache, isFolderWithinRoot, refreshDriveFolderCache } from "@/lib/googleDrive"
 import { Readable } from "stream"
 
 export const runtime = "nodejs"
@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     }
 
     const formData = await request.formData()
-    const targetFolderId = formData.get("folderId")?.toString()?.trim() || config.folderId
+    const requestedFolderId = formData.get("folderId")?.toString()?.trim() || ""
+    const targetFolderId = requestedFolderId || config.folderId || ""
     const files = formData.getAll("files").filter(Boolean)
 
     if (!targetFolderId) {
@@ -42,37 +43,59 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No files provided" }, { status: 400 })
     }
 
-    try {
-        const drive = await getDriveClientForWorkspace(user.workspaceId)
-        const uploaded: { id: string; name: string }[] = []
+    if (requestedFolderId && config.folderId && requestedFolderId !== config.folderId) {
+        try {
+            const cached = await getDriveFolderCache(user.workspaceId)
+            if (!isFolderWithinRoot(cached, config.folderId, requestedFolderId)) {
+                return NextResponse.json({ error: "Folder is outside the configured root" }, { status: 400 })
+            }
+        } catch (error) {
+            console.error("Folder validation failed:", error)
+            return NextResponse.json({ error: "Folder validation failed" }, { status: 500 })
+        }
+    }
 
+    try {
+        const payloads: { name: string; type: string; buffer: Buffer }[] = []
         for (const entry of files) {
             if (!(entry instanceof File)) continue
             const arrayBuffer = await entry.arrayBuffer()
-            const buffer = Buffer.from(arrayBuffer)
-
-            const response = await drive.files.create({
-                requestBody: {
-                    name: entry.name,
-                    parents: [targetFolderId],
-                },
-                media: {
-                    mimeType: entry.type || "application/octet-stream",
-                    body: Readable.from(buffer),
-                },
-                fields: "id, name",
-                supportsAllDrives: true,
+            payloads.push({
+                name: entry.name,
+                type: entry.type || "application/octet-stream",
+                buffer: Buffer.from(arrayBuffer),
             })
-
-            if (response.data.id) {
-                uploaded.push({
-                    id: response.data.id,
-                    name: response.data.name || entry.name,
-                })
-            }
         }
 
-        return NextResponse.json({ uploaded })
+        const response = NextResponse.json({
+            uploaded: payloads.map((file) => ({ id: "", name: file.name })),
+            queued: true,
+        })
+
+        void (async () => {
+            try {
+                const drive = await getDriveClientForWorkspace(user.workspaceId)
+                for (const file of payloads) {
+                    await drive.files.create({
+                        requestBody: {
+                            name: file.name,
+                            parents: [targetFolderId],
+                        },
+                        media: {
+                            mimeType: file.type,
+                            body: Readable.from(file.buffer),
+                        },
+                        fields: "id, name",
+                        supportsAllDrives: true,
+                    })
+                }
+                void refreshDriveFolderCache(user.workspaceId)
+            } catch (error) {
+                console.error("Google Drive background upload error:", error)
+            }
+        })()
+
+        return response
     } catch (error) {
         console.error("Google Drive upload error:", error)
         return NextResponse.json({ error: "Failed to upload files" }, { status: 500 })

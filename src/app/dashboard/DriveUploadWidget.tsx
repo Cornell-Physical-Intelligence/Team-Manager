@@ -1,10 +1,10 @@
 "use client"
 
-import { useRef, useState, type DragEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { Check, FolderOpen, Loader2, Settings, UploadCloud, XCircle } from "lucide-react"
+import { ArrowLeft, Check, FolderOpen, Loader2, Settings, UploadCloud, XCircle } from "lucide-react"
 
 type DriveConfig = {
     connected: boolean
@@ -17,6 +17,13 @@ type DriveUploadWidgetProps = {
     initialConfig: DriveConfig
     canManage: boolean
     className?: string
+}
+
+type DriveFolderNode = {
+    id: string
+    name: string
+    parents: string[]
+    modifiedTime?: string | null
 }
 
 function GoogleDriveLogo({ className }: { className?: string }) {
@@ -33,30 +40,111 @@ function GoogleDriveLogo({ className }: { className?: string }) {
 }
 
 export function DriveUploadWidget({ initialConfig, canManage, className }: DriveUploadWidgetProps) {
-    const [uploading, setUploading] = useState(false)
+    const [folderTree, setFolderTree] = useState<DriveFolderNode[]>([])
+    const [loadingTree, setLoadingTree] = useState(false)
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(initialConfig.folderId)
+    const [folderStack, setFolderStack] = useState<string[]>([])
     const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null)
-    const [dragging, setDragging] = useState(false)
+    const [dragTarget, setDragTarget] = useState<string | null>(null)
+    const [uploading, setUploading] = useState(false)
+
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-    const config = initialConfig
-    const hasFolder = !!config.folderId
+    const rootFolderId = initialConfig.folderId
+    const rootFolderName = initialConfig.folderName || "Root"
+
+    const folderMap = useMemo(() => {
+        const map = new Map<string, DriveFolderNode>()
+        folderTree.forEach((node) => map.set(node.id, node))
+        return map
+    }, [folderTree])
+
+    const childrenMap = useMemo(() => {
+        const map = new Map<string, DriveFolderNode[]>()
+        folderTree.forEach((node) => {
+            node.parents?.forEach((parentId) => {
+                if (!map.has(parentId)) map.set(parentId, [])
+                map.get(parentId)!.push(node)
+            })
+        })
+        map.forEach((children) =>
+            children.sort((a, b) => {
+                const aTime = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0
+                const bTime = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0
+                return bTime - aTime
+            })
+        )
+        return map
+    }, [folderTree])
+
+    const currentFolderName = currentFolderId
+        ? folderMap.get(currentFolderId)?.name || (currentFolderId === rootFolderId ? rootFolderName : "Folder")
+        : rootFolderName
+
+    const currentChildren = currentFolderId ? childrenMap.get(currentFolderId) || [] : []
 
     const setMessage = (type: "success" | "error", message: string) => {
         setStatus({ type, message })
         setTimeout(() => setStatus(null), 4000)
     }
 
-    const uploadFiles = async (files: File[]) => {
-        if (!config.connected || !hasFolder) {
-            setMessage("error", "Set a destination folder in Settings first.")
+    const fetchTree = async () => {
+        if (!rootFolderId) return
+        setLoadingTree(true)
+        try {
+            const res = await fetch(`/api/google-drive/folders/tree?rootId=${rootFolderId}`)
+            if (!res.ok) throw new Error("Failed to load folders")
+            const data = await res.json()
+            setFolderTree(Array.isArray(data.folders) ? data.folders : [])
+            setCurrentFolderId(rootFolderId)
+            setFolderStack([])
+        } catch (error) {
+            console.error(error)
+            setMessage("error", "Failed to load folders.")
+        } finally {
+            setLoadingTree(false)
+        }
+    }
+
+    useEffect(() => {
+        if (initialConfig.connected && rootFolderId) {
+            void fetchTree()
+        }
+    }, [initialConfig.connected, rootFolderId])
+
+    const navigateToFolder = (folderId: string) => {
+        if (!folderId) return
+        if (currentFolderId) {
+            setFolderStack((prev) => [...prev, currentFolderId])
+        }
+        setCurrentFolderId(folderId)
+    }
+
+    const navigateBack = () => {
+        if (folderStack.length === 0) {
+            setCurrentFolderId(rootFolderId)
+            return
+        }
+        const next = [...folderStack]
+        const parent = next.pop()!
+        setFolderStack(next)
+        setCurrentFolderId(parent)
+    }
+
+    const uploadFiles = async (files: File[], folderId: string) => {
+        if (!rootFolderId) {
+            setMessage("error", "Select a destination folder in Settings first.")
             return
         }
         if (files.length === 0) return
 
         setUploading(true)
+        setMessage("success", `Upload received. Processing ${files.length} file${files.length === 1 ? "" : "s"}.`)
+
         try {
             const formData = new FormData()
             files.forEach((file) => formData.append("files", file, file.name))
+            formData.append("folderId", folderId)
 
             const res = await fetch("/api/google-drive/upload", {
                 method: "POST",
@@ -67,10 +155,6 @@ export function DriveUploadWidget({ initialConfig, canManage, className }: Drive
                 const data = await res.json().catch(() => null)
                 throw new Error(data?.error || "Upload failed")
             }
-
-            const data = await res.json()
-            const count = Array.isArray(data.uploaded) ? data.uploaded.length : 0
-            setMessage("success", `Uploaded ${count} file${count === 1 ? "" : "s"}.`)
         } catch (error) {
             console.error(error)
             setMessage("error", "Upload failed. Try again.")
@@ -79,20 +163,20 @@ export function DriveUploadWidget({ initialConfig, canManage, className }: Drive
         }
     }
 
-    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    const handleDrop = (event: DragEvent<HTMLDivElement>, folderId: string) => {
         event.preventDefault()
-        setDragging(false)
+        setDragTarget(null)
         if (event.dataTransfer.files?.length) {
-            uploadFiles(Array.from(event.dataTransfer.files))
+            uploadFiles(Array.from(event.dataTransfer.files), folderId)
         }
     }
 
     const handleFileInput = (files: FileList | null) => {
-        if (!files || files.length === 0) return
-        uploadFiles(Array.from(files))
+        if (!files || files.length === 0 || !currentFolderId) return
+        uploadFiles(Array.from(files), currentFolderId)
     }
 
-    if (!config.connected) {
+    if (!initialConfig.connected) {
         return (
             <section className={cn("border border-border rounded-lg overflow-hidden flex flex-col h-full", className)}>
                 <div className="bg-gradient-to-br from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 p-6 flex-1 flex items-center justify-center">
@@ -133,7 +217,7 @@ export function DriveUploadWidget({ initialConfig, canManage, className }: Drive
                         <span className="text-xs font-semibold">Google Drive</span>
                         <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                             <FolderOpen className="h-3 w-3" />
-                            {config.folderName ? `Uploads to ${config.folderName}` : "No folder selected"}
+                            {rootFolderId ? `Root: ${rootFolderName}` : "No root folder"}
                         </span>
                     </div>
                 </div>
@@ -147,40 +231,80 @@ export function DriveUploadWidget({ initialConfig, canManage, className }: Drive
                 )}
             </div>
 
-            {!hasFolder && (
-                <div className="mb-3 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            {!rootFolderId && (
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                     Select a destination folder in Settings to enable uploads.
                 </div>
             )}
 
-            <div
-                className={cn(
-                    "border-2 border-dashed rounded-lg transition-all cursor-pointer flex-1 flex",
-                    "border-border hover:border-muted-foreground/60",
-                    dragging && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20",
-                    !hasFolder && "opacity-60 pointer-events-none"
-                )}
-                onDragOver={(event) => {
-                    event.preventDefault()
-                    setDragging(true)
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                onClick={() => {
-                    if (hasFolder) fileInputRef.current?.click()
-                }}
-            >
-                <div className="flex flex-col items-center justify-center py-10 px-4 flex-1">
-                    {uploading ? (
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
+            {rootFolderId && (
+                <div className="flex-1 flex flex-col gap-3">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <button
+                            onClick={navigateBack}
+                            disabled={!folderStack.length}
+                            className="p-1 rounded hover:bg-muted disabled:opacity-30"
+                        >
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="font-medium text-foreground truncate">{currentFolderName}</span>
+                    </div>
+
+                    {loadingTree ? (
+                        <div className="flex-1 flex items-center justify-center">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
                     ) : (
-                        <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
+                        <div className="grid grid-cols-2 gap-3 auto-rows-fr flex-1">
+                            <div
+                                className={cn(
+                                    "border-2 border-dashed rounded-lg transition-all flex flex-col items-center justify-center p-3 text-xs text-muted-foreground",
+                                    dragTarget === currentFolderId && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+                                )}
+                                onDragOver={(event) => {
+                                    event.preventDefault()
+                                    setDragTarget(currentFolderId)
+                                }}
+                                onDragLeave={() => setDragTarget(null)}
+                                onDrop={(event) => {
+                                    if (currentFolderId) {
+                                        handleDrop(event, currentFolderId)
+                                    }
+                                }}
+                                onClick={() => fileInputRef.current?.click()}
+                            >
+                                <UploadCloud className="h-5 w-5 mb-1" />
+                                Drop to upload here
+                            </div>
+
+                            {currentChildren.map((folder) => (
+                                <div
+                                    key={folder.id}
+                                    className={cn(
+                                        "border rounded-lg p-3 text-xs flex flex-col gap-2 transition-all",
+                                        dragTarget === folder.id && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
+                                    )}
+                                    onDragOver={(event) => {
+                                        event.preventDefault()
+                                        setDragTarget(folder.id)
+                                    }}
+                                    onDragLeave={() => setDragTarget(null)}
+                                    onDrop={(event) => handleDrop(event, folder.id)}
+                                >
+                                    <button
+                                        onClick={() => navigateToFolder(folder.id)}
+                                        className="flex items-center gap-2 text-left"
+                                    >
+                                        <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                                        <span className="font-medium text-foreground truncate">{folder.name}</span>
+                                    </button>
+                                    <span className="text-[10px] text-muted-foreground">Drop files here</span>
+                                </div>
+                            ))}
+                        </div>
                     )}
-                    <span className="text-sm text-muted-foreground">
-                        {uploading ? "Uploading..." : "Drop files or click to upload"}
-                    </span>
                 </div>
-            </div>
+            )}
 
             <input
                 ref={fileInputRef}
@@ -205,6 +329,10 @@ export function DriveUploadWidget({ initialConfig, canManage, className }: Drive
                         {status.message}
                     </p>
                 </div>
+            )}
+
+            {uploading && (
+                <div className="mt-2 text-[11px] text-muted-foreground">Uploading in background…</div>
             )}
         </section>
     )

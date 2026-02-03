@@ -287,6 +287,8 @@ model WorkspaceDriveConfig {
   tokenExpiry     DateTime?
   folderId        String?
   folderName      String?
+  folderTree      Json?
+  folderTreeUpdatedAt DateTime?
   connectedById   String?
   connectedByName String?
   createdAt       DateTime @default(now())

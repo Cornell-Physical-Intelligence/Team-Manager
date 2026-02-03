@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { driveConfigTableExists, getDriveClientForWorkspace, refreshDriveFolderCache } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
 
@@ -54,6 +54,8 @@ export async function POST(request: Request) {
                 connectedByName: user.name,
             },
         })
+
+        void refreshDriveFolderCache(user.workspaceId)
 
         return NextResponse.json({
             folder: {
