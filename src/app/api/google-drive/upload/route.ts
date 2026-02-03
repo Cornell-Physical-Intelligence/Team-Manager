@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { driveConfigTableExists, getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { Readable } from "stream"
 
 export const runtime = "nodejs"
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
                 },
                 media: {
                     mimeType: entry.type || "application/octet-stream",
-                    body: buffer,
+                    body: Readable.from(buffer),
                 },
                 fields: "id, name",
                 supportsAllDrives: true,
