@@ -2,17 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import {
-    Check, ChevronLeft, ChevronRight, ExternalLink, File, FileAudio,
-    FileImage, FileSpreadsheet, FileText, FileVideo, FolderOpen,
-    Loader2, RefreshCw, Settings, Upload, XCircle
+    ArrowLeft, ChevronRight, ExternalLink, File, FileAudio, FileImage,
+    FileSpreadsheet, FileText, FileVideo, Folder, Loader2, Plus,
+    RotateCw, Settings, Upload, X
 } from "lucide-react"
-
-/* ── Types ─────────────────────────────────────────────── */
 
 type DriveConfig = {
     connected: boolean
@@ -21,20 +17,20 @@ type DriveConfig = {
     connectedByName: string | null
 }
 
-type DriveUploadWidgetProps = {
+type Props = {
     initialConfig: DriveConfig
     canManage: boolean
     className?: string
 }
 
-type DriveFolderNode = {
+type FolderNode = {
     id: string
     name: string
     parents: string[]
     modifiedTime?: string | null
 }
 
-type DriveFileItem = {
+type FileItem = {
     id: string
     name: string
     mimeType: string
@@ -44,30 +40,25 @@ type DriveFileItem = {
     webViewLink: string | null
 }
 
-/* ── Helpers ───────────────────────────────────────────── */
-
-function getFileIcon(mimeType: string) {
-    if (mimeType.startsWith("image/")) return FileImage
-    if (mimeType.startsWith("video/")) return FileVideo
-    if (mimeType.startsWith("audio/")) return FileAudio
-    if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return FileSpreadsheet
-    if (mimeType.includes("document") || mimeType.includes("text") || mimeType.includes("pdf")) return FileText
+function fileIcon(mime: string) {
+    if (mime.startsWith("image/")) return FileImage
+    if (mime.startsWith("video/")) return FileVideo
+    if (mime.startsWith("audio/")) return FileAudio
+    if (mime.includes("spreadsheet") || mime.includes("excel")) return FileSpreadsheet
+    if (mime.includes("document") || mime.includes("text") || mime.includes("pdf")) return FileText
     return File
 }
 
-function formatRelativeDate(dateStr: string | null) {
-    if (!dateStr) return ""
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) return "Today"
-    if (diffDays === 1) return "Yesterday"
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+function relDate(s: string | null) {
+    if (!s) return ""
+    const d = Math.floor((Date.now() - new Date(s).getTime()) / 86400000)
+    if (d === 0) return "Today"
+    if (d === 1) return "Yesterday"
+    if (d < 7) return `${d}d ago`
+    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-function GoogleDriveLogo({ className }: { className?: string }) {
+function DriveLogo({ className }: { className?: string }) {
     return (
         <svg className={className} viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
             <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
@@ -80,601 +71,383 @@ function GoogleDriveLogo({ className }: { className?: string }) {
     )
 }
 
-/* ── Component ─────────────────────────────────────────── */
-
-export function DriveUploadWidget({ initialConfig, canManage, className }: DriveUploadWidgetProps) {
-    /* ── State ── */
-    const [folderTree, setFolderTree] = useState<DriveFolderNode[]>([])
-    const [loadingTree, setLoadingTree] = useState(false)
-    const [currentFolderId, setCurrentFolderId] = useState<string | null>(initialConfig.folderId)
-    const [folderStack, setFolderStack] = useState<string[]>([])
-    const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
-    const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null)
-    const [dragTarget, setDragTarget] = useState<string | null>(null)
+export function DriveUploadWidget({ initialConfig, canManage, className }: Props) {
+    const [tree, setTree] = useState<FolderNode[]>([])
+    const [loading, setLoading] = useState(false)
+    const [folderId, setFolderId] = useState<string | null>(initialConfig.folderId)
+    const [stack, setStack] = useState<string[]>([])
+    const [pending, setPending] = useState<File[] | null>(null)
+    const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null)
     const [uploading, setUploading] = useState(false)
-    const [files, setFiles] = useState<DriveFileItem[]>([])
+    const [files, setFiles] = useState<FileItem[]>([])
     const [loadingFiles, setLoadingFiles] = useState(false)
-    const [widgetDragOver, setWidgetDragOver] = useState(false)
-    const [refreshing, setRefreshing] = useState(false)
+    const [dragOver, setDragOver] = useState(false)
+    const [spinning, setSpinning] = useState(false)
 
-    const fileInputRef = useRef<HTMLInputElement>(null)
-    const dragCounterRef = useRef(0)
+    const inputRef = useRef<HTMLInputElement>(null)
+    const dcRef = useRef(0)
 
-    const rootFolderId = initialConfig.folderId
-    const rootFolderName = initialConfig.folderName || "Root"
+    const root = initialConfig.folderId
+    const rootName = initialConfig.folderName || "Drive"
 
-    /* ── Memoized maps ── */
     const folderMap = useMemo(() => {
-        const map = new Map<string, DriveFolderNode>()
-        folderTree.forEach((node) => map.set(node.id, node))
-        return map
-    }, [folderTree])
+        const m = new Map<string, FolderNode>()
+        tree.forEach((n) => m.set(n.id, n))
+        return m
+    }, [tree])
 
-    const childrenMap = useMemo(() => {
-        const map = new Map<string, DriveFolderNode[]>()
-        folderTree.forEach((node) => {
-            node.parents?.forEach((parentId) => {
-                if (!map.has(parentId)) map.set(parentId, [])
-                map.get(parentId)!.push(node)
+    const childMap = useMemo(() => {
+        const m = new Map<string, FolderNode[]>()
+        tree.forEach((n) => {
+            n.parents?.forEach((pid) => {
+                if (!m.has(pid)) m.set(pid, [])
+                m.get(pid)!.push(n)
             })
         })
-        map.forEach((children) =>
-            children.sort((a, b) => {
-                const aTime = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0
-                const bTime = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0
-                return bTime - aTime
+        m.forEach((arr) =>
+            arr.sort((a, b) => {
+                const at = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0
+                const bt = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0
+                return bt - at
             })
         )
-        return map
-    }, [folderTree])
+        return m
+    }, [tree])
 
-    const currentChildren = currentFolderId ? childrenMap.get(currentFolderId) || [] : []
-    const isRootLevel = currentFolderId === rootFolderId
-    const hasChildren = (folderId: string) => (childrenMap.get(folderId) || []).length > 0
+    const children = folderId ? childMap.get(folderId) || [] : []
+    const atRoot = folderId === root
+    const hasSub = (id: string) => (childMap.get(id) || []).length > 0
 
-    /* ── Breadcrumbs ── */
-    const breadcrumbs = useMemo(() => {
-        if (!rootFolderId) return []
-        const crumbs: { id: string; name: string }[] = [{ id: rootFolderId, name: rootFolderName }]
-        for (const folderId of folderStack) {
-            if (folderId === rootFolderId) continue
-            const node = folderMap.get(folderId)
-            crumbs.push({ id: folderId, name: node?.name || "Folder" })
+    const crumbs = useMemo(() => {
+        if (!root) return []
+        const c: { id: string; name: string }[] = [{ id: root, name: rootName }]
+        for (const id of stack) {
+            if (id === root) continue
+            c.push({ id, name: folderMap.get(id)?.name || "..." })
         }
-        if (currentFolderId && currentFolderId !== rootFolderId) {
-            const node = folderMap.get(currentFolderId)
-            crumbs.push({ id: currentFolderId, name: node?.name || "Folder" })
-        }
-        return crumbs
-    }, [folderStack, currentFolderId, rootFolderId, rootFolderName, folderMap])
+        if (folderId && folderId !== root)
+            c.push({ id: folderId, name: folderMap.get(folderId)?.name || "..." })
+        return c
+    }, [stack, folderId, root, rootName, folderMap])
 
-    /* ── Status helper ── */
-    const setMessage = (type: "success" | "error", message: string, duration = 4000) => {
-        setStatus({ type, message })
-        setTimeout(() => setStatus(null), duration)
+    const flash = (ok: boolean, msg: string, ms = 3500) => {
+        setToast({ ok, msg })
+        setTimeout(() => setToast(null), ms)
     }
 
-    /* ── Data fetching ── */
-    const fetchTree = async (preserveNavigation = false) => {
-        if (!rootFolderId) return
-        setLoadingTree(true)
+    /* data */
+    const loadTree = async (keep = false) => {
+        if (!root) return
+        setLoading(true)
         try {
-            const res = await fetch(`/api/google-drive/folders/tree?rootId=${rootFolderId}`)
-            if (!res.ok) throw new Error("Failed to load folders")
-            const data = await res.json()
-            setFolderTree(Array.isArray(data.folders) ? data.folders : [])
-            if (!preserveNavigation) {
-                setCurrentFolderId(rootFolderId)
-                setFolderStack([])
-            }
-        } catch (error) {
-            console.error(error)
-            setMessage("error", "Failed to load folders.")
-        } finally {
-            setLoadingTree(false)
-        }
+            const r = await fetch(`/api/google-drive/folders/tree?rootId=${root}`)
+            if (!r.ok) throw 0
+            const d = await r.json()
+            setTree(Array.isArray(d.folders) ? d.folders : [])
+            if (!keep) { setFolderId(root); setStack([]) }
+        } catch { flash(false, "Failed to load") }
+        finally { setLoading(false) }
     }
 
-    const fetchFiles = async (folderId: string) => {
+    const loadFiles = async (id: string) => {
         setLoadingFiles(true)
         try {
-            const res = await fetch(`/api/google-drive/files?folderId=${folderId}`)
-            if (!res.ok) throw new Error("Failed to load files")
-            const data = await res.json()
-            setFiles(Array.isArray(data.files) ? data.files : [])
-        } catch (error) {
-            console.error(error)
-            setFiles([])
-        } finally {
-            setLoadingFiles(false)
-        }
+            const r = await fetch(`/api/google-drive/files?folderId=${id}`)
+            if (!r.ok) throw 0
+            const d = await r.json()
+            setFiles(Array.isArray(d.files) ? d.files : [])
+        } catch { setFiles([]) }
+        finally { setLoadingFiles(false) }
     }
 
     useEffect(() => {
-        if (initialConfig.connected && rootFolderId) {
-            void fetchTree()
-            void fetchFiles(rootFolderId)
+        if (initialConfig.connected && root) {
+            void loadTree()
+            void loadFiles(root)
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialConfig.connected, rootFolderId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialConfig.connected, root])
 
-    /* ── Navigation ── */
-    const navigateToFolder = (folderId: string) => {
-        if (!folderId) return
-        if (currentFolderId) {
-            setFolderStack((prev) => [...prev, currentFolderId])
-        }
-        setCurrentFolderId(folderId)
-        void fetchFiles(folderId)
+    /* nav */
+    const go = (id: string) => {
+        if (!id) return
+        if (folderId) setStack((s) => [...s, folderId])
+        setFolderId(id)
+        void loadFiles(id)
     }
 
-    const navigateBack = () => {
-        if (folderStack.length === 0) {
-            setCurrentFolderId(rootFolderId)
-            setFiles([])
-            if (rootFolderId) void fetchFiles(rootFolderId)
+    const back = () => {
+        if (stack.length === 0) {
+            setFolderId(root)
+            if (root) void loadFiles(root)
             return
         }
-        const next = [...folderStack]
-        const parent = next.pop()!
-        setFolderStack(next)
-        setCurrentFolderId(parent)
-        void fetchFiles(parent)
+        const s = [...stack]
+        const p = s.pop()!
+        setStack(s)
+        setFolderId(p)
+        void loadFiles(p)
     }
 
-    const navigateToBreadcrumb = (index: number) => {
-        const crumb = breadcrumbs[index]
-        if (!crumb) return
-        if (index === 0) {
-            setCurrentFolderId(rootFolderId)
-            setFolderStack([])
-            setFiles([])
-            if (rootFolderId) void fetchFiles(rootFolderId)
+    const jumpTo = (i: number) => {
+        const c = crumbs[i]
+        if (!c) return
+        if (i === 0) {
+            setFolderId(root); setStack([]); setFiles([])
+            if (root) void loadFiles(root)
         } else {
-            const newStack = breadcrumbs.slice(1, index).map((c) => c.id)
-            setFolderStack(newStack)
-            setCurrentFolderId(crumb.id)
-            void fetchFiles(crumb.id)
+            setStack(crumbs.slice(1, i).map((x) => x.id))
+            setFolderId(c.id)
+            void loadFiles(c.id)
         }
     }
 
-    /* ── Upload ── */
-    const uploadFiles = async (filesToUpload: File[], folderId: string, folderName?: string) => {
-        if (!rootFolderId) {
-            setMessage("error", "Select a destination folder in Settings first.")
-            return
-        }
-        if (filesToUpload.length === 0) return
-
-        const name = folderName || "folder"
+    /* upload */
+    const upload = async (list: File[], targetId: string, targetName?: string) => {
+        if (!root) return
+        if (!list.length) return
+        const n = targetName || "folder"
         setUploading(true)
-        setStatus({ type: "success", message: `Uploading ${filesToUpload.length} file${filesToUpload.length === 1 ? "" : "s"} to ${name}...` })
-
+        flash(true, `Uploading ${list.length} file${list.length > 1 ? "s" : ""} to ${n}...`)
         try {
-            const formData = new FormData()
-            filesToUpload.forEach((file) => formData.append("files", file, file.name))
-            formData.append("folderId", folderId)
-
-            const res = await fetch("/api/google-drive/upload", {
-                method: "POST",
-                body: formData,
-            })
-
-            if (!res.ok) {
-                const data = await res.json().catch(() => null)
-                throw new Error(data?.error || "Upload failed")
-            }
-
-            setPendingFiles(null)
-            setMessage(
-                "success",
-                `${filesToUpload.length} file${filesToUpload.length === 1 ? "" : "s"} sent to ${name}. They'll appear shortly.`,
-                6000
-            )
-            setTimeout(() => {
-                if (currentFolderId) void fetchFiles(currentFolderId)
-            }, 2000)
-        } catch (error) {
-            console.error(error)
-            setMessage("error", "Upload failed. Try again.")
-        } finally {
-            setUploading(false)
-        }
+            const fd = new FormData()
+            list.forEach((f) => fd.append("files", f, f.name))
+            fd.append("folderId", targetId)
+            const r = await fetch("/api/google-drive/upload", { method: "POST", body: fd })
+            if (!r.ok) { const d = await r.json().catch(() => null); throw new Error(d?.error || "fail") }
+            setPending(null)
+            flash(true, `Sent to ${n}`, 5000)
+            setTimeout(() => { if (folderId) void loadFiles(folderId) }, 2000)
+        } catch { flash(false, "Upload failed") }
+        finally { setUploading(false) }
     }
 
-    const handleFileSelection = (selectedFiles: File[]) => {
-        if (selectedFiles.length === 0) return
-        const targetId = currentFolderId || rootFolderId
-        if (!targetId) return
-
-        if (hasChildren(targetId)) {
-            setPendingFiles(selectedFiles)
-            setMessage("success", `Choose a subfolder for ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}.`)
+    const pick = (list: File[]) => {
+        if (!list.length) return
+        const tid = folderId || root
+        if (!tid) return
+        if (hasSub(tid)) {
+            setPending(list)
             return
         }
-
-        const targetName = folderMap.get(targetId)?.name || rootFolderName
-        void uploadFiles(selectedFiles, targetId, targetName)
+        void upload(list, tid, folderMap.get(tid)?.name || rootName)
     }
 
-    /* ── Drag-and-drop (folder cards) ── */
-    const handleDropToFolder = (event: DragEvent<HTMLDivElement>, folderId: string) => {
-        event.preventDefault()
-        event.stopPropagation()
-        setDragTarget(null)
-        dragCounterRef.current = 0
-        setWidgetDragOver(false)
-        if (pendingFiles) return
-        const droppedFiles = Array.from(event.dataTransfer.files || [])
-        if (droppedFiles.length === 0) return
-
-        if (hasChildren(folderId)) {
-            setPendingFiles(droppedFiles)
-            navigateToFolder(folderId)
-            setMessage("success", `Choose a subfolder for ${droppedFiles.length} file${droppedFiles.length === 1 ? "" : "s"}.`)
+    const clickFolder = (f: FolderNode) => {
+        if (pending) {
+            if (hasSub(f.id)) { go(f.id) }
+            else { void upload(pending, f.id, f.name) }
             return
         }
-
-        const targetName = folderMap.get(folderId)?.name
-        void uploadFiles(droppedFiles, folderId, targetName)
+        go(f.id)
     }
 
-    /* ── Drag-and-drop (widget level) ── */
-    const handleWidgetDragEnter = (e: DragEvent<HTMLElement>) => {
-        e.preventDefault()
-        dragCounterRef.current++
-        if (dragCounterRef.current === 1) setWidgetDragOver(true)
+    /* drag */
+    const onEnter = (e: DragEvent) => { e.preventDefault(); dcRef.current++; if (dcRef.current === 1) setDragOver(true) }
+    const onLeave = () => { dcRef.current--; if (dcRef.current === 0) setDragOver(false) }
+    const onOver = (e: DragEvent) => e.preventDefault()
+    const onDrop = (e: DragEvent) => {
+        e.preventDefault(); dcRef.current = 0; setDragOver(false)
+        if (pending) return
+        const f = Array.from(e.dataTransfer.files || [])
+        if (f.length) pick(f)
     }
 
-    const handleWidgetDragLeave = () => {
-        dragCounterRef.current--
-        if (dragCounterRef.current === 0) setWidgetDragOver(false)
+    const refresh = async () => {
+        setSpinning(true)
+        await loadTree(true)
+        if (folderId) await loadFiles(folderId)
+        setSpinning(false)
     }
 
-    const handleWidgetDragOver = (e: DragEvent<HTMLElement>) => {
-        e.preventDefault()
-    }
-
-    const handleWidgetDrop = (e: DragEvent<HTMLElement>) => {
-        e.preventDefault()
-        dragCounterRef.current = 0
-        setWidgetDragOver(false)
-        if (pendingFiles) return
-        const droppedFiles = Array.from(e.dataTransfer.files || [])
-        if (droppedFiles.length === 0) return
-        handleFileSelection(droppedFiles)
-    }
-
-    /* ── Refresh ── */
-    const handleRefresh = async () => {
-        setRefreshing(true)
-        await fetchTree(true)
-        if (currentFolderId) await fetchFiles(currentFolderId)
-        setRefreshing(false)
-    }
-
-    /* ── File input handler ── */
-    const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const selectedFiles = Array.from(e.target.files || [])
-        if (selectedFiles.length === 0) return
-        handleFileSelection(selectedFiles)
+    const onInput = (e: ChangeEvent<HTMLInputElement>) => {
+        const f = Array.from(e.target.files || [])
+        if (f.length) pick(f)
         e.target.value = ""
     }
 
-    /* ── Folder click handler ── */
-    const handleFolderClick = (folder: DriveFolderNode) => {
-        if (pendingFiles) {
-            if (hasChildren(folder.id)) {
-                navigateToFolder(folder.id)
-                setMessage("success", `Choose a subfolder in ${folder.name}.`)
-            } else {
-                void uploadFiles(pendingFiles, folder.id, folder.name)
-            }
-            return
-        }
-        navigateToFolder(folder.id)
-    }
-
-    /* ═══ Render: Not connected ═══ */
-    if (!initialConfig.connected) {
+    /* ── not connected / no root ── */
+    if (!initialConfig.connected || !root) {
         return (
-            <section className={cn("border border-border rounded-lg overflow-hidden flex flex-col h-full", className)}>
-                <div className="bg-gradient-to-br from-blue-50 to-green-50 dark:from-blue-950/30 dark:to-green-950/30 p-6 flex-1 flex items-center justify-center">
-                    <div className="flex flex-col items-center text-center space-y-4">
-                        <div className="w-12 h-12 rounded-xl bg-white dark:bg-zinc-900 shadow-sm flex items-center justify-center">
-                            <GoogleDriveLogo className="w-7 h-7" />
-                        </div>
-                        <div className="space-y-1">
-                            <h3 className="font-medium text-sm">Google Drive</h3>
-                            <p className="text-xs text-muted-foreground max-w-[220px]">
-                                {canManage
-                                    ? "Set up Google Drive in Settings to upload files"
-                                    : "Contact an admin to connect Google Drive"}
-                            </p>
-                        </div>
-                        {canManage && (
-                            <Link href="/dashboard/settings?tab=integrations">
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <Settings className="h-3.5 w-3.5" />
-                                    Open Settings
-                                </Button>
-                            </Link>
-                        )}
-                    </div>
-                </div>
+            <section className={cn("border border-border rounded-lg flex flex-col h-full items-center justify-center p-6", className)}>
+                <DriveLogo className="w-8 h-8 mb-3 opacity-60" />
+                {canManage ? (
+                    <Link
+                        href="/dashboard/settings?tab=integrations"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                        {!initialConfig.connected ? "Connect Google Drive" : "Select a root folder"} &rarr;
+                    </Link>
+                ) : (
+                    <span className="text-xs text-muted-foreground">
+                        {!initialConfig.connected ? "Google Drive not connected" : "No folder configured"}
+                    </span>
+                )}
             </section>
         )
     }
 
-    /* ═══ Render: Connected ═══ */
+    /* ── connected ── */
     return (
         <section
             className={cn(
-                "border border-border rounded-lg p-3 flex flex-col h-full relative",
-                widgetDragOver && "border-blue-500 bg-blue-50/30 dark:bg-blue-950/20",
+                "border border-border rounded-lg flex flex-col h-full relative overflow-hidden",
+                dragOver && "ring-2 ring-blue-400 ring-inset",
                 className
             )}
-            onDragEnter={handleWidgetDragEnter}
-            onDragLeave={handleWidgetDragLeave}
-            onDragOver={handleWidgetDragOver}
-            onDrop={handleWidgetDrop}
+            onDragEnter={onEnter}
+            onDragLeave={onLeave}
+            onDragOver={onOver}
+            onDrop={onDrop}
         >
-            {/* Hidden file input */}
-            <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={handleFileInputChange}
-            />
+            <input ref={inputRef} type="file" multiple className="hidden" onChange={onInput} />
 
-            {/* Drop overlay */}
-            {widgetDragOver && !pendingFiles && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-blue-50/80 dark:bg-blue-950/50 border-2 border-dashed border-blue-400 pointer-events-none">
-                    <div className="flex flex-col items-center gap-1.5">
-                        <Upload className="h-6 w-6 text-blue-500" />
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                            Drop files to upload
-                        </span>
+            {/* drop overlay */}
+            {dragOver && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/80 backdrop-blur-[2px]">
+                    <div className="flex flex-col items-center gap-1">
+                        <Upload className="h-5 w-5 text-blue-500" />
+                        <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400">Drop to upload</span>
                     </div>
                 </div>
             )}
 
-            {/* Header */}
-            <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-md flex items-center justify-center bg-white dark:bg-zinc-800 border">
-                        <GoogleDriveLogo className="w-4 h-4" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs font-semibold">Google Drive</span>
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                            <FolderOpen className="h-3 w-3" />
-                            {rootFolderId ? rootFolderName : "No root folder"}
+            {/* toolbar */}
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border bg-muted/30">
+                {!atRoot && (
+                    <button onClick={back} className="p-1 rounded hover:bg-muted transition-colors shrink-0" aria-label="Back">
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                    </button>
+                )}
+
+                <div className="flex-1 flex items-center gap-0.5 text-[11px] overflow-x-auto whitespace-nowrap min-w-0 scrollbar-none">
+                    {crumbs.map((c, i) => (
+                        <span key={`${c.id}-${i}`} className="flex items-center gap-0.5 shrink-0">
+                            {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/40" />}
+                            <button
+                                onClick={() => jumpTo(i)}
+                                className={cn(
+                                    "px-1 py-0.5 rounded transition-colors truncate max-w-[90px]",
+                                    i === crumbs.length - 1
+                                        ? "font-medium text-foreground"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                )}
+                            >
+                                {c.name}
+                            </button>
                         </span>
-                    </div>
+                    ))}
                 </div>
 
-                <div className="flex items-center gap-1">
-                    {rootFolderId && (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={handleRefresh}
-                                        disabled={refreshing || loadingTree}
-                                        className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-40"
-                                    >
-                                        <RefreshCw className={cn("h-3.5 w-3.5 text-muted-foreground", refreshing && "animate-spin")} />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Refresh</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
-                    {canManage && (
-                        <Link href="/dashboard/settings?tab=integrations">
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
-                                Settings
-                            </Button>
-                        </Link>
-                    )}
-                </div>
+                <button
+                    onClick={() => inputRef.current?.click()}
+                    disabled={uploading}
+                    className="p-1 rounded hover:bg-muted transition-colors shrink-0 disabled:opacity-30"
+                    aria-label="Upload"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                </button>
+                <button
+                    onClick={refresh}
+                    disabled={spinning || loading}
+                    className="p-1 rounded hover:bg-muted transition-colors shrink-0 disabled:opacity-30"
+                    aria-label="Refresh"
+                >
+                    <RotateCw className={cn("h-3.5 w-3.5", spinning && "animate-spin")} />
+                </button>
+                {canManage && (
+                    <Link
+                        href="/dashboard/settings?tab=integrations"
+                        className="p-1 rounded hover:bg-muted transition-colors shrink-0"
+                        aria-label="Settings"
+                    >
+                        <Settings className="h-3.5 w-3.5" />
+                    </Link>
+                )}
             </div>
 
-            {/* No root folder */}
-            {!rootFolderId && (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                    Select a destination folder in Settings to enable uploads.
+            {/* pending banner */}
+            {pending && (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-[11px] text-amber-700 dark:text-amber-400">
+                    <span>{pending.length} file{pending.length > 1 ? "s" : ""} — select destination</span>
+                    <button onClick={() => setPending(null)} className="hover:text-amber-900 dark:hover:text-amber-200">
+                        <X className="h-3 w-3" />
+                    </button>
                 </div>
             )}
 
-            {/* Main content */}
-            {rootFolderId && (
-                <div className="flex-1 flex flex-col gap-2 min-h-0">
-                    {/* Navigation: back + breadcrumbs + upload */}
-                    <div className="flex items-center gap-1.5">
-                        {!isRootLevel && (
+            {/* content */}
+            {loading ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+            ) : (
+                <ScrollArea className="flex-1">
+                    <div className="py-1">
+                        {/* folders */}
+                        {children.map((f) => (
                             <button
-                                onClick={navigateBack}
-                                className="shrink-0 p-1 rounded hover:bg-muted transition-colors"
-                                aria-label="Go back"
+                                key={f.id}
+                                onClick={() => clickFolder(f)}
+                                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors group"
                             >
-                                <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                                <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <span className="flex-1 text-xs truncate">{f.name}</span>
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors" />
                             </button>
+                        ))}
+
+                        {/* divider */}
+                        {children.length > 0 && files.length > 0 && !loadingFiles && (
+                            <div className="border-t border-border mx-3 my-1" />
                         )}
 
-                        <div className="flex-1 flex items-center gap-1 text-[11px] text-muted-foreground overflow-x-auto whitespace-nowrap min-w-0 scrollbar-none">
-                            {breadcrumbs.map((crumb, i) => (
-                                <span key={`${crumb.id}-${i}`} className="flex items-center gap-1 shrink-0">
-                                    {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
-                                    <button
-                                        onClick={() => navigateToBreadcrumb(i)}
-                                        className={cn(
-                                            "hover:text-foreground transition-colors truncate max-w-[100px]",
-                                            i === breadcrumbs.length - 1 ? "font-medium text-foreground" : ""
-                                        )}
-                                    >
-                                        {crumb.name}
-                                    </button>
-                                </span>
-                            ))}
-                        </div>
-
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={uploading || !currentFolderId}
-                                        className="shrink-0 p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-40"
-                                    >
-                                        <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Upload files</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-
-                    {/* Pending files banner */}
-                    {pendingFiles && (
-                        <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs">
-                            <span className="text-amber-700 dark:text-amber-400">
-                                {pendingFiles.length} file{pendingFiles.length === 1 ? "" : "s"} ready — pick a folder
-                            </span>
-                            <button
-                                onClick={() => {
-                                    setPendingFiles(null)
-                                    setMessage("success", "Cancelled.")
-                                }}
-                                className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
-                            >
-                                <XCircle className="h-3.5 w-3.5" />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Content area */}
-                    {loadingTree ? (
-                        <div className="flex-1 flex items-center justify-center">
-                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <ScrollArea className="flex-1">
-                            <div className="flex flex-col gap-2">
-                                {/* Subfolders: grid at root, list otherwise */}
-                                {isRootLevel ? (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {currentChildren.map((folder) => (
-                                            <div
-                                                key={folder.id}
-                                                className={cn(
-                                                    "border rounded-lg p-3 text-xs flex flex-col gap-2 transition-all cursor-pointer hover:bg-muted/40",
-                                                    !pendingFiles && dragTarget === folder.id && "border-blue-500 bg-blue-50/50 dark:bg-blue-950/20"
-                                                )}
-                                                onDragOver={(e) => {
-                                                    if (pendingFiles) return
-                                                    e.preventDefault()
-                                                    e.stopPropagation()
-                                                    setDragTarget(folder.id)
-                                                }}
-                                                onDragLeave={(e) => {
-                                                    e.stopPropagation()
-                                                    setDragTarget(null)
-                                                }}
-                                                onDrop={(e) => handleDropToFolder(e, folder.id)}
-                                            >
-                                                <button
-                                                    onClick={() => handleFolderClick(folder)}
-                                                    className="flex items-center gap-2 text-left"
-                                                >
-                                                    <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                    <span className="font-medium text-foreground truncate">{folder.name}</span>
-                                                </button>
-                                                <span className="text-[10px] text-muted-foreground">
-                                                    {pendingFiles ? "Click to select" : "Drop or click"}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    currentChildren.map((folder) => (
-                                        <button
-                                            key={folder.id}
-                                            onClick={() => handleFolderClick(folder)}
-                                            className="w-full flex items-center justify-between gap-2 border rounded-md px-3 py-2 text-xs text-left hover:bg-muted/40 transition-colors"
-                                        >
-                                            <span className="flex items-center gap-2 min-w-0">
-                                                <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                <span className="font-medium text-foreground truncate">{folder.name}</span>
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground shrink-0">
-                                                {pendingFiles ? "Click to send" : "Open"}
-                                            </span>
-                                        </button>
-                                    ))
-                                )}
-
-                                {/* Files */}
-                                {loadingFiles ? (
-                                    <div className="flex items-center justify-center py-3">
-                                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    </div>
-                                ) : files.length > 0 ? (
-                                    <>
-                                        {currentChildren.length > 0 && (
-                                            <div className="border-t border-border my-1" />
-                                        )}
-                                        {files.map((file) => {
-                                            const Icon = getFileIcon(file.mimeType)
-                                            const driveUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`
-                                            return (
-                                                <a
-                                                    key={file.id}
-                                                    href={driveUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="w-full flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-xs text-left hover:bg-muted/40 transition-colors group"
-                                                >
-                                                    <span className="flex items-center gap-2 min-w-0">
-                                                        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                                        <span className="text-foreground truncate">{file.name}</span>
-                                                    </span>
-                                                    <span className="flex items-center gap-2 shrink-0">
-                                                        <span className="text-[10px] text-muted-foreground">{formatRelativeDate(file.modifiedTime)}</span>
-                                                        <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    </span>
-                                                </a>
-                                            )
-                                        })}
-                                    </>
-                                ) : null}
-
-                                {/* Empty state */}
-                                {currentChildren.length === 0 && files.length === 0 && !loadingFiles && (
-                                    <div className="text-xs text-muted-foreground text-center py-6">
-                                        This folder is empty.
-                                    </div>
-                                )}
+                        {/* files */}
+                        {loadingFiles ? (
+                            <div className="flex items-center justify-center py-4">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             </div>
-                        </ScrollArea>
-                    )}
-                </div>
+                        ) : (
+                            files.map((f) => {
+                                const Icon = fileIcon(f.mimeType)
+                                const url = f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`
+                                return (
+                                    <a
+                                        key={f.id}
+                                        href={url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50 transition-colors group"
+                                    >
+                                        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                        <span className="flex-1 text-xs truncate">{f.name}</span>
+                                        <span className="text-[10px] text-muted-foreground shrink-0">{relDate(f.modifiedTime)}</span>
+                                        <ExternalLink className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground shrink-0 transition-colors" />
+                                    </a>
+                                )
+                            })
+                        )}
+
+                        {/* empty */}
+                        {children.length === 0 && files.length === 0 && !loadingFiles && (
+                            <div className="flex flex-col items-center justify-center py-8 gap-2">
+                                <Folder className="h-6 w-6 text-muted-foreground/30" />
+                                <span className="text-[11px] text-muted-foreground">Empty folder</span>
+                            </div>
+                        )}
+                    </div>
+                </ScrollArea>
             )}
 
-            {/* Status message */}
-            {status && (
-                <div className="mt-2">
-                    <p className={cn(
-                        "text-xs flex items-center gap-2 p-2 rounded-md",
-                        status.type === "error"
-                            ? "text-red-600 bg-red-50 dark:bg-red-950/30"
-                            : "text-green-600 bg-green-50 dark:bg-green-950/30"
-                    )}>
-                        {status.type === "error" ? <XCircle className="h-3 w-3 shrink-0" /> : <Check className="h-3 w-3 shrink-0" />}
-                        {status.message}
-                    </p>
+            {/* toast */}
+            {toast && (
+                <div className={cn(
+                    "absolute bottom-2 left-2 right-2 z-30 px-3 py-1.5 rounded-md text-[11px] flex items-center gap-2 shadow-sm transition-all",
+                    toast.ok
+                        ? "bg-foreground text-background"
+                        : "bg-red-600 text-white"
+                )}>
+                    {toast.msg}
                 </div>
             )}
         </section>
