@@ -208,6 +208,31 @@ export async function DELETE(
             })
             const columnIds = columns.map(c => c.id)
 
+            // Record deletions for sync consumers
+            const tasksToDelete = await tx.task.findMany({
+                where: {
+                    OR: [
+                        { columnId: { in: columnIds } },
+                        { push: { projectId: id } }
+                    ]
+                },
+                select: { id: true }
+            })
+
+            if (tasksToDelete.length > 0) {
+                await tx.taskDeletion.createMany({
+                    data: tasksToDelete.map((task) => ({
+                        taskId: task.id,
+                        projectId: id,
+                        workspaceId: user.workspaceId!,
+                        deletedBy: user.id,
+                        deletedByName: user.name || 'Unknown',
+                        deletedAt: new Date()
+                    })),
+                    skipDuplicates: true
+                })
+            }
+
             // Delete comments on tasks in these columns
             await tx.comment.deleteMany({
                 where: { task: { columnId: { in: columnIds } } }

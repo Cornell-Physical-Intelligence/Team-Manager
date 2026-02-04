@@ -17,6 +17,20 @@ export async function GET(
         const { id: projectId } = await params
         const { searchParams } = new URL(request.url)
         const since = searchParams.get("since") // ISO timestamp
+        const cursorParam = searchParams.get("cursor")
+        const limitParam = searchParams.get("limit")
+
+        const limit = Math.min(200, Math.max(1, Number(limitParam) || 100))
+        let cursor: { updatedAt: Date; id: string } | null = null
+        if (cursorParam) {
+            const [cursorUpdatedAt, cursorId] = cursorParam.split("::")
+            if (cursorUpdatedAt && cursorId) {
+                const parsed = new Date(cursorUpdatedAt)
+                if (!isNaN(parsed.getTime())) {
+                    cursor = { updatedAt: parsed, id: cursorId }
+                }
+            }
+        }
 
         // Verify project existence and access in one combined check
         const project = await prisma.project.findFirst({
@@ -35,9 +49,20 @@ export async function GET(
         const where: any = {
             column: { board: { projectId } }
         }
-
+        const and: any[] = []
         if (since) {
-            where.updatedAt = { gt: new Date(since) }
+            and.push({ updatedAt: { gt: new Date(since) } })
+        }
+        if (cursor) {
+            and.push({
+                OR: [
+                    { updatedAt: { lt: cursor.updatedAt } },
+                    { updatedAt: cursor.updatedAt, id: { lt: cursor.id } }
+                ]
+            })
+        }
+        if (and.length > 0) {
+            where.AND = and
         }
 
         // Fetch only minimal data for changed tasks
@@ -64,22 +89,41 @@ export async function GET(
                     take: 1
                 }
             },
-            orderBy: { updatedAt: "desc" },
-            take: 100 // Limit to prevent huge responses
+            orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+            take: limit + 1 // Fetch one extra to detect pagination
         })
 
-        // Get deleted task IDs (tasks that existed but are now gone)
-        // We track this by checking if any tasks were deleted since the timestamp
-        // For now, we'll just return changed tasks - deletions will be caught on full refresh
+        const hasMore = changedTasks.length > limit
+        const pageTasks = hasMore ? changedTasks.slice(0, limit) : changedTasks
+        const lastTask = pageTasks[pageTasks.length - 1] || null
+        const nextCursor = hasMore && lastTask?.updatedAt
+            ? `${lastTask.updatedAt.toISOString()}::${lastTask.id}`
+            : null
 
-        // Get the latest update timestamp
-        const latestUpdate = changedTasks.length > 0
-            ? changedTasks[0].updatedAt?.toISOString()
-            : since || new Date().toISOString()
+        const deletedWhere: any = { projectId }
+        if (since) {
+            deletedWhere.deletedAt = { gt: new Date(since) }
+        }
+        const deletions = await prisma.taskDeletion.findMany({
+            where: deletedWhere,
+            select: { taskId: true, deletedAt: true },
+            orderBy: { deletedAt: "desc" }
+        })
+        const deletedTaskIds = deletions.map(d => d.taskId)
+        const latestDeletion = deletions[0]?.deletedAt?.toISOString() || null
+
+        const latestUpdate = pageTasks.length > 0
+            ? pageTasks[0].updatedAt?.toISOString()
+            : null
+
+        const candidates = [latestUpdate, latestDeletion, since].filter(Boolean) as string[]
+        const lastUpdate = candidates.length > 0
+            ? candidates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+            : new Date().toISOString()
 
         return NextResponse.json({
-            hasChanges: changedTasks.length > 0,
-            tasks: changedTasks.map(t => ({
+            hasChanges: pageTasks.length > 0 || deletedTaskIds.length > 0,
+            tasks: pageTasks.map(t => ({
                 id: t.id,
                 title: t.title,
                 description: t.description ?? null,
@@ -93,8 +137,12 @@ export async function GET(
                 requireAttachment: t.requireAttachment,
                 hasAttachment: t.attachments.length > 0
             })),
-            lastUpdate: latestUpdate,
-            // Return timestamp for next poll
+            deletedTaskIds,
+            latestUpdate,
+            latestDeletion,
+            hasMore,
+            nextCursor,
+            lastUpdate,
             serverTime: new Date().toISOString()
         })
     } catch (error) {

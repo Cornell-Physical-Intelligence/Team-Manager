@@ -777,22 +777,45 @@ export async function deleteTask(taskId: string, projectId: string) {
             }
         }
 
-        // Create activity log before deletion (store task title since task will be deleted)
-        await prisma.activityLog.create({
-            data: {
-                taskId: taskId,
-                taskTitle: task.title,
-                action: 'deleted',
-                field: null,
-                oldValue: task.title,
-                newValue: null,
-                changedBy: user.id,
-                changedByName: user.name || 'Unknown',
-                details: `Task "${task.title}" was deleted`
+        await prisma.$transaction(async (tx) => {
+            if (taskProjectId) {
+                await tx.taskDeletion.upsert({
+                    where: { taskId },
+                    create: {
+                        taskId,
+                        projectId: taskProjectId,
+                        workspaceId: user.workspaceId!,
+                        deletedBy: user.id,
+                        deletedByName: user.name || 'Unknown',
+                        deletedAt: new Date()
+                    },
+                    update: {
+                        projectId: taskProjectId,
+                        workspaceId: user.workspaceId!,
+                        deletedBy: user.id,
+                        deletedByName: user.name || 'Unknown',
+                        deletedAt: new Date()
+                    }
+                })
             }
-        })
 
-        await prisma.task.delete({ where: { id: taskId } })
+            // Create activity log before deletion (store task title since task will be deleted)
+            await tx.activityLog.create({
+                data: {
+                    taskId: taskId,
+                    taskTitle: task.title,
+                    action: 'deleted',
+                    field: null,
+                    oldValue: task.title,
+                    newValue: null,
+                    changedBy: user.id,
+                    changedByName: user.name || 'Unknown',
+                    details: `Task "${task.title}" was deleted`
+                }
+            })
+
+            await tx.task.delete({ where: { id: taskId } })
+        })
         if (taskProjectId) {
             revalidatePath(`/dashboard/projects/${taskProjectId}`)
         }

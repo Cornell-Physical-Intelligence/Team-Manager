@@ -357,48 +357,90 @@ export function Board({
             }
 
             try {
-                const since = encodeURIComponent(lastSyncTime.current)
-                const res = await fetch(`/api/projects/${projectId}/sync?since=${since}`)
-                if (!res.ok) return
+                const baseSince = lastSyncTime.current
+                let cursor: string | null = null
+                const allTasks: any[] = []
+                const deletedIds = new Set<string>()
+                let latestUpdate: string | null = null
+                let latestDeletion: string | null = null
+                let serverTime: string | null = null
+                let guard = 0
 
-                const data = await res.json()
+                while (guard < 20) {
+                    const params = new URLSearchParams({ since: baseSince })
+                    if (cursor) params.set('cursor', cursor)
+                    const res = await fetch(`/api/projects/${projectId}/sync?${params.toString()}`)
+                    if (!res.ok) return
 
-                if (data.hasChanges && data.tasks?.length > 0) {
-                    // Update local state with changed tasks
+                    const data = await res.json()
+                    serverTime = data.serverTime || serverTime
+
+                    const pageTasks = Array.isArray(data.tasks) ? data.tasks : []
+                    if (pageTasks.length > 0) {
+                        allTasks.push(...pageTasks)
+                    }
+
+                    if (Array.isArray(data.deletedTaskIds)) {
+                        for (const id of data.deletedTaskIds) {
+                            if (typeof id === 'string') deletedIds.add(id)
+                        }
+                    }
+
+                    if (data.latestUpdate && (!latestUpdate || data.latestUpdate > latestUpdate)) {
+                        latestUpdate = data.latestUpdate
+                    }
+                    if (data.latestDeletion && (!latestDeletion || data.latestDeletion > latestDeletion)) {
+                        latestDeletion = data.latestDeletion
+                    }
+
+                    if (!data.hasMore || !data.nextCursor) break
+                    if (data.nextCursor === cursor) break
+                    cursor = data.nextCursor
+                    guard += 1
+                }
+
+                if (allTasks.length > 0 || deletedIds.size > 0) {
+                    const changedById = new Map<string, any>()
+                    for (const task of allTasks) {
+                        if (task?.id) {
+                            changedById.set(task.id, task)
+                        }
+                    }
+                    const changedTasks = Array.from(changedById.values())
+
                     setColumns(prev => {
                         const newColumns = prev.map(col => ({
                             ...col,
-                            tasks: col.tasks.map(task => {
-                                const updated = data.tasks.find((t: { id: string }) => t.id === task.id)
-                            if (updated) {
-                                // Task was updated - merge changes
-                                return {
-                                    ...task,
-                                    ...updated,
-                                    description: updated.description !== undefined ? updated.description : task.description,
-                                    // Preserve full data that sync doesn't return
-                                    activityLogs: task.activityLogs,
-                                    comments: task.comments,
-                                    attachments: updated.hasAttachment ? task.attachments : []
-                                }
-                                }
-                                return task
-                            })
+                            tasks: col.tasks
+                                .filter(task => !deletedIds.has(task.id))
+                                .map(task => {
+                                    const updated = changedById.get(task.id)
+                                    if (updated) {
+                                        return {
+                                            ...task,
+                                            ...updated,
+                                            description: updated.description !== undefined ? updated.description : task.description,
+                                            // Preserve full data that sync doesn't return
+                                            activityLogs: task.activityLogs,
+                                            comments: task.comments,
+                                            attachments: updated.hasAttachment ? task.attachments : []
+                                        }
+                                    }
+                                    return task
+                                })
                         }))
 
                         // Handle tasks that moved columns
-                        for (const changedTask of data.tasks) {
+                        for (const changedTask of changedTasks) {
+                            if (deletedIds.has(changedTask.id)) continue
                             const currentCol = newColumns.find(c =>
                                 c.tasks.some(t => t.id === changedTask.id)
                             )
 
                             if (currentCol && currentCol.id !== changedTask.columnId) {
-                                // Task moved to different column - relocate it
                                 const task = currentCol.tasks.find(t => t.id === changedTask.id)
                                 if (task && changedTask.columnId) {
-                                    // Remove from current column
                                     currentCol.tasks = currentCol.tasks.filter(t => t.id !== changedTask.id)
-                                    // Add to new column
                                     const targetCol = newColumns.find(c => c.id === changedTask.columnId)
                                     if (targetCol) {
                                         targetCol.tasks.push({ ...task, columnId: changedTask.columnId })
@@ -408,7 +450,8 @@ export function Board({
                         }
 
                         // Handle new tasks (not in any column yet)
-                        for (const changedTask of data.tasks) {
+                        for (const changedTask of changedTasks) {
+                            if (deletedIds.has(changedTask.id)) continue
                             const existsInAnyColumn = newColumns.some(c =>
                                 c.tasks.some(t => t.id === changedTask.id)
                             )
@@ -436,9 +479,12 @@ export function Board({
                     })
                 }
 
-                // Update sync timestamp
-                if (data.lastUpdate) {
-                    lastSyncTime.current = data.lastUpdate
+                const timeCandidates = [latestUpdate, latestDeletion].filter(Boolean) as string[]
+                if (timeCandidates.length > 0) {
+                    const nextSync = timeCandidates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
+                    lastSyncTime.current = nextSync
+                } else if (serverTime) {
+                    lastSyncTime.current = serverTime
                 }
             } catch (error) {
                 // Silent fail - will retry on next poll

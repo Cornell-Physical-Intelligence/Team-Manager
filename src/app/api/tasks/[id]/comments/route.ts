@@ -150,6 +150,17 @@ export async function POST(
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
+        if (replyToId) {
+            const replyTarget = await prisma.comment.findUnique({
+                where: { id: replyToId },
+                select: { taskId: true }
+            })
+
+            if (!replyTarget || replyTarget.taskId !== taskId) {
+                return NextResponse.json({ error: 'Reply target not found' }, { status: 400 })
+            }
+        }
+
         const commentData = {
             taskId: taskId,
             content: content.trim(),
@@ -225,9 +236,11 @@ export async function POST(
 }
 
 export async function DELETE(
-    request: Request
+    request: Request,
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id: taskId } = await params
         const url = new URL(request.url)
         const commentId = url.searchParams.get('commentId')
 
@@ -261,6 +274,10 @@ export async function DELETE(
         })
 
         if (!comment) {
+            return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
+        }
+
+        if (comment.taskId !== taskId) {
             return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
         }
 

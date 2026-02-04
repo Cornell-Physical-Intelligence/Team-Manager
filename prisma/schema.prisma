@@ -158,6 +158,19 @@ model Task {
   @@index([pushId])
 }
 
+model TaskDeletion {
+  id            String   @id @default(cuid())
+  taskId        String   @unique
+  projectId     String
+  workspaceId   String
+  deletedBy     String?
+  deletedByName String?
+  deletedAt     DateTime @default(now())
+
+  @@index([projectId, deletedAt])
+  @@index([workspaceId, deletedAt])
+}
+
 model TaskAssignee {
   id        String   @id @default(cuid())
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
