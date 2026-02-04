@@ -46,6 +46,7 @@ export async function GET(
             select: {
                 id: true,
                 title: true,
+                description: true,
                 columnId: true,
                 updatedAt: true,
                 assignee: { select: { id: true, name: true } },
@@ -81,6 +82,7 @@ export async function GET(
             tasks: changedTasks.map(t => ({
                 id: t.id,
                 title: t.title,
+                description: t.description ?? null,
                 columnId: t.columnId,
                 updatedAt: t.updatedAt?.toISOString(),
                 assignee: t.assignee,

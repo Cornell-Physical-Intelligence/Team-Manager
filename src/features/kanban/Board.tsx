@@ -370,16 +370,17 @@ export function Board({
                             ...col,
                             tasks: col.tasks.map(task => {
                                 const updated = data.tasks.find((t: { id: string }) => t.id === task.id)
-                                if (updated) {
-                                    // Task was updated - merge changes
-                                    return {
-                                        ...task,
-                                        ...updated,
-                                        // Preserve full data that sync doesn't return
-                                        activityLogs: task.activityLogs,
-                                        comments: task.comments,
-                                        attachments: updated.hasAttachment ? task.attachments : []
-                                    }
+                            if (updated) {
+                                // Task was updated - merge changes
+                                return {
+                                    ...task,
+                                    ...updated,
+                                    description: updated.description !== undefined ? updated.description : task.description,
+                                    // Preserve full data that sync doesn't return
+                                    activityLogs: task.activityLogs,
+                                    comments: task.comments,
+                                    attachments: updated.hasAttachment ? task.attachments : []
+                                }
                                 }
                                 return task
                             })
@@ -418,6 +419,7 @@ export function Board({
                                         id: changedTask.id,
                                         title: changedTask.title,
                                         columnId: changedTask.columnId,
+                                        description: changedTask.description ?? null,
                                         assignee: changedTask.assignee,
                                         assignees: changedTask.assignees,
                                         push: changedTask.push,
