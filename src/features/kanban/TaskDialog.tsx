@@ -123,6 +123,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [isUploadingInstructions, setIsUploadingInstructions] = useState(false)
     const [isDraggingFile, setIsDraggingFile] = useState(false)
     const [dragFileName, setDragFileName] = useState<string | null>(null)
+    const descriptionRef = useRef<HTMLTextAreaElement>(null)
     const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null)
     const [driveLoading, setDriveLoading] = useState(false)
     const [folderTree, setFolderTree] = useState<FolderNode[]>([])
@@ -383,24 +384,25 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [isLoading, setIsLoading] = useState(false)
 
     const hasTitle = title.trim().length > 0
-    const hasDescription = description.trim().length > 0
+    const hasDescriptionValue = description.trim().length > 0 || !!instructionsFile || !!existingInstructionsFile
+    const isDescriptionSatisfied = hasDescriptionValue || isDraggingFile
     const hasAssignees = assigneeIds.length > 0
     const hasDateRange = startDate !== "" && endDate !== ""
     const hasDriveFolder = !!selectedFolder
 
     const requiredTagClass = (met: boolean) =>
-        `text-[10px] font-normal text-destructive transition-all duration-200 overflow-hidden whitespace-nowrap ${met ? "opacity-0 max-w-0 ml-0" : "opacity-100 max-w-[80px] ml-2"}`
+        `text-[10px] font-normal text-destructive transition-all duration-200 overflow-hidden whitespace-nowrap pointer-events-none select-none ${met ? "opacity-0 max-w-0 ml-0" : "opacity-100 max-w-[80px] ml-0"}`
 
     // Validation - all fields required
     const isValid = useMemo(() => {
         return (
             hasTitle &&
-            hasDescription &&
+            hasDescriptionValue &&
             hasAssignees &&
             hasDateRange &&
             (!requiresDriveFolder || hasDriveFolder)
         )
-    }, [hasTitle, hasDescription, hasAssignees, hasDateRange, requiresDriveFolder, hasDriveFolder])
+    }, [hasTitle, hasDescriptionValue, hasAssignees, hasDateRange, requiresDriveFolder, hasDriveFolder])
 
     const toggleAssignee = (userId: string) => {
         setAssigneeIds(prev =>
@@ -620,6 +622,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (files && files.length > 0) {
             setInstructionsFile(files[0])
             setExistingInstructionsFile(null)
+            descriptionRef.current?.focus()
         }
     }
 
@@ -669,24 +672,23 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                             <div className="space-y-4">
                                 <div className="space-y-1">
                                     <Label htmlFor="title" className="sr-only">Task Title</Label>
-                                    <div className="flex justify-end">
-                                        <span className={requiredTagClass(hasTitle)}>Required</span>
+                                    <div className="relative">
+                                        <Input
+                                            id="title"
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            autoComplete="off"
+                                            placeholder="Task Title"
+                                            className="h-10 pr-16"
+                                        />
+                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasTitle)}`}>
+                                            Required
+                                        </span>
                                     </div>
-                                    <Input
-                                        id="title"
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        autoComplete="off"
-                                        placeholder="Task Title"
-                                        className="h-10"
-                                    />
                                 </div>
 
                                 <div className="space-y-1">
                                     <Label htmlFor="description" className="sr-only">Description</Label>
-                                    <div className="flex justify-end">
-                                        <span className={requiredTagClass(hasDescription)}>Required</span>
-                                    </div>
                                     <div
                                         className="relative"
                                         onDragOver={handleDragOver}
@@ -695,58 +697,60 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                     >
                                         <Textarea
                                             id="description"
+                                            ref={descriptionRef}
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value)}
                                             autoComplete="off"
                                             placeholder="Type Description or Drag Files"
-                                            className={`min-h-[120px] resize-y ${isDraggingFile ? "ring-1 ring-primary/40" : ""}`}
+                                            className={`min-h-[120px] resize-y pr-24 ${isDraggingFile ? "ring-1 ring-primary/40" : ""}`}
                                         />
-                                        {(isDraggingFile ? dragFileName : (instructionsFile?.name || existingInstructionsFile?.name)) && (
-                                            <div className="absolute top-2 right-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                                                <span className="max-w-[160px] truncate">
+                                        <div
+                                            className={`absolute top-2 ${instructionsFile || existingInstructionsFile ? "right-8" : "right-2"} flex items-center gap-2 text-[11px] text-muted-foreground pointer-events-none`}
+                                        >
+                                            <span className={requiredTagClass(isDescriptionSatisfied)}>Required</span>
+                                            {(isDraggingFile ? dragFileName : (instructionsFile?.name || existingInstructionsFile?.name)) && (
+                                                <span className="max-w-[160px] truncate pointer-events-none">
                                                     {isDraggingFile ? dragFileName : (instructionsFile?.name || existingInstructionsFile?.name)}
                                                 </span>
-                                                {(instructionsFile || existingInstructionsFile) && (
-                                                    <button
-                                                        type="button"
-                                                        className="text-muted-foreground hover:text-destructive transition-colors"
-                                                        onClick={() => {
-                                                            setInstructionsFile(null)
-                                                            setExistingInstructionsFile(null)
-                                                        }}
-                                                    >
-                                                        <X className="h-3.5 w-3.5" />
-                                                    </button>
-                                                )}
-                                            </div>
+                                            )}
+                                        </div>
+                                        {(instructionsFile || existingInstructionsFile) && (
+                                            <button
+                                                type="button"
+                                                className="absolute top-2 right-2 text-muted-foreground hover:text-destructive transition-colors"
+                                                onClick={() => {
+                                                    setInstructionsFile(null)
+                                                    setExistingInstructionsFile(null)
+                                                }}
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
                                         )}
                                     </div>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-medium inline-flex items-center">
-                                        Assignees
-                                        <span className={requiredTagClass(hasAssignees)}>Required</span>
-                                    </Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                role="combobox"
-                                                className="w-full justify-between h-10 font-normal px-3"
-                                            >
-                                                <span className="truncate">
-                                                    {assigneeIds.length === 0
-                                                        ? "Select assignee..."
-                                                        : assigneeIds.length === 1
-                                                            ? users.find(u => u.id === assigneeIds[0])?.name || "1 selected"
-                                                            : `${assigneeIds.length} selected`}
-                                                </span>
-                                                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
+                                <div className="space-y-1">
+                                    <Label className="sr-only">Assignees</Label>
+                                    <div className="relative">
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    className="w-full justify-between h-10 font-normal px-3 pr-16"
+                                                >
+                                                    <span className="truncate">
+                                                        {assigneeIds.length === 0
+                                                            ? "Select assignee..."
+                                                            : assigneeIds.length === 1
+                                                                ? users.find(u => u.id === assigneeIds[0])?.name || "1 selected"
+                                                                : `${assigneeIds.length} selected`}
+                                                    </span>
+                                                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
                                         <PopoverContent className="w-[260px] p-0" align="start">
                                             <RemoveScroll shards={[dialogContentRef]}>
                                                 <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
@@ -789,15 +793,16 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 </div>
                                             </RemoveScroll>
                                         </PopoverContent>
-                                    </Popover>
+                                        </Popover>
+                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasAssignees)}`}>
+                                            Required
+                                        </span>
+                                    </div>
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                     <div className="flex items-center justify-between">
-                                        <Label htmlFor="taskDates" className="text-sm font-medium inline-flex items-center">
-                                            Dates
-                                            <span className={requiredTagClass(hasDateRange)}>Required</span>
-                                        </Label>
+                                        <Label htmlFor="taskDates" className="sr-only">Dates</Label>
                                         {!task && (
                                             <div className="flex gap-2">
                                                 <button
@@ -817,45 +822,52 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             </div>
                                         )}
                                     </div>
-                                    <DateRangePicker
-                                        id="taskDates"
-                                        startDate={startDate}
-                                        endDate={endDate}
-                                        onChange={(start, end) => {
-                                            setStartDate(start)
-                                            setEndDate(end)
-                                        }}
-                                        className="h-10"
-                                        quickActions={!task ? [
-                                            { label: "+1 Day", days: 1 },
-                                            { label: "+7 Days", days: 7 }
-                                        ] : []}
-                                    />
+                                    <div className="relative">
+                                        <DateRangePicker
+                                            id="taskDates"
+                                            startDate={startDate}
+                                            endDate={endDate}
+                                            onChange={(start, end) => {
+                                                setStartDate(start)
+                                                setEndDate(end)
+                                            }}
+                                            className="h-10 pr-16"
+                                            quickActions={!task ? [
+                                                { label: "+1 Day", days: 1 },
+                                                { label: "+7 Days", days: 7 }
+                                            ] : []}
+                                        />
+                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasDateRange)}`}>
+                                            Required
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
                             {driveConfig?.connected && rootId && (
-                                <div className="space-y-2">
-                                    <Label className="text-sm font-medium inline-flex items-center">
-                                        Submission Folder
+                                <div className="space-y-1">
+                                    <Label className="sr-only">Submission Folder</Label>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={openFolderPicker}
+                                            disabled={driveLoading}
+                                            className="w-full flex items-center justify-between gap-2 p-3 pr-16 bg-muted/30 rounded-lg border hover:bg-muted/40 transition-colors disabled:opacity-60"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                <span className="text-sm font-medium truncate">
+                                                    {selectedFolder?.name || "Select a folder"}
+                                                </span>
+                                            </div>
+                                            {driveLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
+                                        </button>
                                         {requiresDriveFolder && (
-                                            <span className={requiredTagClass(hasDriveFolder)}>Required</span>
-                                        )}
-                                    </Label>
-                                    <button
-                                        type="button"
-                                        onClick={openFolderPicker}
-                                        disabled={driveLoading}
-                                        className="w-full flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg border hover:bg-muted/40 transition-colors disabled:opacity-60"
-                                    >
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            <span className="text-sm font-medium truncate">
-                                                {selectedFolder?.name || "Select a folder"}
+                                            <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasDriveFolder)}`}>
+                                                Required
                                             </span>
-                                        </div>
-                                        {driveLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />}
-                                    </button>
+                                        )}
+                                    </div>
                                     <p className="text-[11px] text-muted-foreground">
                                         Attachments uploaded to this task will be stored in this Drive folder.
                                     </p>
