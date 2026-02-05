@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 import { updateTaskStatus } from "@/app/actions/kanban"
-import { assignTaskToPush } from "@/app/actions/pushes"
+import { assignTaskToPush, updatePush } from "@/app/actions/pushes"
 import { Column } from "./Column"
 import { TaskCard } from "./TaskCard"
 import { TaskDialog } from "./TaskDialog"
@@ -909,22 +909,27 @@ export function Board({
         }))
     }
 
-    const isPushComplete = (pushId: string) => {
+    const isPushAllDone = (pushId: string) => {
         const pushCols = getPushTasks(pushId)
         const doneCol = pushCols.find(c => c.name === 'Done')
         const totalTasks = pushCols.reduce((sum, c) => sum + c.tasks.length, 0)
 
-        // A push is complete if it has tasks and all are in Done
+        // All tasks done if it has tasks and all are in Done
         if (loadedPushes[pushId]) return totalTasks > 0 && doneCol?.tasks.length === totalTasks
 
         const push = pushes.find((p) => p.id === pushId)
         return !!push && push.taskCount > 0 && push.completedCount === push.taskCount
     }
 
+    const isPushMarkedComplete = (pushId: string) => {
+        const push = pushes.find((p) => p.id === pushId)
+        return push?.status === 'Completed'
+    }
+
     const isPushLocked = (push: PushType) => {
         if (!push.dependsOnId) return false
         // A push is locked if its parent is not complete
-        return !isPushComplete(push.dependsOnId)
+        return !isPushMarkedComplete(push.dependsOnId)
     }
 
     const getParentPushName = (parentId: string) => {
@@ -1066,7 +1071,7 @@ export function Board({
                                 <div key={`chain-${firstPush.id}`}>
                                     <PushChainStrip
                                         chain={chain}
-                                        isComplete={isPushComplete}
+                                        isComplete={isPushMarkedComplete}
                                         isAdmin={isAdmin}
                                         onEditPush={handleEditPush}
                                         onAddTask={(push) => {
@@ -1091,7 +1096,8 @@ export function Board({
                         // For single pushes, use original rendering
                         const push = chain[0]
                         const pushColumns = getPushTasks(push.id)
-                        const isComplete = isPushComplete(push.id)
+                        const allTasksDone = isPushAllDone(push.id)
+                        const isComplete = push.status === 'Completed'
                         const isLocked = isPushLocked(push)
                         const isCollapsed = collapsedPushes.has(push.id)
                         const isOpen = !isCollapsed
@@ -1197,6 +1203,21 @@ export function Board({
                                                 <span className="hidden md:inline text-xs text-muted-foreground bg-muted/50 px-2 py-0.5 rounded">
                                                     {new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}
                                                 </span>
+                                            )}
+                                            {isAdmin && allTasksDone && !isComplete && (
+                                                <button
+                                                    type="button"
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation()
+                                                        await updatePush({ id: push.id, status: 'Completed' })
+                                                        router.refresh()
+                                                    }}
+                                                    className="h-7 flex items-center gap-1 px-2 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
+                                                    title="Mark this push complete"
+                                                >
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    <span className="hidden sm:inline">Mark Complete</span>
+                                                </button>
                                             )}
                                             {isAdmin && (
                                                 <div

@@ -264,10 +264,7 @@ export async function assignTaskToPush(taskId: string, pushId: string | null) {
             data: { pushId }
         })
 
-        // Check if push is now complete (all tasks in Done column)
-        if (pushId) {
-            await checkAndUpdatePushStatus(pushId)
-        }
+        // Completion is now manual; do not auto-update push status.
 
         const projectId = task.column?.board?.projectId
         if (projectId) {
@@ -282,38 +279,8 @@ export async function assignTaskToPush(taskId: string, pushId: string | null) {
 }
 
 export async function checkAndUpdatePushStatus(pushId: string) {
-    try {
-        const push = await prisma.push.findUnique({
-            where: { id: pushId },
-            include: {
-                tasks: {
-                    include: {
-                        column: true
-                    }
-                }
-            }
-        })
-
-        if (!push || push.tasks.length === 0) return
-
-        // Check if all tasks are in the "Done" column
-        const allDone = push.tasks.every(task => task.column?.name === 'Done')
-
-        if (allDone && push.status !== 'Completed') {
-            await prisma.push.update({
-                where: { id: pushId },
-                data: { status: 'Completed' }
-            })
-        } else if (!allDone && push.status === 'Completed') {
-            // Revert if a task is moved out of Done
-            await prisma.push.update({
-                where: { id: pushId },
-                data: { status: 'Active' }
-            })
-        }
-    } catch (error) {
-        console.error('Failed to update push status:', error)
-    }
+    // No-op: Push completion is manual now.
+    return
 }
 
 export async function getPushes(projectId: string) {
