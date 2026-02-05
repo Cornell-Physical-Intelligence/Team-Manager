@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { sendDiscordNotification } from '@/lib/discord'
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
+import { driveConfigTableExists, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
 import { differenceInCalendarDays } from 'date-fns'
 import type { Prisma } from '@prisma/client'
 
@@ -55,6 +56,25 @@ type CreateTaskInput = {
     enableProgress?: boolean
     progress?: number
     pushId?: string
+    attachmentFolderId?: string | null
+    attachmentFolderName?: string | null
+}
+
+async function getWorkspaceDriveConfig(workspaceId: string) {
+    if (!(await driveConfigTableExists())) return null
+    try {
+        return await prisma.workspaceDriveConfig.findUnique({
+            where: { workspaceId },
+            select: {
+                refreshToken: true,
+                folderId: true,
+                folderName: true
+            }
+        })
+    } catch (error: any) {
+        if (error?.code === "P2021" || error?.code === "P2022") return null
+        throw error
+    }
 }
 
 export async function createTask(input: CreateTaskInput) {
@@ -128,6 +148,25 @@ export async function createTask(input: CreateTaskInput) {
             }
         }
 
+        const driveConfig = await getWorkspaceDriveConfig(user.workspaceId)
+        let attachmentFolderId = input.attachmentFolderId?.trim() || null
+        let attachmentFolderName = input.attachmentFolderName?.trim() || null
+
+        if (driveConfig?.refreshToken && driveConfig.folderId) {
+            if (!attachmentFolderId) {
+                attachmentFolderId = driveConfig.folderId
+                attachmentFolderName = driveConfig.folderName || attachmentFolderName || "Drive"
+            } else if (attachmentFolderId !== driveConfig.folderId) {
+                const cached = await getDriveFolderCache(user.workspaceId)
+                if (!isFolderWithinRoot(cached, driveConfig.folderId, attachmentFolderId)) {
+                    return { error: "Selected upload folder is outside the configured Drive root" }
+                }
+            }
+        } else {
+            attachmentFolderId = null
+            attachmentFolderName = null
+        }
+
         const taskData: Prisma.TaskCreateInput = {
             title: title.trim(),
             description: description?.trim() || null,
@@ -137,7 +176,9 @@ export async function createTask(input: CreateTaskInput) {
             progress: input.progress || 0,
             startDate: startDate ? parseDateInput(startDate, "startOfDay") : null,
             endDate: endDate ? parseDateInput(endDate, "endOfDay") : null,
-            push: pushId ? { connect: { id: pushId } } : undefined
+            push: pushId ? { connect: { id: pushId } } : undefined,
+            attachmentFolderId,
+            attachmentFolderName
         }
 
         // Only connect assignee if provided
@@ -612,6 +653,34 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
+        let nextAttachmentFolderId: string | null | undefined = undefined
+        let nextAttachmentFolderName: string | null | undefined = undefined
+        if (input.attachmentFolderId !== undefined) {
+            const driveConfig = await getWorkspaceDriveConfig(user.workspaceId)
+            const requestedId = input.attachmentFolderId?.trim() || ""
+            const requestedName = input.attachmentFolderName?.trim() || null
+
+            if (driveConfig?.refreshToken && driveConfig.folderId) {
+                if (!requestedId) {
+                    nextAttachmentFolderId = driveConfig.folderId
+                    nextAttachmentFolderName = driveConfig.folderName || requestedName || "Drive"
+                } else if (requestedId !== driveConfig.folderId) {
+                    const cached = await getDriveFolderCache(user.workspaceId)
+                    if (!isFolderWithinRoot(cached, driveConfig.folderId, requestedId)) {
+                        return { error: "Selected upload folder is outside the configured Drive root" }
+                    }
+                    nextAttachmentFolderId = requestedId
+                    nextAttachmentFolderName = requestedName
+                } else {
+                    nextAttachmentFolderId = requestedId
+                    nextAttachmentFolderName = driveConfig.folderName || requestedName
+                }
+            } else {
+                nextAttachmentFolderId = null
+                nextAttachmentFolderName = null
+            }
+        }
+
         const nextAssignedIds = new Set<string>([...oldAssignedIds])
         if (input.assigneeIds !== undefined) {
             nextAssignedIds.clear()
@@ -635,7 +704,9 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
                 endDate: input.endDate !== undefined ? (input.endDate ? parseDateInput(input.endDate, "endOfDay") : null) : undefined,
                 requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : undefined,
                 enableProgress: input.enableProgress !== undefined ? input.enableProgress : undefined,
-                progress: input.progress !== undefined ? input.progress : undefined
+                progress: input.progress !== undefined ? input.progress : undefined,
+                attachmentFolderId: nextAttachmentFolderId !== undefined ? nextAttachmentFolderId : undefined,
+                attachmentFolderName: nextAttachmentFolderName !== undefined ? nextAttachmentFolderName : undefined
             }
         })
 

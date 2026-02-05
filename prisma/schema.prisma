@@ -136,6 +136,8 @@ model Task {
   subteamId       String?
   priority        String   @default("Medium")
   requireAttachment Boolean @default(true)
+  attachmentFolderId   String?
+  attachmentFolderName String?
   instructionsFileUrl  String?  // Optional instructions file URL
   instructionsFileName String?  // Original filename
   progress        Int      @default(0)
@@ -201,6 +203,8 @@ model TaskAttachment {
   url       String
   size      Int      @default(0)
   type      String   @default("file")
+  storageProvider String   @default("vercel")
+  externalId String?
   order     Int      @default(0)
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId    String

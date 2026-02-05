@@ -50,6 +50,8 @@ type Task = {
     updatedAt?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
+    attachmentFolderId?: string | null
+    attachmentFolderName?: string | null
     assigneeId?: string | null
     assignee?: { id?: string; name: string } | null
     assignees?: { user: { id: string; name: string } }[]
@@ -458,19 +460,21 @@ export function Board({
                             if (!existsInAnyColumn && changedTask.columnId) {
                                 const targetCol = newColumns.find(c => c.id === changedTask.columnId)
                                 if (targetCol) {
-                                    targetCol.tasks.push({
-                                        id: changedTask.id,
-                                        title: changedTask.title,
-                                        columnId: changedTask.columnId,
-                                        description: changedTask.description ?? null,
-                                        assignee: changedTask.assignee,
-                                        assignees: changedTask.assignees,
-                                        push: changedTask.push,
-                                        startDate: changedTask.startDate,
-                                        endDate: changedTask.endDate,
-                                        requireAttachment: changedTask.requireAttachment,
-                                        updatedAt: changedTask.updatedAt
-                                    })
+                                        targetCol.tasks.push({
+                                            id: changedTask.id,
+                                            title: changedTask.title,
+                                            columnId: changedTask.columnId,
+                                            description: changedTask.description ?? null,
+                                            assignee: changedTask.assignee,
+                                            assignees: changedTask.assignees,
+                                            push: changedTask.push,
+                                            startDate: changedTask.startDate,
+                                            endDate: changedTask.endDate,
+                                            requireAttachment: changedTask.requireAttachment,
+                                            attachmentFolderId: changedTask.attachmentFolderId ?? null,
+                                            attachmentFolderName: changedTask.attachmentFolderName ?? null,
+                                            updatedAt: changedTask.updatedAt
+                                        })
                                 }
                             }
                         }

@@ -39,6 +39,8 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                                     updatedAt: true,
                                     requireAttachment: true,
                                     enableProgress: true,
+                                    attachmentFolderId: true,
+                                    attachmentFolderName: true,
                                     instructionsFileUrl: true,
                                     instructionsFileName: true,
                                     push: {

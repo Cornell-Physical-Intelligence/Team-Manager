@@ -16,6 +16,8 @@ type Task = {
     updatedAt?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
+    attachmentFolderId?: string | null
+    attachmentFolderName?: string | null
     assigneeId?: string | null
     instructionsFileUrl?: string | null
     instructionsFileName?: string | null

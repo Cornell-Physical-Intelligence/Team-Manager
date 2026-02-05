@@ -3,6 +3,8 @@ import { put, del } from '@vercel/blob'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getTaskContext } from '@/lib/access'
+import { driveConfigTableExists, getDriveClientForWorkspace, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
+import { Readable } from 'stream'
 
 export async function GET(
     request: Request,
@@ -94,15 +96,75 @@ export async function POST(
             return NextResponse.json({ error: 'File type not allowed' }, { status: 400 })
         }
 
-        // Upload to Vercel Blob
-        const filename = `${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-        const fileBuffer = await file.arrayBuffer()
-        console.log(`[UPLOAD] Processing file: ${filename}, size: ${file.size} bytes`);
-        const blob = await put(filename, fileBuffer, {
-            access: 'public',
-            contentType: file.type || 'application/octet-stream',
+        const task = await prisma.task.findUnique({
+            where: { id },
+            select: { attachmentFolderId: true }
         })
-        console.log(`[UPLOAD] Blob created: ${blob.url}`);
+
+        let driveConfig: { refreshToken: string | null; folderId: string | null } | null = null
+        if (await driveConfigTableExists()) {
+            driveConfig = await prisma.workspaceDriveConfig.findUnique({
+                where: { workspaceId: user.workspaceId },
+                select: { refreshToken: true, folderId: true }
+            })
+        }
+
+        const hasDrive = !!driveConfig?.refreshToken && !!driveConfig.folderId
+        const targetFolderId = task?.attachmentFolderId || driveConfig?.folderId || null
+
+        let attachmentUrl = ''
+        let storageProvider = 'vercel'
+        let externalId: string | null = null
+
+        if (hasDrive && targetFolderId) {
+            if (driveConfig?.folderId && targetFolderId !== driveConfig.folderId) {
+                const cached = await getDriveFolderCache(user.workspaceId)
+                if (!isFolderWithinRoot(cached, driveConfig.folderId, targetFolderId)) {
+                    return NextResponse.json({ error: 'Upload folder is outside the configured Drive root' }, { status: 400 })
+                }
+            }
+
+            const fileBuffer = await file.arrayBuffer()
+            const drive = await getDriveClientForWorkspace(user.workspaceId)
+            const driveResponse = await drive.files.create({
+                requestBody: {
+                    name: file.name,
+                    parents: [targetFolderId],
+                },
+                media: {
+                    mimeType: file.type || "application/octet-stream",
+                    body: Readable.from(Buffer.from(fileBuffer)),
+                },
+                fields: "id, name, webViewLink, webContentLink, mimeType",
+                supportsAllDrives: true,
+            })
+
+            const fileId = driveResponse.data.id || ""
+            if (!fileId) {
+                return NextResponse.json({ error: 'Failed to upload to Google Drive' }, { status: 500 })
+            }
+
+            const isImage = (file.type && file.type.startsWith('image/')) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(fileExtension)
+            const viewUrl = `https://drive.google.com/uc?export=view&id=${fileId}`
+            const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`
+
+            attachmentUrl = isImage ? viewUrl : downloadUrl
+            storageProvider = 'google'
+            externalId = fileId
+        } else {
+            // Upload to Vercel Blob
+            const filename = `${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+            const fileBuffer = await file.arrayBuffer()
+            console.log(`[UPLOAD] Processing file: ${filename}, size: ${file.size} bytes`);
+            const blob = await put(filename, fileBuffer, {
+                access: 'public',
+                contentType: file.type || 'application/octet-stream',
+            })
+            console.log(`[UPLOAD] Blob created: ${blob.url}`);
+            attachmentUrl = blob.url
+            storageProvider = 'vercel'
+            externalId = null
+        }
 
         // Get max order for this task
         const maxOrder = await prisma.taskAttachment.aggregate({
@@ -117,7 +179,9 @@ export async function POST(
                 name: file.name,
                 size: file.size,
                 type: file.type || 'application/octet-stream',
-                url: blob.url,
+                url: attachmentUrl,
+                storageProvider,
+                externalId,
                 uploadedBy: user.name || 'User',
                 order: (maxOrder._max.order ?? -1) + 1
             }
@@ -188,12 +252,24 @@ export async function DELETE(
             return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
         }
 
-        // Delete from Vercel Blob
-        try {
-            console.log(`[DELETE] Deleting blob: ${attachment.url}`);
-            await del(attachment.url)
-        } catch (e) {
-            console.error('Failed to delete from blob storage:', e)
+        if (attachment.storageProvider === 'google' && attachment.externalId) {
+            try {
+                const drive = await getDriveClientForWorkspace(user.workspaceId)
+                await drive.files.delete({
+                    fileId: attachment.externalId,
+                    supportsAllDrives: true,
+                })
+            } catch (e) {
+                console.error('Failed to delete from Google Drive:', e)
+            }
+        } else {
+            // Delete from Vercel Blob
+            try {
+                console.log(`[DELETE] Deleting blob: ${attachment.url}`);
+                await del(attachment.url)
+            } catch (e) {
+                console.error('Failed to delete from blob storage:', e)
+            }
         }
 
         // Get task info before deleting

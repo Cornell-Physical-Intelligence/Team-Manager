@@ -84,6 +84,8 @@ export async function GET(
                 startDate: true,
                 endDate: true,
                 requireAttachment: true,
+                attachmentFolderId: true,
+                attachmentFolderName: true,
                 attachments: {
                     select: { id: true },
                     take: 1
@@ -135,6 +137,8 @@ export async function GET(
                 startDate: t.startDate?.toISOString() || null,
                 endDate: t.endDate?.toISOString() || null,
                 requireAttachment: t.requireAttachment,
+                attachmentFolderId: t.attachmentFolderId || null,
+                attachmentFolderName: t.attachmentFolderName || null,
                 hasAttachment: t.attachments.length > 0
             })),
             deletedTaskIds,

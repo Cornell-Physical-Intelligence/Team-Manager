@@ -17,8 +17,9 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, ChevronDown, FileText, Upload, X, ListChecks } from "lucide-react"
-import { useState, useTransition, useEffect, useMemo, useRef } from "react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Plus, Trash2, ChevronDown, FileText, Upload, X, ListChecks, Folder, ChevronRight, ArrowLeft, Loader2 } from "lucide-react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { createTask, updateTaskDetails, deleteTask } from "@/app/actions/kanban"
 import { RemoveScroll } from "react-remove-scroll"
 
@@ -30,6 +31,8 @@ type TaskType = {
     assignees?: { user: { id: string; name: string } }[]
     requireAttachment?: boolean
     enableProgress?: boolean
+    attachmentFolderId?: string | null
+    attachmentFolderName?: string | null
     instructionsFileUrl?: string | null
     instructionsFileName?: string | null
     startDate?: Date | string | null
@@ -44,6 +47,19 @@ type TaskDialogResultTask = TaskType & {
     activityLogs?: { changedByName: string; createdAt: Date | string }[]
     comments?: { createdAt: Date | string }[]
     attachments?: { id: string; createdAt: Date | string }[]
+}
+
+type DriveConfig = {
+    connected: boolean
+    folderId: string | null
+    folderName: string | null
+}
+
+type FolderNode = {
+    id: string
+    name: string
+    parents: string[]
+    modifiedTime?: string | null
 }
 
 import {
@@ -107,6 +123,15 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [isUploadingInstructions, setIsUploadingInstructions] = useState(false)
     const instructionsFileRef = useRef<HTMLInputElement>(null)
     const [isDraggingFile, setIsDraggingFile] = useState(false)
+    const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null)
+    const [driveLoading, setDriveLoading] = useState(false)
+    const [folderTree, setFolderTree] = useState<FolderNode[]>([])
+    const [pickerOpen, setPickerOpen] = useState(false)
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+    const [folderStack, setFolderStack] = useState<string[]>([])
+    const [loadingFolders, setLoadingFolders] = useState(false)
+    const [selectedFolder, setSelectedFolder] = useState<{ id: string; name: string } | null>(null)
+    const folderInitRef = useRef(false)
 
     // Checklist state
     const [enableChecklist, setEnableChecklist] = useState(false)
@@ -117,6 +142,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     useEffect(() => {
         if (open) {
             setError(null)
+            folderInitRef.current = false
+            setFolderTree([])
+            setPickerOpen(false)
+            setFolderStack([])
+            setCurrentFolderId(null)
+            setSelectedFolder(null)
             if (task) {
                 setTitle(task.title || "")
                 setDescription(task.description || "")
@@ -157,6 +188,139 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         }
     }, [task, today, open])
 
+    useEffect(() => {
+        if (!open) return
+        let cancelled = false
+        const loadDriveConfig = async () => {
+            setDriveLoading(true)
+            try {
+                const res = await fetch("/api/google-drive/config")
+                const data = await res.json().catch(() => null)
+                if (cancelled) return
+                if (data && typeof data.connected === "boolean") {
+                    setDriveConfig({
+                        connected: data.connected,
+                        folderId: data.folderId || null,
+                        folderName: data.folderName || null
+                    })
+                } else {
+                    setDriveConfig({ connected: false, folderId: null, folderName: null })
+                }
+            } catch {
+                if (!cancelled) setDriveConfig({ connected: false, folderId: null, folderName: null })
+            } finally {
+                if (!cancelled) setDriveLoading(false)
+            }
+        }
+        loadDriveConfig()
+        return () => { cancelled = true }
+    }, [open])
+
+    useEffect(() => {
+        if (!open || folderInitRef.current) return
+        if (driveConfig?.connected && driveConfig.folderId) {
+            if (task?.attachmentFolderId) {
+                setSelectedFolder({
+                    id: task.attachmentFolderId,
+                    name: task.attachmentFolderName || "Drive Folder"
+                })
+            } else if (task) {
+                setSelectedFolder({
+                    id: driveConfig.folderId,
+                    name: driveConfig.folderName || "Drive"
+                })
+            } else {
+                setSelectedFolder(null)
+            }
+        } else {
+            setSelectedFolder(null)
+        }
+        folderInitRef.current = true
+    }, [driveConfig, task, open])
+
+    const rootId = driveConfig?.folderId || null
+    const rootName = driveConfig?.folderName || "Drive"
+    const requiresDriveFolder = !task && (driveLoading ? true : !!(driveConfig?.connected && rootId))
+
+    const folderMap = useMemo(() => {
+        const map = new Map<string, FolderNode>()
+        folderTree.forEach((node) => map.set(node.id, node))
+        return map
+    }, [folderTree])
+
+    const childMap = useMemo(() => {
+        const map = new Map<string, FolderNode[]>()
+        folderTree.forEach((node) => {
+            node.parents?.forEach((parentId) => {
+                if (!map.has(parentId)) map.set(parentId, [])
+                map.get(parentId)!.push(node)
+            })
+        })
+        map.forEach((arr) =>
+            arr.sort((a, b) => {
+                const at = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0
+                const bt = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0
+                return bt - at
+            })
+        )
+        return map
+    }, [folderTree])
+
+    const children = currentFolderId ? childMap.get(currentFolderId) || [] : []
+    const atRoot = currentFolderId === rootId
+
+    const loadFolderTree = async () => {
+        if (!rootId) return
+        setLoadingFolders(true)
+        try {
+            const res = await fetch(`/api/google-drive/folders/tree?rootId=${rootId}`)
+            if (!res.ok) throw new Error("Failed")
+            const data = await res.json()
+            setFolderTree(Array.isArray(data.folders) ? data.folders : [])
+        } catch {
+            setFolderTree([])
+        } finally {
+            setLoadingFolders(false)
+        }
+    }
+
+    const openFolderPicker = async () => {
+        if (!rootId) return
+        setPickerOpen(true)
+        setCurrentFolderId(rootId)
+        setFolderStack([])
+        if (folderTree.length === 0) {
+            await loadFolderTree()
+        }
+    }
+
+    const goFolder = (id: string) => {
+        if (!id) return
+        if (currentFolderId) setFolderStack((s) => [...s, currentFolderId])
+        setCurrentFolderId(id)
+    }
+
+    const backFolder = () => {
+        if (folderStack.length === 0) {
+            setCurrentFolderId(rootId)
+            return
+        }
+        const next = [...folderStack]
+        const prev = next.pop()!
+        setFolderStack(next)
+        setCurrentFolderId(prev)
+    }
+
+    const confirmFolder = () => {
+        if (!currentFolderId) return
+        const name =
+            currentFolderId === rootId
+                ? rootName
+                : folderMap.get(currentFolderId)?.name || "Folder"
+        setSelectedFolder({ id: currentFolderId, name })
+        setPickerOpen(false)
+    }
+
     const addChecklistItem = () => {
         if (newChecklistItem.trim()) {
             setChecklistItems(prev => [...prev, newChecklistItem.trim()])
@@ -177,9 +341,10 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             description.trim().length > 0 &&
             assigneeIds.length > 0 &&
             startDate !== "" &&
-            endDate !== ""
+            endDate !== "" &&
+            (!requiresDriveFolder || !!selectedFolder)
         )
-    }, [title, description, assigneeIds, startDate, endDate])
+    }, [title, description, assigneeIds, startDate, endDate, requiresDriveFolder, selectedFolder])
 
     // Validation errors for display
     const getValidationErrors = () => {
@@ -189,6 +354,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (assigneeIds.length === 0) errors.push("Assignee")
         if (!startDate) errors.push("Start Date")
         if (!endDate) errors.push("Due Date")
+        if (requiresDriveFolder && !selectedFolder) errors.push("Submission Folder")
         return errors
     }
 
@@ -219,6 +385,13 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
         setIsLoading(true)
         try {
+            const attachmentFolderPayload = (driveConfig?.connected && rootId)
+                ? {
+                    attachmentFolderId: selectedFolder?.id || task?.attachmentFolderId || rootId,
+                    attachmentFolderName: selectedFolder?.name || task?.attachmentFolderName || rootName
+                }
+                : {}
+
             if (task) {
                 const result = await updateTaskDetails(task.id, {
                     title: title.trim(),
@@ -229,7 +402,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     endDate,
                     requireAttachment,
                     enableProgress,
-                    projectId
+                    projectId,
+                    ...attachmentFolderPayload
                 })
 
                 if (result?.error) {
@@ -281,7 +455,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     enableProgress,
                     columnId: columnId!,
                     projectId,
-                    pushId: pushId || undefined
+                    pushId: pushId || undefined,
+                    ...attachmentFolderPayload
                 })
 
                 if (result?.error) {
@@ -683,6 +858,107 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                     </div>
                                 )}
                             </div>
+
+                            {driveConfig?.connected && rootId && (
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium flex items-center gap-2">
+                                        Submission Folder
+                                        <span className="text-xs font-normal text-muted-foreground">(Google Drive)</span>
+                                        {requiresDriveFolder && (
+                                            <span className="text-[10px] font-medium text-amber-600">Required</span>
+                                        )}
+                                    </Label>
+                                    <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg border">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                                            <span className={`text-sm font-medium truncate ${requiresDriveFolder && !selectedFolder ? 'text-amber-600' : ''}`}>
+                                                {selectedFolder?.name || "Select a folder"}
+                                            </span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={openFolderPicker}
+                                            disabled={driveLoading}
+                                        >
+                                            {driveLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Change"}
+                                        </Button>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Attachments uploaded to this task will be stored in this Drive folder.
+                                    </p>
+
+                                    {/* Folder picker dialog */}
+                                    <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+                                        <DialogContent className="sm:max-w-md p-0 gap-0">
+                                            <DialogHeader className="px-4 py-3 border-b">
+                                                <DialogTitle className="text-sm">Choose upload folder</DialogTitle>
+                                            </DialogHeader>
+
+                                            <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
+                                                <button
+                                                    onClick={backFolder}
+                                                    disabled={atRoot}
+                                                    className="p-1 rounded hover:bg-muted disabled:opacity-30 shrink-0 transition-colors"
+                                                >
+                                                    <ArrowLeft className="h-3.5 w-3.5" />
+                                                </button>
+                                                <span className="text-xs font-medium truncate flex-1">
+                                                    {currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}
+                                                </span>
+                                            </div>
+
+                                            <ScrollArea className="h-64">
+                                                {loadingFolders ? (
+                                                    <div className="flex items-center justify-center py-8">
+                                                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                                    </div>
+                                                ) : children.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-8 gap-1">
+                                                        <Folder className="h-5 w-5 text-muted-foreground/30" />
+                                                        <span className="text-xs text-muted-foreground">No folders here</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-1">
+                                                        {children.map((f) => (
+                                                            <button
+                                                                key={f.id}
+                                                                onClick={() => goFolder(f.id)}
+                                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50 transition-colors group"
+                                                            >
+                                                                <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                                <span className="flex-1 text-sm truncate">{f.name}</span>
+                                                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 transition-colors" />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </ScrollArea>
+
+                                            <div className="border-t px-4 py-3 flex items-center gap-2">
+                                                <Button
+                                                    onClick={confirmFolder}
+                                                    disabled={!currentFolderId}
+                                                    size="sm"
+                                                    className="flex-1"
+                                                >
+                                                    Select "{currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}"
+                                                </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            )}
+
+                            {driveConfig?.connected && !rootId && (
+                                <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                                    Google Drive is connected but no root folder is set yet. Ask an admin to configure it in Settings → Integrations.
+                                </div>
+                            )}
 
                             <div className="space-y-3">
                                 <Label className="text-sm font-medium flex items-center gap-2">

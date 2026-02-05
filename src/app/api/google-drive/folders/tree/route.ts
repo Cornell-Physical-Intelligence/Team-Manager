@@ -41,10 +41,6 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    if (user.role !== "Admin" && user.role !== "Team Lead") {
-        return NextResponse.json({ error: "Not authorized" }, { status: 403 })
-    }
-
     if (!(await driveConfigTableExists())) {
         return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
@@ -55,11 +51,17 @@ export async function GET(request: Request) {
     })
 
     const { searchParams } = new URL(request.url)
-    const rootId = searchParams.get("rootId") || config?.folderId || ""
+    const requestedRootId = searchParams.get("rootId")
+    const configuredRootId = config?.folderId || ""
+    const isLeadership = user.role === "Admin" || user.role === "Team Lead"
+    const rootId = isLeadership ? (requestedRootId || configuredRootId) : configuredRootId
 
     try {
+        if (!rootId) {
+            return NextResponse.json({ folders: [], rootId: "" })
+        }
         const folders = await getDriveFolderCache(user.workspaceId)
-        const tree = rootId ? filterSubtree(folders, rootId) : folders
+        const tree = filterSubtree(folders, rootId)
 
         return NextResponse.json({ folders: tree, rootId })
     } catch (error) {
@@ -67,4 +69,3 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Failed to load folders" }, { status: 500 })
     }
 }
-
