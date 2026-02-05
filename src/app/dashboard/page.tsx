@@ -436,7 +436,7 @@ export default async function DashboardPage() {
 
                 {/* Main Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    {/* Left Column - Tasks & Approval Side-by-Side */}
+                    {/* Left Column - Tasks & Activity */}
                     <div className="lg:col-span-2 space-y-5">
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                             {/* My Tasks - Detailed View */}
@@ -557,33 +557,9 @@ export default async function DashboardPage() {
                                 projects={projects}
                             />
                         )}
-                    </div>
 
-                    {/* Right Column - Leadership Only */}
-                    {isLeadership && (
-                        <div className="flex flex-col gap-5 h-full">
-                            {/* Project Activity Tracker */}
-                            <div className="shrink-0">
-                                <ProjectActivityTracker />
-                            </div>
-
-                            {/* Drive Uploads */}
-                            <DriveUploadWidget
-                                className="flex-1"
-                                initialConfig={{
-                                    connected: !!driveConfig?.refreshToken,
-                                    folderId: driveConfig?.folderId || null,
-                                    folderName: driveConfig?.folderName || null,
-                                    connectedByName: driveConfig?.connectedByName || null
-                                }}
-                                canManage={isAdmin}
-                            />
-                        </div>
-                    )}
-
-                    {/* Recent Activity - Bottom Left */}
-                    {isLeadership && recentActivity.length > 0 && (
-                        <div className="lg:col-span-2">
+                        {/* Recent Activity */}
+                        {isLeadership && recentActivity.length > 0 && (
                             <section className="border border-border rounded-lg p-4">
                                 <div className="flex items-center justify-between mb-4">
                                     <h2 className="text-sm font-medium">Recent Activity</h2>
@@ -605,6 +581,28 @@ export default async function DashboardPage() {
                                     ))}
                                 </div>
                             </section>
+                        )}
+                    </div>
+
+                    {/* Right Column - Leadership Only */}
+                    {isLeadership && (
+                        <div className="flex flex-col gap-5 h-full">
+                            {/* Project Activity Tracker */}
+                            <div className="shrink-0">
+                                <ProjectActivityTracker />
+                            </div>
+
+                            {/* Drive Uploads */}
+                            <DriveUploadWidget
+                                className="flex-1"
+                                initialConfig={{
+                                    connected: !!driveConfig?.refreshToken,
+                                    folderId: driveConfig?.folderId || null,
+                                    folderName: driveConfig?.folderName || null,
+                                    connectedByName: driveConfig?.connectedByName || null
+                                }}
+                                canManage={isAdmin}
+                            />
                         </div>
                     )}
 
