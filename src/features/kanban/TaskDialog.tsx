@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Plus, Trash2, X, ListChecks, Folder, ChevronRight, Loader2 } from "lucide-react"
+import { Plus, Trash2, X, ListChecks, Folder, ChevronRight, Loader2, ArrowLeft } from "lucide-react"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { createTask, updateTaskDetails, deleteTask } from "@/app/actions/kanban"
 import { RemoveScroll } from "react-remove-scroll"
@@ -129,6 +129,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [folderTree, setFolderTree] = useState<FolderNode[]>([])
     const [pickerOpen, setPickerOpen] = useState(false)
     const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+    const [folderStack, setFolderStack] = useState<string[]>([])
     const [loadingFolders, setLoadingFolders] = useState(false)
     const [selectedFolder, setSelectedFolder] = useState<{ id: string; name: string } | null>(null)
     const folderInitRef = useRef(false)
@@ -146,6 +147,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             folderInitRef.current = false
             setPickerOpen(false)
             setCurrentFolderId(null)
+            setFolderStack([])
             setSelectedFolder(null)
             if (task) {
                 setTitle(task.title || "")
@@ -348,6 +350,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             setFolderTree(cached)
         }
         setCurrentFolderId(rootId)
+        setFolderStack([])
         setPickerOpen(true)
         if (!cached || isStale) {
             await loadFolderTree(true)
@@ -356,7 +359,19 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
     const goFolder = (id: string) => {
         if (!id) return
+        if (currentFolderId) setFolderStack((s) => [...s, currentFolderId])
         setCurrentFolderId(id)
+    }
+
+    const backFolder = () => {
+        if (folderStack.length === 0) {
+            setCurrentFolderId(rootId)
+            return
+        }
+        const next = [...folderStack]
+        const prev = next.pop()!
+        setFolderStack(next)
+        setCurrentFolderId(prev)
     }
 
     const confirmFolder = () => {
@@ -834,7 +849,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             className="w-full h-10 flex items-center justify-between gap-2 px-3 pr-16 bg-background rounded-md border hover:bg-muted/30 transition-colors disabled:opacity-60"
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                <img
+                                                    src="/google-drive.svg"
+                                                    alt=""
+                                                    aria-hidden="true"
+                                                    className="h-4 w-4 shrink-0 opacity-70"
+                                                />
                                                 <span className="text-sm font-normal truncate">
                                                     {selectedFolder?.name || "Select a folder"}
                                                 </span>
@@ -857,6 +877,22 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             <DialogHeader className="px-4 py-3 border-b">
                                                 <DialogTitle className="text-sm">Choose upload folder</DialogTitle>
                                             </DialogHeader>
+
+                                            <div className="flex items-center gap-2 px-4 py-2 border-b">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    onClick={backFolder}
+                                                    className="h-7 w-7"
+                                                    disabled={folderStack.length === 0}
+                                                >
+                                                    <ArrowLeft className="h-4 w-4" />
+                                                </Button>
+                                                <div className="text-xs text-muted-foreground truncate">
+                                                    {currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || \"\")?.name || \"Folder\"}
+                                                </div>
+                                            </div>
 
                                             <ScrollArea className="h-64">
                                                 {loadingFolders ? (
