@@ -23,12 +23,11 @@ export function GeneralTab({ userName, userId, userRole, inviteCode, inviteLink 
             </div>
 
             <div className="space-y-5 max-w-md">
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px] items-end">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] items-end">
                     <DisplayNameSettings initialName={userName} />
-                    <div className="grid gap-2">
-                        <Label className="text-sm">Role</Label>
-                        <Input defaultValue={userRole} disabled className="bg-muted h-9 text-sm" />
-                    </div>
+                    <span className="text-xs text-muted-foreground sm:pb-2">
+                        {userRole}
+                    </span>
                 </div>
 
                 <AppearanceSettings userId={userId} />

@@ -18,12 +18,12 @@ export function CopyButton({ text }: { text: string }) {
             variant="outline"
             size="icon"
             onClick={handleCopy}
-            className="h-12 w-12 shrink-0"
+            className="h-9 w-9 shrink-0"
         >
             {copied ? (
-                <Check className="h-5 w-5 text-green-600" />
+                <Check className="h-4 w-4 text-green-600" />
             ) : (
-                <Copy className="h-5 w-5" />
+                <Copy className="h-4 w-4" />
             )}
         </Button>
     )
