@@ -67,11 +67,11 @@ function EditableName({
 
     if (editing) {
         return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 min-w-0 w-full">
                 <Input
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    className="h-7 text-sm w-[140px]"
+                    className="h-7 text-sm"
                     autoFocus
                     onKeyDown={(e) => {
                         if (e.key === "Enter") handleSave()
@@ -106,8 +106,8 @@ function EditableName({
     }
 
     return (
-        <div className="flex items-center gap-1.5 group">
-            <span className="text-sm font-medium">{name}</span>
+        <div className="flex items-center gap-1.5 group min-w-0">
+            <span className="text-sm font-medium truncate">{name}</span>
             {canEdit && (
                 <button
                     onClick={() => setEditing(true)}
@@ -161,10 +161,17 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
 
                 {/* Desktop view */}
                 <div className="hidden md:block">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm table-fixed">
+                        <colgroup>
+                            <col style={{ width: 220 }} />
+                            <col />
+                            <col style={{ width: 160 }} />
+                            <col style={{ width: 200 }} />
+                            {canManage && <col style={{ width: 56 }} />}
+                        </colgroup>
                         <thead>
                             <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
-                                <th className="text-left font-medium px-4 py-2.5 w-[200px]">Member</th>
+                                <th className="text-left font-medium px-4 py-2.5">Member</th>
                                 <th className="text-left font-medium px-4 py-2.5">Email</th>
                                 <th className="text-right font-medium px-4 py-2.5">Role</th>
                                 <th className="text-right font-medium px-4 py-2.5">Projects</th>
