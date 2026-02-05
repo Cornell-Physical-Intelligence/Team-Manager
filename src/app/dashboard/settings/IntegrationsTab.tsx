@@ -134,11 +134,6 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                             : "Not connected"}
                     </p>
                 </div>
-                {config.connected ? (
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                ) : (
-                    <span className="w-2 h-2 rounded-full bg-zinc-300 dark:bg-zinc-600 shrink-0" />
-                )}
             </div>
 
             {config.connected ? (
@@ -149,15 +144,9 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                     </div>
 
                     {canManage && (
-                        <Button variant="outline" size="sm" onClick={openPicker} className="w-full">
-                            {saved ? "Change Root Folder" : "Select Root Folder"}
-                        </Button>
-                    )}
-
-                    {canManage && (
                         <div className="flex items-center gap-2 pt-1">
-                            <Button variant="outline" size="sm" onClick={connect} disabled={connecting} className="flex-1">
-                                {connecting ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Connecting...</> : "Switch Account"}
+                            <Button variant="outline" size="sm" onClick={openPicker} className="flex-1">
+                                {saved ? "Change Root Folder" : "Select Root Folder"}
                             </Button>
                             <Button
                                 variant="outline"
@@ -166,7 +155,7 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                                 disabled={disconnecting}
                                 className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
                             >
-                                {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Disconnect"}
+                                {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Log out"}
                             </Button>
                         </div>
                     )}
