@@ -75,6 +75,18 @@ type Attachment = {
     externalId?: string | null
 }
 
+type DriveConfig = {
+    connected: boolean
+    folderId: string | null
+    folderName: string | null
+}
+
+type DriveFolderNode = {
+    id: string
+    name: string
+    parents: string[]
+}
+
 type TaskPreviewProps = {
     task: Task
     open: boolean
@@ -97,8 +109,10 @@ const formatTimeAgo = (date: string) => {
 
 const getAttachmentUrls = (attachment: Attachment) => {
     if (attachment.storageProvider === 'google' && attachment.externalId) {
+        const viewUrl = `https://drive.google.com/uc?export=view&id=${attachment.externalId}`
         return {
-            preview: `https://drive.google.com/uc?export=view&id=${attachment.externalId}`,
+            preview: `https://drive.google.com/thumbnail?id=${attachment.externalId}&sz=w400`,
+            fallbackPreview: viewUrl,
             download: `https://drive.google.com/uc?export=download&id=${attachment.externalId}`
         }
     }
@@ -293,6 +307,10 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
     const deleteTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
     const [checklistCount, setChecklistCount] = useState<number>(0)
+    const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null)
+    const [folderTree, setFolderTree] = useState<DriveFolderNode[]>([])
+    const [uploadsPath, setUploadsPath] = useState<string>("")
+    const driveConfigLoadedRef = useRef(false)
 
     // Scroll to bottom on new comments
     useEffect(() => {
@@ -318,6 +336,132 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                 })
         }
     }, [open])
+
+    useEffect(() => {
+        if (!open || driveConfigLoadedRef.current) return
+        driveConfigLoadedRef.current = true
+        let cancelled = false
+        const loadConfig = async () => {
+            try {
+                const res = await fetch("/api/google-drive/config")
+                const data = await res.json().catch(() => null)
+                if (cancelled) return
+                if (data && typeof data.connected === "boolean") {
+                    setDriveConfig({
+                        connected: data.connected,
+                        folderId: data.folderId || null,
+                        folderName: data.folderName || null
+                    })
+                } else {
+                    setDriveConfig({ connected: false, folderId: null, folderName: null })
+                }
+            } catch {
+                if (!cancelled) setDriveConfig({ connected: false, folderId: null, folderName: null })
+            }
+        }
+        loadConfig()
+        return () => { cancelled = true }
+    }, [open])
+
+    useEffect(() => {
+        if (!open || !driveConfig?.connected || !driveConfig.folderId) return
+        const rootId = driveConfig.folderId
+        const cacheKey = `driveFolderTree:${rootId}`
+        const cacheTimeKey = `${cacheKey}:ts`
+        const ttlMs = 30 * 60 * 1000
+        let cancelled = false
+
+        const readCache = () => {
+            try {
+                const raw = sessionStorage.getItem(cacheKey)
+                if (!raw) return null
+                const parsed = JSON.parse(raw)
+                return Array.isArray(parsed) ? (parsed as DriveFolderNode[]) : null
+            } catch {
+                return null
+            }
+        }
+
+        const readCacheTime = () => {
+            try {
+                const raw = sessionStorage.getItem(cacheTimeKey)
+                const ts = raw ? Number(raw) : 0
+                return Number.isFinite(ts) ? ts : 0
+            } catch {
+                return 0
+            }
+        }
+
+        const cached = readCache()
+        const cachedAt = readCacheTime()
+        const isStale = !cachedAt || Date.now() - cachedAt > ttlMs
+        if (cached && cached.length > 0) {
+            setFolderTree(cached)
+        }
+
+        const loadTree = async () => {
+            try {
+                const res = await fetch(`/api/google-drive/folders/tree?rootId=${rootId}`)
+                if (!res.ok) return
+                const data = await res.json()
+                const nextTree = Array.isArray(data.folders) ? data.folders : []
+                if (cancelled) return
+                setFolderTree(nextTree)
+            } catch {
+                // ignore
+            }
+        }
+
+        if (!cached || isStale) {
+            loadTree()
+        }
+        return () => { cancelled = true }
+    }, [open, driveConfig?.connected, driveConfig?.folderId])
+
+    useEffect(() => {
+        if (!open) return
+        const rootName = driveConfig?.folderName || "Drive"
+        const rootId = driveConfig?.folderId || null
+        const targetId = task.attachmentFolderId || rootId
+        const fallbackName = task.attachmentFolderName || "Team Manager"
+
+        if (!rootId || !targetId) {
+            setUploadsPath(`${rootName} / ${fallbackName}`)
+            return
+        }
+
+        if (targetId === rootId) {
+            setUploadsPath(rootName)
+            return
+        }
+
+        const map = new Map<string, DriveFolderNode>()
+        folderTree.forEach((node) => map.set(node.id, node))
+
+        const visited = new Set<string>()
+        const findPath = (currentId: string): string[] | null => {
+            if (currentId === rootId) return [rootName]
+            if (visited.has(currentId)) return null
+            visited.add(currentId)
+            const node = map.get(currentId)
+            const parents = node?.parents || []
+            for (const parentId of parents) {
+                const parentPath = findPath(parentId)
+                if (parentPath) {
+                    const name = node?.name || fallbackName
+                    return [...parentPath, name]
+                }
+            }
+            return null
+        }
+
+        const pathParts = findPath(targetId)
+        if (pathParts && pathParts.length > 0) {
+            setUploadsPath(pathParts.join(" / "))
+        } else {
+            setUploadsPath(`${rootName} / ${fallbackName}`)
+        }
+    }, [open, driveConfig?.folderId, driveConfig?.folderName, folderTree, task.attachmentFolderId, task.attachmentFolderName])
 
     // Track last comment time for incremental polling
     const lastCommentTime = useRef<string | null>(null)
@@ -951,22 +1095,24 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
 
                             {/* Files Section */}
                             <div className="border-t pt-2">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-[10px] font-medium">
-                                        Files ({attachments.length})
-                                    </span>
+                                <div className="flex items-center justify-between mb-1.5 gap-2">
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <span className="text-[10px] font-medium shrink-0">
+                                            Files ({attachments.length})
+                                        </span>
+                                        <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-x-auto scrollbar-none">
+                                            Uploads go to: {uploadsPath || `${task.attachmentFolderName || "Team Manager"}`}
+                                        </div>
+                                    </div>
                                     {attachments.length > 0 && (
                                         <button
                                             onClick={downloadAllAttachments}
-                                            className="text-[9px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted transition-colors"
+                                            className="text-[9px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted transition-colors shrink-0"
                                         >
                                             <Download className="h-2.5 w-2.5" />
                                             Download All
                                         </button>
                                     )}
-                                </div>
-                                <div className="text-[10px] text-muted-foreground mb-2">
-                                    Uploads go to: {task.attachmentFolderName || "Team Manager"}
                                 </div>
                                 <input
                                     ref={fileInputRef}
@@ -997,7 +1143,8 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                     <div className="flex gap-2 pb-2 min-w-max">
                                         {/* Render all attachments */}
                                         {attachments.map(a => {
-                                            const { preview, download } = getAttachmentUrls(a)
+                                            const { preview, fallbackPreview, download } = getAttachmentUrls(a) as { preview: string; download: string; fallbackPreview?: string }
+                                            const enlargeUrl = fallbackPreview || preview
                                             if (deletingIds.has(a.id)) {
                                                 return (
                                                     <div key={a.id} className="relative group bg-muted/80 rounded overflow-hidden border border-border shrink-0 w-24 h-24 flex flex-col items-center justify-center gap-1.5">
@@ -1025,12 +1172,21 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                                             alt={a.name}
                                                             className="w-full h-full object-cover pointer-events-none select-none"
                                                             loading="lazy"
+                                                            onError={(e) => {
+                                                                if (fallbackPreview && e.currentTarget.src !== fallbackPreview) {
+                                                                    e.currentTarget.src = fallbackPreview
+                                                                    return
+                                                                }
+                                                                if (download && e.currentTarget.src !== download) {
+                                                                    e.currentTarget.src = download
+                                                                }
+                                                            }}
                                                         />
                                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 z-20">
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
-                                                                    setEnlargedImage({ url: preview, name: a.name })
+                                                                    setEnlargedImage({ url: enlargeUrl, name: a.name })
                                                                 }}
                                                                 className="p-1.5 bg-background/90 rounded hover:bg-background shadow-sm"
                                                                 title="Enlarge"
