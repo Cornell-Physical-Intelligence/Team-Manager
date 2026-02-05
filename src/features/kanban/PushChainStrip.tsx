@@ -21,7 +21,6 @@ type PushChainStripProps = {
     chain: PushType[]
     isComplete: (pushId: string) => boolean
     isAllDone: (pushId: string) => boolean
-    isCompleting: (pushId: string) => boolean
     isAdmin: boolean
     onEditPush: (e: React.MouseEvent, push: PushType) => void
     onAddTask: (push: PushType) => void
@@ -44,7 +43,6 @@ export function PushChainStrip({
     chain,
     isComplete,
     isAllDone,
-    isCompleting,
     isAdmin,
     onEditPush,
     onAddTask,
@@ -244,7 +242,6 @@ export function PushChainStrip({
                 {chain.map((push) => {
                     const isExpanded = push.id === expandedPushId
                     const pushIsComplete = isComplete(push.id)
-                    const pushIsCompleting = isCompleting(push.id)
                     const pushIsLocked = isLocked(push)
                     const isHovered = hoveredId === push.id
                     const percent = push.taskCount > 0 ? (push.completedCount / push.taskCount) * 100 : 0
@@ -391,46 +388,35 @@ export function PushChainStrip({
                                         )}>
                                             {push.name}
                                         </span>
-                                        {isAdmin && isAllDone(push.id) && (!pushIsComplete || pushIsCompleting) && (
+                                        {isAdmin && (pushIsComplete || isAllDone(push.id)) && (
                                             <button
                                                 type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
+                                                    if (pushIsComplete) {
+                                                        onUnmarkComplete(push)
+                                                        return
+                                                    }
                                                     onMarkComplete(push)
                                                     setIsContentOpen(false)
                                                     setUserSelectedPushId(null)
                                                 }}
                                                 className={cn(
                                                     "h-7 inline-flex items-center overflow-hidden rounded-md border text-xs font-medium transition-[max-width,padding,border-color,background-color] duration-200 ease-out",
-                                                    pushIsCompleting
+                                                    pushIsComplete
                                                         ? "max-w-7 px-0 gap-0 border-transparent bg-transparent text-green-600 justify-center"
                                                         : "max-w-[140px] px-2 gap-1 border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
                                                 )}
-                                                title="Mark this push complete"
+                                                title={pushIsComplete ? "Mark as not complete" : "Mark this push complete"}
                                             >
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                                 <span
                                                     className={cn(
                                                         "hidden sm:inline whitespace-nowrap transition-all duration-200",
-                                                        pushIsCompleting ? "opacity-0 w-0 translate-x-1" : "opacity-100"
+                                                        pushIsComplete ? "opacity-0 w-0 translate-x-1" : "opacity-100"
                                                     )}
                                                 >
                                                     Mark Complete
-                                                </span>
-                                            </button>
-                                        )}
-                                        {pushIsComplete && !pushIsCompleting && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    onUnmarkComplete(push)
-                                                }}
-                                                className="flex items-center"
-                                                title="Mark as not complete"
-                                            >
-                                                <span className="w-7 flex items-center justify-center">
-                                                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                                                 </span>
                                             </button>
                                         )}
