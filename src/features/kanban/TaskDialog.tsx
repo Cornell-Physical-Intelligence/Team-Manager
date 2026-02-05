@@ -176,7 +176,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setDescription("")
                 setAssigneeId(initialAssigneeIds?.[0] || "")
                 setAssigneeIds(initialAssigneeIds || [])
-                setStartDate(today)
+                setStartDate("")
                 setEndDate("")
                 setRequireAttachment(true)
                 setEnableProgress(false)
@@ -626,20 +626,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         }
     }
 
-    const applyQuickDays = (days: number) => {
-        const baseStr = endDate || startDate || today
-        const base = new Date(baseStr)
-        const next = new Date(base)
-        next.setDate(base.getDate() + days)
-        if (!startDate) {
-            setStartDate(baseStr)
-        }
-        setEndDate(next.toISOString().split('T')[0])
-    }
-
-    const handleAddDay = () => applyQuickDays(1)
-    const handleAddWeek = () => applyQuickDays(7)
-
     return (
         <>
             <Dialog open={open} onOpenChange={isControlled ? onOpenChange : setInternalOpen}>
@@ -739,7 +725,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
-                                                    className="w-full justify-between h-10 font-normal px-3 pr-16"
+                                                    className="w-full justify-between h-10 font-normal px-3 pr-20 relative"
                                                 >
                                                     <span className="truncate">
                                                         {assigneeIds.length === 0
@@ -748,7 +734,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                                 ? users.find(u => u.id === assigneeIds[0])?.name || "1 selected"
                                                                 : `${assigneeIds.length} selected`}
                                                     </span>
-                                                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50 absolute right-11" />
                                                 </Button>
                                             </PopoverTrigger>
                                         <PopoverContent className="w-[260px] p-0" align="start">
@@ -801,27 +787,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 </div>
 
                                 <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="taskDates" className="sr-only">Dates</Label>
-                                        {!task && (
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="text-xs text-primary hover:underline font-medium"
-                                                    onClick={handleAddDay}
-                                                >
-                                                    + 1 Day
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="text-xs text-primary hover:underline font-medium"
-                                                    onClick={handleAddWeek}
-                                                >
-                                                    + 7 Days
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                    <Label htmlFor="taskDates" className="sr-only">Dates</Label>
                                     <div className="relative">
                                         <DateRangePicker
                                             id="taskDates"
@@ -832,6 +798,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 setEndDate(end)
                                             }}
                                             className="h-10 pr-16"
+                                            placeholder="Select Days"
                                             quickActions={!task ? [
                                                 { label: "+1 Day", days: 1 },
                                                 { label: "+7 Days", days: 7 }

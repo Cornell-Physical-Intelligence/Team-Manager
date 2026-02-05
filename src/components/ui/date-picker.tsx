@@ -338,7 +338,6 @@ function DateRangePicker({
             } else {
                 onChange(formatDate(selectedStart), clickedStr)
             }
-            setOpen(false)
         }
     }
 
@@ -525,7 +524,7 @@ function DateRangePicker({
                                             disabled={isDateDisabled(day)}
                                             className={cn(
                                                 "h-8 w-8 rounded-md text-sm font-medium transition-colors",
-                                                "relative",
+                                                "relative flex flex-col items-center justify-center",
                                                 "hover:bg-accent hover:text-accent-foreground",
                                                 "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
                                                 "disabled:pointer-events-none disabled:opacity-30",
@@ -538,7 +537,7 @@ function DateRangePicker({
                                             {isToday(day) && (
                                                 <span
                                                     className={cn(
-                                                        "absolute -top-1 right-0 text-[8px] leading-none",
+                                                        "text-[7px] leading-none mt-0.5",
                                                         (isStart || isEnd) ? "text-primary-foreground/80" : "text-muted-foreground"
                                                     )}
                                                 >
