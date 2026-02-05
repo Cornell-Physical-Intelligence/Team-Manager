@@ -129,7 +129,9 @@ export function Board({
     const [loadingPushes, setLoadingPushes] = useState<Record<string, true>>({})
     const [loadedPushes, setLoadedPushes] = useState<Record<string, true>>({})
     const [pushStatusOverrides, setPushStatusOverrides] = useState<Record<string, 'Active' | 'Completed'>>({})
+    const [completingPushes, setCompletingPushes] = useState<Record<string, true>>({})
     const { toast } = useToast()
+    const completionTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
     // Dialog States
     const [reviewDialog, setReviewDialog] = useState<{
@@ -937,20 +939,63 @@ export function Board({
         return getPushStatus(pushId) === 'Completed'
     }
 
+    const isPushCompleting = (pushId: string) => {
+        return !!completingPushes[pushId]
+    }
+
     const isPushLocked = (push: PushType) => {
         if (!push.dependsOnId) return false
         // A push is locked if its parent is not complete
         return !isPushMarkedComplete(push.dependsOnId)
     }
 
+    useEffect(() => {
+        return () => {
+            const timers = completionTimersRef.current
+            Object.values(timers).forEach((timer) => clearTimeout(timer))
+            completionTimersRef.current = {}
+        }
+    }, [])
+
+    const startCompletionTransition = (pushId: string) => {
+        setCompletingPushes((prev) => ({ ...prev, [pushId]: true }))
+        const timers = completionTimersRef.current
+        if (timers[pushId]) clearTimeout(timers[pushId])
+        timers[pushId] = setTimeout(() => {
+            setCompletingPushes((prev) => {
+                const next = { ...prev }
+                delete next[pushId]
+                return next
+            })
+            delete completionTimersRef.current[pushId]
+        }, 220)
+    }
+
+    const clearCompletionTransition = (pushId: string) => {
+        const timers = completionTimersRef.current
+        if (timers[pushId]) {
+            clearTimeout(timers[pushId])
+            delete timers[pushId]
+        }
+        setCompletingPushes((prev) => {
+            if (!prev[pushId]) return prev
+            const next = { ...prev }
+            delete next[pushId]
+            return next
+        })
+    }
+
     const setPushStatus = async (pushId: string, status: 'Active' | 'Completed') => {
         setPushStatusOverrides((prev) => ({ ...prev, [pushId]: status }))
         if (status === 'Completed') {
+            startCompletionTransition(pushId)
             setCollapsedPushes((prev) => {
                 const next = new Set(prev)
                 next.add(pushId)
                 return next
             })
+        } else {
+            clearCompletionTransition(pushId)
         }
         try {
             await updatePush({ id: pushId, status })
@@ -1102,6 +1147,7 @@ export function Board({
                                         isAllDone={isPushAllDone}
                                         onMarkComplete={(push) => setPushStatus(push.id, 'Completed')}
                                         onUnmarkComplete={(push) => setPushStatus(push.id, 'Active')}
+                                        isCompleting={isPushCompleting}
                                         isAdmin={isAdmin}
                                         onEditPush={handleEditPush}
                                         onAddTask={(push) => {
@@ -1128,6 +1174,7 @@ export function Board({
                         const pushColumns = getPushTasks(push.id)
                         const allTasksDone = isPushAllDone(push.id)
                         const isComplete = isPushMarkedComplete(push.id)
+                        const isCompleting = isPushCompleting(push.id)
                         const isLocked = isPushLocked(push)
                         const isCollapsed = collapsedPushes.has(push.id)
                         const isOpen = !isCollapsed
@@ -1165,21 +1212,33 @@ export function Board({
                                                 )}>
                                                     {push.name}
                                                 </span>
-                                                {isAdmin && allTasksDone && !isComplete && (
+                                                {isAdmin && allTasksDone && (!isComplete || isCompleting) && (
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation()
                                                             setPushStatus(push.id, 'Completed')
                                                         }}
-                                                        className="h-7 flex items-center gap-1 px-2 rounded-md border border-green-200 bg-green-50 text-green-600 text-xs font-medium hover:bg-green-100 transition-colors"
+                                                        className={cn(
+                                                            "h-7 inline-flex items-center overflow-hidden rounded-md border text-xs font-medium transition-[max-width,padding,border-color,background-color] duration-200 ease-out",
+                                                            isCompleting
+                                                                ? "max-w-7 px-0 gap-0 border-transparent bg-transparent text-green-600 justify-center"
+                                                                : "max-w-[140px] px-2 gap-1 border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
+                                                        )}
                                                         title="Mark this push complete"
                                                     >
                                                         <CheckCircle2 className="h-3.5 w-3.5" />
-                                                        <span className="hidden sm:inline">Mark Complete</span>
+                                                        <span
+                                                            className={cn(
+                                                                "hidden sm:inline whitespace-nowrap transition-all duration-200",
+                                                                isCompleting ? "opacity-0 w-0 translate-x-1" : "opacity-100"
+                                                            )}
+                                                        >
+                                                            Mark Complete
+                                                        </span>
                                                     </button>
                                                 )}
-                                                {isComplete && (
+                                                {isComplete && !isCompleting && (
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
@@ -1189,7 +1248,9 @@ export function Board({
                                                         className="flex items-center"
                                                         title="Mark as not complete"
                                                     >
-                                                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                                        <span className="w-7 flex items-center justify-center">
+                                                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                                        </span>
                                                     </button>
                                                 )}
                                             </div>
