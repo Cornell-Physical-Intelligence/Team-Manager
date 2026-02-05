@@ -385,14 +385,13 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
         setIsLoading(true)
         try {
-            const attachmentFolderPayload = (driveConfig?.connected && rootId)
-                ? {
-                    attachmentFolderId: selectedFolder?.id || task?.attachmentFolderId || rootId,
-                    attachmentFolderName: selectedFolder?.name || task?.attachmentFolderName || rootName
-                }
-                : {}
-
             if (task) {
+                const attachmentFolderPayload = (driveConfig?.connected && rootId)
+                    ? {
+                        attachmentFolderId: selectedFolder?.id || task.attachmentFolderId || rootId,
+                        attachmentFolderName: selectedFolder?.name || task.attachmentFolderName || rootName
+                    }
+                    : {}
                 const result = await updateTaskDetails(task.id, {
                     title: title.trim(),
                     description: description.trim(),
@@ -444,6 +443,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                 handleClose()
             } else {
+                const attachmentFolderPayload = (driveConfig?.connected && rootId)
+                    ? {
+                        attachmentFolderId: selectedFolder?.id || null,
+                        attachmentFolderName: selectedFolder?.name || null
+                    }
+                    : {}
                 const result = await createTask({
                     title: title.trim(),
                     description: description.trim(),
