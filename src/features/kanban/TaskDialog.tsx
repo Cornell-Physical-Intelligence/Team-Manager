@@ -193,20 +193,32 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (driveConfigLoadedRef.current) return
         driveConfigLoadedRef.current = true
         let cancelled = false
-        const loadDriveConfig = async () => {
+        const cached = readCachedDriveConfig()
+        const cachedAt = readCachedDriveConfigTime()
+        const isStale = !cachedAt || Date.now() - cachedAt > driveConfigCacheTtlMs
+        if (cached) {
+            setDriveConfig(cached)
+            setDriveLoading(false)
+        } else {
             setDriveLoading(true)
+        }
+        const loadDriveConfig = async () => {
             try {
                 const res = await fetch("/api/google-drive/config")
                 const data = await res.json().catch(() => null)
                 if (cancelled) return
                 if (data && typeof data.connected === "boolean") {
-                    setDriveConfig({
+                    const nextConfig = {
                         connected: data.connected,
                         folderId: data.folderId || null,
                         folderName: data.folderName || null
-                    })
+                    }
+                    setDriveConfig(nextConfig)
+                    writeCachedDriveConfig(nextConfig)
                 } else {
-                    setDriveConfig({ connected: false, folderId: null, folderName: null })
+                    const fallback = { connected: false, folderId: null, folderName: null }
+                    setDriveConfig(fallback)
+                    writeCachedDriveConfig(fallback)
                 }
             } catch {
                 if (!cancelled) setDriveConfig({ connected: false, folderId: null, folderName: null })
@@ -243,6 +255,9 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const rootId = driveConfig?.folderId || null
     const rootName = driveConfig?.folderName || "Drive"
     const requiresDriveFolder = !task && (driveLoading ? true : !!(driveConfig?.connected && rootId))
+    const driveConfigCacheKey = "driveConfig:state"
+    const driveConfigCacheTimeKey = "driveConfig:state:ts"
+    const driveConfigCacheTtlMs = 30 * 60 * 1000
     const folderCacheKey = rootId ? `driveFolderTree:${rootId}` : null
     const folderCacheTimeKey = folderCacheKey ? `${folderCacheKey}:ts` : null
     const folderCacheTtlMs = 30 * 60 * 1000
@@ -300,6 +315,41 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         try {
             sessionStorage.setItem(folderCacheKey, JSON.stringify(tree))
             sessionStorage.setItem(folderCacheTimeKey, String(Date.now()))
+        } catch {
+            // Ignore cache write failures
+        }
+    }
+
+    const readCachedDriveConfig = () => {
+        try {
+            const raw = sessionStorage.getItem(driveConfigCacheKey)
+            if (!raw) return null
+            const parsed = JSON.parse(raw)
+            if (!parsed || typeof parsed.connected !== "boolean") return null
+            return {
+                connected: !!parsed.connected,
+                folderId: parsed.folderId || null,
+                folderName: parsed.folderName || null
+            } as DriveConfig
+        } catch {
+            return null
+        }
+    }
+
+    const readCachedDriveConfigTime = () => {
+        try {
+            const raw = sessionStorage.getItem(driveConfigCacheTimeKey)
+            const ts = raw ? Number(raw) : 0
+            return Number.isFinite(ts) ? ts : 0
+        } catch {
+            return 0
+        }
+    }
+
+    const writeCachedDriveConfig = (config: DriveConfig) => {
+        try {
+            sessionStorage.setItem(driveConfigCacheKey, JSON.stringify(config))
+            sessionStorage.setItem(driveConfigCacheTimeKey, String(Date.now()))
         } catch {
             // Ignore cache write failures
         }
@@ -837,6 +887,17 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                     </div>
                                 </div>
                             </div>
+
+                            {driveLoading && !driveConfig && (
+                                <div className="space-y-1">
+                                    <div className="relative">
+                                        <div className="w-full h-10 rounded-md border bg-muted/20 animate-pulse" />
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Attachments uploaded to this task will be stored in this Drive folder.
+                                    </p>
+                                </div>
+                            )}
 
                             {driveConfig?.connected && rootId && (
                                 <div className="space-y-1">
