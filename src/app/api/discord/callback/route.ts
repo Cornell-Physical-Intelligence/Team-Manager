@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import prisma from '@/lib/prisma'
 import { createSession, SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from '@/lib/session'
+import { joinWorkspaceByCode } from '@/lib/workspaceInvites'
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
@@ -148,8 +149,20 @@ export async function GET(request: Request) {
 
             const session = await createSession(user.id)
 
-            // Redirect to Workspaces
-            const response = NextResponse.redirect(new URL('/workspaces', request.url))
+            const pendingInvite = cookieStore.get('pending_invite')?.value
+            if (pendingInvite) {
+                await joinWorkspaceByCode({
+                    userId: user.id,
+                    userName: user.name,
+                    code: pendingInvite,
+                })
+                cookieStore.delete('pending_invite')
+            }
+
+            // Redirect to Workspaces or Dashboard if invite processed
+            const response = NextResponse.redirect(
+                new URL(pendingInvite ? '/dashboard' : '/workspaces', request.url)
+            )
 
             // Set session cookie on the response
             response.cookies.set(SESSION_COOKIE_NAME, session.token, {
@@ -183,6 +196,16 @@ export async function GET(request: Request) {
         })
 
         console.log(`[Auth] Created new user ${user.id} with role Member.`)
+
+        const pendingInvite = cookieStore.get('pending_invite')?.value
+        if (pendingInvite) {
+            await joinWorkspaceByCode({
+                userId: user.id,
+                userName: user.name,
+                code: pendingInvite,
+            })
+            cookieStore.delete('pending_invite')
+        }
 
         const response = NextResponse.redirect(new URL('/onboarding', request.url))
 

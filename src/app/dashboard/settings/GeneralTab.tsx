@@ -14,10 +14,11 @@ type GeneralTabProps = {
     userId: string
     userRole: string
     inviteCode: string | null
+    inviteLink: string | null
     showWorkload: boolean
 }
 
-export function GeneralTab({ userName, userId, userRole, inviteCode, showWorkload }: GeneralTabProps) {
+export function GeneralTab({ userName, userId, userRole, inviteCode, inviteLink, showWorkload }: GeneralTabProps) {
     const [workloadOpen, setWorkloadOpen] = useState(false)
 
     return (
@@ -47,6 +48,23 @@ export function GeneralTab({ userName, userId, userRole, inviteCode, showWorkloa
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Share this code to allow others to join your workspace.
+                        </p>
+                    </div>
+                )}
+
+                {inviteLink && (
+                    <div className="grid gap-2">
+                        <Label className="text-sm">Invite Link</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={inviteLink}
+                                readOnly
+                                className="h-9 text-xs bg-muted/50"
+                            />
+                            <CopyButton text={inviteLink} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Anyone with this link can join your workspace.
                         </p>
                     </div>
                 )}

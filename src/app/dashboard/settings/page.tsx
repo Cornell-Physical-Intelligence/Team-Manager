@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { driveConfigTableExists } from "@/lib/googleDrive"
+import { appUrl } from "@/lib/appUrl"
 import { SettingsShell } from "./SettingsShell"
 import { GeneralTab } from "./GeneralTab"
 import { MembersTab } from "./MembersTab"
@@ -106,6 +107,7 @@ export default async function SettingsPage() {
                         userId={user.id}
                         userRole={user.role}
                         inviteCode={workspace?.inviteCode || null}
+                        inviteLink={workspace?.inviteCode ? appUrl(`/invite/${workspace.inviteCode}`) : null}
                         showWorkload={user.role === "Admin"}
                     />
                 ),
