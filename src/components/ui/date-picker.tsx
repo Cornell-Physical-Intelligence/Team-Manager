@@ -239,6 +239,13 @@ function DateRangePicker({
     quickActions = []
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false)
+    const [isDragging, setIsDragging] = React.useState(false)
+    const [dragAnchor, setDragAnchor] = React.useState<Date | null>(null)
+    const [dragHover, setDragHover] = React.useState<Date | null>(null)
+    const dragMovedRef = React.useRef(false)
+    const ignoreClickRef = React.useRef(false)
+    const dragAnchorRef = React.useRef<Date | null>(null)
+    const dragHoverRef = React.useRef<Date | null>(null)
 
     const selectedStart = startDate ? new Date(startDate + "T00:00:00") : null
     const selectedEnd = endDate ? new Date(endDate + "T00:00:00") : null
@@ -277,7 +284,44 @@ function DateRangePicker({
 
     const formatDate = (date: Date) => date.toISOString().split("T")[0]
 
+    React.useEffect(() => {
+        dragAnchorRef.current = dragAnchor
+    }, [dragAnchor])
+
+    React.useEffect(() => {
+        dragHoverRef.current = dragHover
+    }, [dragHover])
+
+    const finalizeDrag = React.useCallback(() => {
+        if (!dragAnchorRef.current) {
+            setIsDragging(false)
+            return
+        }
+        if (dragMovedRef.current) {
+            const anchor = dragAnchorRef.current
+            const hover = dragHoverRef.current || anchor
+            const [start, end] = anchor.getTime() <= hover.getTime() ? [anchor, hover] : [hover, anchor]
+            onChange(formatDate(start), formatDate(end))
+            ignoreClickRef.current = true
+        }
+        dragMovedRef.current = false
+        setIsDragging(false)
+        setDragAnchor(null)
+        setDragHover(null)
+    }, [onChange])
+
+    React.useEffect(() => {
+        if (!isDragging) return
+        const handleMouseUp = () => finalizeDrag()
+        window.addEventListener("mouseup", handleMouseUp)
+        return () => window.removeEventListener("mouseup", handleMouseUp)
+    }, [isDragging, finalizeDrag])
+
     const selectDate = (day: number) => {
+        if (ignoreClickRef.current) {
+            ignoreClickRef.current = false
+            return
+        }
         const clicked = new Date(year, month, day)
         const clickedStr = formatDate(clicked)
 
@@ -322,12 +366,6 @@ function DateRangePicker({
         )
     }
 
-    const isInRange = (day: number) => {
-        if (!selectedStart || !selectedEnd) return false
-        const checkDate = new Date(year, month, day).getTime()
-        return checkDate >= selectedStart.getTime() && checkDate <= selectedEnd.getTime()
-    }
-
     const formatDisplayDate = (dateStr: string) => {
         const date = new Date(dateStr + "T00:00:00")
         return date.toLocaleDateString("en-US", {
@@ -365,8 +403,32 @@ function DateRangePicker({
         const end = new Date(base)
         end.setDate(base.getDate() + days)
         onChange(start, formatDate(end))
-        setOpen(false)
     }
+
+    const previewStart = isDragging && dragAnchor ? dragAnchor : selectedStart
+    const previewEnd = isDragging && dragHover ? dragHover : selectedEnd
+    const previewRange = previewStart && previewEnd
+        ? (previewStart.getTime() <= previewEnd.getTime()
+            ? { start: previewStart, end: previewEnd }
+            : { start: previewEnd, end: previewStart })
+        : null
+    const rangeStart = previewRange?.start || previewStart
+    const rangeEnd = previewRange?.end || previewEnd
+
+    const isPreviewInRange = (day: number) => {
+        if (!rangeStart || !rangeEnd) return false
+        const checkDate = new Date(year, month, day).getTime()
+        return checkDate >= rangeStart.getTime() && checkDate <= rangeEnd.getTime()
+    }
+
+    const isPreviewStart = (dateObj: Date | null) => isSameDay(dateObj, rangeStart)
+    const isPreviewEnd = (dateObj: Date | null) => isSameDay(dateObj, rangeEnd)
+
+    const selectionHint = isDragging
+        ? "Drag to choose an end date"
+        : !selectedStart || (selectedStart && selectedEnd)
+            ? "Click to set a start date"
+            : "Click to set an end date"
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -386,7 +448,7 @@ function DateRangePicker({
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
                 <div className="p-3">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-2">
                         <Button
                             variant="ghost"
                             size="icon-sm"
@@ -408,6 +470,10 @@ function DateRangePicker({
                         </Button>
                     </div>
 
+                    <div className="text-[11px] text-muted-foreground mb-2">
+                        {selectionHint}
+                    </div>
+
                     <div className="grid grid-cols-7 gap-1 mb-1">
                         {DAYS.map((day) => (
                             <div
@@ -419,17 +485,53 @@ function DateRangePicker({
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-7 gap-1">
+                    <div
+                        className="grid grid-cols-7 gap-1"
+                        onMouseLeave={() => {
+                            if (isDragging) {
+                                const anchor = dragAnchorRef.current
+                                if (anchor) {
+                                    dragHoverRef.current = anchor
+                                    setDragHover(anchor)
+                                }
+                            }
+                        }}
+                    >
                         {calendarDays.map((day, index) => {
                             const dateObj = day !== null ? new Date(year, month, day) : null
-                            const isStart = isSameDay(dateObj, selectedStart)
-                            const isEnd = isSameDay(dateObj, selectedEnd)
-                            const inRange = day !== null && isInRange(day)
+                            const isStart = isPreviewStart(dateObj)
+                            const isEnd = isPreviewEnd(dateObj)
+                            const inRange = day !== null && isPreviewInRange(day)
                             return (
                                 <div key={index} className="h-8 w-8">
                                     {day !== null && (
                                         <button
                                             type="button"
+                                            onMouseDown={() => {
+                                                if (isDateDisabled(day)) return
+                                                const anchor = new Date(year, month, day)
+                                                dragMovedRef.current = false
+                                                dragAnchorRef.current = anchor
+                                                dragHoverRef.current = anchor
+                                                setDragAnchor(anchor)
+                                                setDragHover(anchor)
+                                                setIsDragging(true)
+                                            }}
+                                            onMouseEnter={() => {
+                                                if (!isDragging || isDateDisabled(day)) return
+                                                const hover = new Date(year, month, day)
+                                                const anchor = dragAnchorRef.current
+                                                if (anchor && hover.getTime() !== anchor.getTime()) {
+                                                    dragMovedRef.current = true
+                                                }
+                                                dragHoverRef.current = hover
+                                                setDragHover(hover)
+                                            }}
+                                            onMouseUp={() => {
+                                                if (isDragging) {
+                                                    finalizeDrag()
+                                                }
+                                            }}
                                             onClick={() => selectDate(day)}
                                             disabled={isDateDisabled(day)}
                                             className={cn(
@@ -450,46 +552,35 @@ function DateRangePicker({
                         })}
                     </div>
 
-                    {quickActions.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                            {quickActions.map((action) => (
-                                <Button
-                                    key={action.label}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs h-7 px-2"
-                                    onClick={() => applyQuickAction(action.days)}
-                                >
-                                    {action.label}
-                                </Button>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="mt-3 pt-3 border-t flex justify-between">
+                    <div className="mt-2 pt-2 border-t flex items-center justify-between gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => {
                                 onChange("", "")
-                                setOpen(false)
+                                setDragAnchor(null)
+                                setDragHover(null)
+                                dragMovedRef.current = false
                             }}
                             className="text-xs h-7 px-2"
                         >
                             Clear
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                const today = new Date().toISOString().split("T")[0]
-                                onChange(today, today)
-                                setOpen(false)
-                            }}
-                            className="text-xs h-7 px-2"
-                        >
-                            Today
-                        </Button>
+                        {quickActions.length > 0 && (
+                            <div className="flex gap-2 ml-auto">
+                                {quickActions.map((action) => (
+                                    <Button
+                                        key={action.label}
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs h-7 px-2"
+                                        onClick={() => applyQuickAction(action.days)}
+                                    >
+                                        {action.label}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </PopoverContent>

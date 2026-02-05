@@ -634,6 +634,20 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         }
     }
 
+    const applyQuickDays = (days: number) => {
+        const baseStr = endDate || startDate || today
+        const base = new Date(baseStr)
+        const next = new Date(base)
+        next.setDate(base.getDate() + days)
+        if (!startDate) {
+            setStartDate(baseStr)
+        }
+        setEndDate(next.toISOString().split('T')[0])
+    }
+
+    const handleAddDay = () => applyQuickDays(1)
+    const handleAddWeek = () => applyQuickDays(7)
+
     return (
         <>
             <Dialog open={open} onOpenChange={isControlled ? onOpenChange : setInternalOpen}>
@@ -765,10 +779,30 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="taskDates" className="text-sm font-medium flex items-center gap-2">
-                                        Dates
-                                        <span className={requiredTagClass(hasDateRange)}>Required</span>
-                                    </Label>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="taskDates" className="text-sm font-medium flex items-center gap-2">
+                                            Dates
+                                            <span className={requiredTagClass(hasDateRange)}>Required</span>
+                                        </Label>
+                                        {!task && (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="text-xs text-primary hover:underline font-medium"
+                                                    onClick={handleAddDay}
+                                                >
+                                                    + 1 Day
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="text-xs text-primary hover:underline font-medium"
+                                                    onClick={handleAddWeek}
+                                                >
+                                                    + 7 Days
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                     <DateRangePicker
                                         id="taskDates"
                                         startDate={startDate}
