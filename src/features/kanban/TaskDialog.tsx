@@ -406,7 +406,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const hasDriveFolder = !!selectedFolder
 
     const requiredTagClass = (met: boolean) =>
-        `text-[10px] font-normal ${met ? "text-foreground" : "text-destructive"}`
+        `text-[10px] font-normal text-destructive transition-all duration-200 overflow-hidden whitespace-nowrap ${met ? "opacity-0 max-w-0 ml-0" : "opacity-100 max-w-[80px] ml-2"}`
 
     // Validation - all fields required
     const isValid = useMemo(() => {
@@ -682,7 +682,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="title" className="text-sm font-medium flex items-center gap-2">
+                                    <Label htmlFor="title" className="text-sm font-medium inline-flex items-center">
                                         Task Title
                                         <span className={requiredTagClass(hasTitle)}>Required</span>
                                     </Label>
@@ -696,7 +696,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="description" className="text-sm font-medium flex items-center gap-2">
+                                    <Label htmlFor="description" className="text-sm font-medium inline-flex items-center">
                                         Description
                                         <span className={requiredTagClass(hasDescription)}>Required</span>
                                     </Label>
@@ -712,7 +712,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-medium flex items-center gap-2">
+                                    <Label className="text-sm font-medium inline-flex items-center">
                                         Assignees
                                         <span className={requiredTagClass(hasAssignees)}>Required</span>
                                     </Label>
@@ -780,7 +780,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
-                                        <Label htmlFor="taskDates" className="text-sm font-medium flex items-center gap-2">
+                                        <Label htmlFor="taskDates" className="text-sm font-medium inline-flex items-center">
                                             Dates
                                             <span className={requiredTagClass(hasDateRange)}>Required</span>
                                         </Label>
@@ -822,7 +822,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                             {driveConfig?.connected && rootId && (
                                 <div className="space-y-2">
-                                    <Label className="text-sm font-medium flex items-center gap-2">
+                                    <Label className="text-sm font-medium inline-flex items-center">
                                         Submission Folder
                                         {requiresDriveFolder && (
                                             <span className={requiredTagClass(hasDriveFolder)}>Required</span>

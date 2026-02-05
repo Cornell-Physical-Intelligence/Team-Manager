@@ -385,7 +385,6 @@ function DateRangePicker({
         return placeholder
     }
 
-    // Always create 42 cells (6 rows × 7 columns) for consistent height
     const calendarDays: (number | null)[] = []
     for (let i = 0; i < startingDay; i++) {
         calendarDays.push(null)
@@ -393,7 +392,7 @@ function DateRangePicker({
     for (let day = 1; day <= daysInMonth; day++) {
         calendarDays.push(day)
     }
-    while (calendarDays.length < 42) {
+    while (calendarDays.length % 7 !== 0) {
         calendarDays.push(null)
     }
 
@@ -424,11 +423,7 @@ function DateRangePicker({
     const isPreviewStart = (dateObj: Date | null) => isSameDay(dateObj, rangeStart)
     const isPreviewEnd = (dateObj: Date | null) => isSameDay(dateObj, rangeEnd)
 
-    const selectionHint = isDragging
-        ? "Drag to choose an end date"
-        : !selectedStart || (selectedStart && selectedEnd)
-            ? "Click to set a start date"
-            : "Click to set an end date"
+    const selectionHint = "Click or drag to set a timeline"
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -448,7 +443,7 @@ function DateRangePicker({
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
                 <div className="p-3">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                         <Button
                             variant="ghost"
                             size="icon-sm"
@@ -470,7 +465,7 @@ function DateRangePicker({
                         </Button>
                     </div>
 
-                    <div className="text-[11px] text-muted-foreground mb-2">
+                    <div className="text-[11px] text-muted-foreground mb-1">
                         {selectionHint}
                     </div>
 
@@ -552,7 +547,7 @@ function DateRangePicker({
                         })}
                     </div>
 
-                    <div className="mt-2 pt-2 border-t flex items-center justify-between gap-2">
+                    <div className="mt-1 pt-2 border-t flex items-center justify-between gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
