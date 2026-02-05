@@ -4,14 +4,13 @@ import { useState, useTransition } from "react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BarChart3, Check, ChevronDown, ChevronRight, Loader2, Pencil, X } from "lucide-react"
+import { BarChart3, Check, ChevronDown, ChevronRight, Copy, Loader2, Pencil, X } from "lucide-react"
 import { RoleSelect } from "../members/RoleSelect"
 import { ProjectSelect } from "../members/ProjectSelect"
 import { MemberActions } from "../members/MemberActions"
 import { updateMemberName } from "@/app/actions/user-settings"
 import { useRouter } from "next/navigation"
 import { WorkloadSettings } from "./WorkloadSettings"
-import { useToast } from "@/components/ui/use-toast"
 
 type Project = {
     id: string
@@ -123,10 +122,13 @@ function EditableName({
 
 export function MembersTab({ members, allProjects, currentUserEmail, canManage, showWorkload }: MembersTabProps) {
     const [workloadOpen, setWorkloadOpen] = useState(false)
-    const { toast } = useToast()
-    const handleCopyEmail = (email: string) => {
+    const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null)
+    const handleCopyEmail = (id: string, email: string) => {
         void navigator.clipboard.writeText(email)
-        toast({ title: "Email copied" })
+        setCopiedEmailId(id)
+        window.setTimeout(() => {
+            setCopiedEmailId((current) => (current === id ? null : current))
+        }, 1500)
     }
 
     return (
@@ -152,14 +154,20 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                     <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
                                 </div>
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleCopyEmail(m.email)}
-                                        className="truncate max-w-[140px] text-left hover:text-foreground transition-colors cursor-pointer"
-                                        title="Click to copy"
-                                    >
-                                        {m.email}
-                                    </button>
+                                    <div className="group flex items-center gap-1 min-w-0 max-w-[140px]">
+                                        <Copy className="h-3 w-3 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCopyEmail(m.id, m.email)}
+                                            className="truncate text-left hover:text-foreground transition-colors cursor-pointer"
+                                            title="Click to copy"
+                                        >
+                                            {m.email}
+                                        </button>
+                                        {copiedEmailId === m.id && (
+                                            <span className="text-[10px] text-muted-foreground shrink-0">Copied</span>
+                                        )}
+                                    </div>
                                     <ProjectSelect
                                         userId={m.id}
                                         currentProjectIds={assignedIds}
@@ -204,14 +212,20 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                             </div>
                                         </td>
                                         <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleCopyEmail(m.email)}
-                                                className="block w-full text-left truncate hover:text-foreground transition-colors cursor-pointer"
-                                                title="Click to copy"
-                                            >
-                                                {m.email}
-                                            </button>
+                                            <div className="group flex items-center gap-1 min-w-0">
+                                                <Copy className="h-3 w-3 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleCopyEmail(m.id, m.email)}
+                                                    className="block w-full text-left truncate hover:text-foreground transition-colors cursor-pointer"
+                                                    title="Click to copy"
+                                                >
+                                                    {m.email}
+                                                </button>
+                                                {copiedEmailId === m.id && (
+                                                    <span className="text-[10px] text-muted-foreground shrink-0">Copied</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-2.5 text-right">
                                             <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
