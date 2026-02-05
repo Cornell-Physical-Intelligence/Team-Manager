@@ -138,9 +138,11 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
 
             {config.connected ? (
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Root folder</span>
-                        <span className="font-medium">{saved?.name || "Not set"}</span>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1 min-w-0">
+                        <span>Root folder:</span>
+                        <span className="font-medium text-foreground truncate">
+                            {saved?.name || "Not set"}
+                        </span>
                     </div>
 
                     {canManage && (

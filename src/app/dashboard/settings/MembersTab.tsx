@@ -122,6 +122,9 @@ function EditableName({
 
 export function MembersTab({ members, allProjects, currentUserEmail, canManage, showWorkload }: MembersTabProps) {
     const [workloadOpen, setWorkloadOpen] = useState(false)
+    const handleCopyEmail = (email: string) => {
+        void navigator.clipboard.writeText(email)
+    }
 
     return (
         <div className="space-y-6">
@@ -146,7 +149,14 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                     <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
                                 </div>
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <span className="truncate max-w-[140px]">{m.email}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopyEmail(m.email)}
+                                        className="truncate max-w-[140px] text-left hover:text-foreground transition-colors cursor-copy"
+                                        title="Click to copy"
+                                    >
+                                        {m.email}
+                                    </button>
                                     <ProjectSelect
                                         userId={m.id}
                                         currentProjectIds={assignedIds}
@@ -190,7 +200,16 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                                 {isSelf && <Badge variant="secondary" className="text-[10px] h-5">You</Badge>}
                                             </div>
                                         </td>
-                                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{m.email}</td>
+                                        <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCopyEmail(m.email)}
+                                                className="block w-full text-left truncate hover:text-foreground transition-colors cursor-copy"
+                                                title="Click to copy"
+                                            >
+                                                {m.email}
+                                            </button>
+                                        </td>
                                         <td className="px-4 py-2.5 text-right">
                                             <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
                                         </td>
