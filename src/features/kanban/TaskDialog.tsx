@@ -924,7 +924,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 <DialogTitle className="text-sm">Choose upload folder</DialogTitle>
                                             </DialogHeader>
 
-                                            <div className="flex items-center gap-2 px-4 py-2 border-b">
+                                            <div className="flex items-center gap-2 px-4 py-2 border-b min-w-0">
                                                 {folderStack.length > 0 && (
                                                     <Button
                                                         type="button"
@@ -936,7 +936,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                         <ArrowLeft className="h-4 w-4" />
                                                     </Button>
                                                 )}
-                                                <div className="text-xs text-muted-foreground truncate">
+                                                <div className="text-xs text-muted-foreground truncate flex-1 min-w-0">
                                                     {currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}
                                                 </div>
                                             </div>
@@ -957,10 +957,10 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                             <button
                                                                 key={f.id}
                                                                 onClick={() => goFolder(f.id)}
-                                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50 transition-colors group"
+                                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50 transition-colors group min-w-0"
                                                             >
                                                                 <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                                <span className="flex-1 text-sm truncate">{f.name}</span>
+                                                                <span className="flex-1 min-w-0 text-sm truncate">{f.name}</span>
                                                                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 transition-colors" />
                                                             </button>
                                                         ))}
@@ -973,9 +973,11 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                     onClick={confirmFolder}
                                                     disabled={!currentFolderId}
                                                     size="sm"
-                                                    className="flex-1"
+                                                    className="flex-1 min-w-0"
                                                 >
-                                                    Select "{currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}"
+                                                    <span className="truncate">
+                                                        Select "{currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}"
+                                                    </span>
                                                 </Button>
                                                 <Button variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
                                                     Cancel

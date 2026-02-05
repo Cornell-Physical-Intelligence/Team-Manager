@@ -179,7 +179,7 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                             </DialogHeader>
 
                             {/* nav bar */}
-                            <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
+                            <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30 min-w-0">
                                 <button
                                     onClick={navBack}
                                     disabled={!current}
@@ -187,7 +187,7 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />
                                 </button>
-                                <span className="text-xs font-medium truncate flex-1">
+                                <span className="text-xs font-medium truncate flex-1 min-w-0">
                                     {current?.name || "My Drive"}
                                 </span>
                             </div>
@@ -209,10 +209,10 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
                                             <button
                                                 key={f.id}
                                                 onClick={() => navTo(f)}
-                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50 transition-colors group"
+                                                className="w-full flex items-center gap-2.5 px-4 py-2 text-left hover:bg-muted/50 transition-colors group min-w-0"
                                             >
                                                 <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                <span className="flex-1 text-sm truncate">{f.name}</span>
+                                                <span className="flex-1 min-w-0 text-sm truncate">{f.name}</span>
                                                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 transition-colors" />
                                             </button>
                                         ))}
@@ -222,9 +222,11 @@ function DriveCard({ config, canManage }: { config: DriveConfig; canManage: bool
 
                             {/* actions */}
                             <div className="border-t px-4 py-3 flex items-center gap-2">
-                                <Button onClick={confirm} disabled={!current || saving} size="sm" className="flex-1">
+                                <Button onClick={confirm} disabled={!current || saving} size="sm" className="flex-1 min-w-0">
                                     {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                                    {current ? `Select "${current.name}"` : "Navigate into a folder"}
+                                    <span className="truncate">
+                                        {current ? `Select "${current.name}"` : "Navigate into a folder"}
+                                    </span>
                                 </Button>
                                 <Button variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
                                     Cancel
