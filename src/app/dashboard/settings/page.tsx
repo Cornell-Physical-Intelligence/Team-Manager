@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import prisma from "@/lib/prisma"
 import { driveConfigTableExists } from "@/lib/googleDrive"
 import { appUrl } from "@/lib/appUrl"
+import { headers } from "next/headers"
 import { SettingsShell } from "./SettingsShell"
 import { GeneralTab } from "./GeneralTab"
 import { MembersTab } from "./MembersTab"
@@ -41,6 +42,11 @@ export default async function SettingsPage() {
     }
 
     const isAdmin = user.role === "Admin" || user.role === "Team Lead"
+    const headerList = headers()
+    const forwardedHost = headerList.get("x-forwarded-host")
+    const host = forwardedHost || headerList.get("host")
+    const forwardedProto = headerList.get("x-forwarded-proto")
+    const proto = forwardedProto || (host?.includes("localhost") ? "http" : "https")
 
     // Fetch data in parallel
     const [workspace, usersRaw, allProjects, driveConfig] = await Promise.all([
@@ -107,7 +113,13 @@ export default async function SettingsPage() {
                         userId={user.id}
                         userRole={user.role}
                         inviteCode={workspace?.inviteCode || null}
-                        inviteLink={workspace?.inviteCode ? appUrl(`/invite/${workspace.inviteCode}`) : null}
+                        inviteLink={
+                            workspace?.inviteCode
+                                ? host
+                                    ? `${proto}://${host}/invite/${workspace.inviteCode}`
+                                    : appUrl(`/invite/${workspace.inviteCode}`)
+                                : null
+                        }
                     />
                 ),
                 members: (
