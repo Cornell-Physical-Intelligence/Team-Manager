@@ -19,8 +19,6 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
     const router = useRouter()
     const [step, setStep] = useState(1)
     const [name, setName] = useState(suggestedName)
-    const [skills, setSkills] = useState<string[]>([])
-    const [currentSkill, setCurrentSkill] = useState("")
     const [interests, setInterests] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState("")
@@ -37,30 +35,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
             }
             setError("")
             setStep(2)
-        } else if (step === 2) {
-            if (skills.length === 0) {
-                setError("Please add at least one skill")
-                return
-            }
-            setError("")
-            setStep(3)
         }
-    }
-
-    const handleAddSkill = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.preventDefault()
-            const trimmed = currentSkill.trim()
-            if (trimmed && !skills.includes(trimmed)) {
-                setSkills([...skills, trimmed])
-                setCurrentSkill("")
-                setError("")
-            }
-        }
-    }
-
-    const removeSkill = (skillToRemove: string) => {
-        setSkills(skills.filter(s => s !== skillToRemove))
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -71,7 +46,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
     }
 
     const handleSubmit = async () => {
-        if (step !== 3) return
+        if (step !== 2) return
 
         if (!interests.trim()) {
             setError("Please tell us a bit about your interests")
@@ -90,7 +65,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
                     discordId,
                     discordUsername,
                     avatar: discordAvatar,
-                    skills,
+                    skills: [],
                     interests: interests.trim()
                 })
             })
@@ -114,7 +89,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
 
             {/* Progress Indicator */}
             <div className="flex gap-2 mb-4 sm:mb-6 justify-center">
-                {[1, 2, 3].map(i => (
+                {[1, 2].map(i => (
                     <div key={i} className={`h-1 sm:h-1.5 flex-1 rounded-full bg-muted overflow-hidden`}>
                         <div className={`h-full bg-primary transition-all duration-500 ease-out ${i <= step ? 'w-full' : 'w-0'}`} />
                     </div>
@@ -143,33 +118,6 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
             {step === 2 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-8 duration-500">
                     <div className="space-y-2">
-                        <Label>Your Skills</Label>
-                        <div className="bg-background border rounded-md p-2 focus-within:ring-2 focus-within:ring-ring ring-offset-background flex flex-wrap gap-2 min-h-[42px] transition-all">
-                            {skills.map(skill => (
-                                <span key={skill} className="bg-primary/10 text-primary border border-primary/20 text-xs px-2 py-1 rounded-md flex items-center gap-1 font-medium animate-in zoom-in duration-200">
-                                    {skill}
-                                    <button type="button" onClick={() => removeSkill(skill)} className="hover:text-primary/70 transition-colors">×</button>
-                                </span>
-                            ))}
-                            <input
-                                className="bg-transparent border-none outline-none text-sm flex-1 min-w-[120px] placeholder:text-muted-foreground"
-                                placeholder={skills.length === 0 ? "Type a skill and press Enter" : ""}
-                                value={currentSkill}
-                                onChange={(e) => setCurrentSkill(e.target.value)}
-                                onKeyDown={handleAddSkill}
-                                autoFocus
-                            />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            E.g. React, Design, Marketing, 3D Modeling...
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {step === 3 && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-right-8 duration-500">
-                    <div className="space-y-2">
                         <Label htmlFor="interests">What do you want to work on?</Label>
                         <textarea
                             id="interests"
@@ -189,7 +137,7 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
 
             <Button
                 type="button"
-                onClick={step === 3 ? handleSubmit : handleNext}
+                onClick={step === 2 ? handleSubmit : handleNext}
                 className="w-full h-10 sm:h-11 text-sm sm:text-base font-medium shadow-sm transition-all hover:translate-y-[-1px]"
                 disabled={isSubmitting}
             >
@@ -199,13 +147,11 @@ export function OnboardingForm({ discordId, discordUsername, discordAvatar, sugg
                         Setting up...
                     </>
                 ) : (
-                    step === 3 ? "Finish & Go to Workspace" : "Next"
+                    step === 2 ? "Finish & Go to Workspace" : "Next"
                 )}
             </Button>
         </div>
     )
 }
-
-
 
 
