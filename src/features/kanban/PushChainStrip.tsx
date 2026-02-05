@@ -25,6 +25,7 @@ type PushChainStripProps = {
     onEditPush: (e: React.MouseEvent, push: PushType) => void
     onAddTask: (push: PushType) => void
     onMarkComplete: (push: PushType) => void
+    onUnmarkComplete: (push: PushType) => void
     loadPushTasks: (pushId: string) => void
     loadedPushes: Record<string, true>
     loadingPushes: Record<string, true>
@@ -46,6 +47,7 @@ export function PushChainStrip({
     onEditPush,
     onAddTask,
     onMarkComplete,
+    onUnmarkComplete,
     loadPushTasks,
     loadedPushes,
     loadingPushes,
@@ -395,7 +397,7 @@ export function PushChainStrip({
                                                     setIsContentOpen(false)
                                                     setUserSelectedPushId(null)
                                                 }}
-                                                className="h-7 flex items-center gap-1 px-2 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
+                                                className="h-7 flex items-center gap-1 px-2 rounded-md border border-green-200 bg-green-50 text-green-600 text-xs font-medium hover:bg-green-100 transition-colors"
                                                 title="Mark this push complete"
                                             >
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -403,7 +405,17 @@ export function PushChainStrip({
                                             </button>
                                         )}
                                         {pushIsComplete && (
-                                            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    onUnmarkComplete(push)
+                                                }}
+                                                className="flex items-center"
+                                                title="Mark as not complete"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                            </button>
                                         )}
 
                                         {isAdmin && (

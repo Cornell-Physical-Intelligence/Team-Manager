@@ -943,15 +943,17 @@ export function Board({
         return !isPushMarkedComplete(push.dependsOnId)
     }
 
-    const markPushComplete = async (pushId: string) => {
-        setPushStatusOverrides((prev) => ({ ...prev, [pushId]: 'Completed' }))
-        setCollapsedPushes((prev) => {
-            const next = new Set(prev)
-            next.add(pushId)
-            return next
-        })
+    const setPushStatus = async (pushId: string, status: 'Active' | 'Completed') => {
+        setPushStatusOverrides((prev) => ({ ...prev, [pushId]: status }))
+        if (status === 'Completed') {
+            setCollapsedPushes((prev) => {
+                const next = new Set(prev)
+                next.add(pushId)
+                return next
+            })
+        }
         try {
-            await updatePush({ id: pushId, status: 'Completed' })
+            await updatePush({ id: pushId, status })
         } catch {
             setPushStatusOverrides((prev) => ({ ...prev, [pushId]: 'Active' }))
         }
@@ -1098,7 +1100,8 @@ export function Board({
                                         chain={chain}
                                         isComplete={isPushMarkedComplete}
                                         isAllDone={isPushAllDone}
-                                        onMarkComplete={(push) => markPushComplete(push.id)}
+                                        onMarkComplete={(push) => setPushStatus(push.id, 'Completed')}
+                                        onUnmarkComplete={(push) => setPushStatus(push.id, 'Active')}
                                         isAdmin={isAdmin}
                                         onEditPush={handleEditPush}
                                         onAddTask={(push) => {
@@ -1167,9 +1170,9 @@ export function Board({
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            markPushComplete(push.id)
+                                                            setPushStatus(push.id, 'Completed')
                                                         }}
-                                                        className="h-7 flex items-center gap-1 px-2 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors"
+                                                        className="h-7 flex items-center gap-1 px-2 rounded-md border border-green-200 bg-green-50 text-green-600 text-xs font-medium hover:bg-green-100 transition-colors"
                                                         title="Mark this push complete"
                                                     >
                                                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1177,7 +1180,17 @@ export function Board({
                                                     </button>
                                                 )}
                                                 {isComplete && (
-                                                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setPushStatus(push.id, 'Active')
+                                                        }}
+                                                        className="flex items-center"
+                                                        title="Mark as not complete"
+                                                    >
+                                                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                                                    </button>
                                                 )}
                                             </div>
 
