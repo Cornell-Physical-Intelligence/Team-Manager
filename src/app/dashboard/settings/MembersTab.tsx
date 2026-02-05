@@ -11,6 +11,7 @@ import { MemberActions } from "../members/MemberActions"
 import { updateMemberName } from "@/app/actions/user-settings"
 import { useRouter } from "next/navigation"
 import { WorkloadSettings } from "./WorkloadSettings"
+import { useToast } from "@/components/ui/use-toast"
 
 type Project = {
     id: string
@@ -122,8 +123,10 @@ function EditableName({
 
 export function MembersTab({ members, allProjects, currentUserEmail, canManage, showWorkload }: MembersTabProps) {
     const [workloadOpen, setWorkloadOpen] = useState(false)
+    const { toast } = useToast()
     const handleCopyEmail = (email: string) => {
         void navigator.clipboard.writeText(email)
+        toast({ title: "Email copied" })
     }
 
     return (
@@ -152,7 +155,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                     <button
                                         type="button"
                                         onClick={() => handleCopyEmail(m.email)}
-                                        className="truncate max-w-[140px] text-left hover:text-foreground transition-colors cursor-copy"
+                                        className="truncate max-w-[140px] text-left hover:text-foreground transition-colors cursor-pointer"
                                         title="Click to copy"
                                     >
                                         {m.email}
@@ -204,7 +207,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                             <button
                                                 type="button"
                                                 onClick={() => handleCopyEmail(m.email)}
-                                                className="block w-full text-left truncate hover:text-foreground transition-colors cursor-copy"
+                                                className="block w-full text-left truncate hover:text-foreground transition-colors cursor-pointer"
                                                 title="Click to copy"
                                             >
                                                 {m.email}
