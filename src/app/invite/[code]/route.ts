@@ -1,13 +1,17 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { getCurrentUser } from "@/lib/auth"
 import { joinWorkspaceByCode } from "@/lib/workspaceInvites"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: Request, { params }: { params: { code: string } }) {
-    const code = params.code?.trim()
-    if (!code) {
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ code: string }> }
+) {
+    const { code } = await context.params
+    const trimmedCode = code?.trim()
+    if (!trimmedCode) {
         return NextResponse.redirect(new URL("/workspaces", request.url))
     }
 
@@ -15,7 +19,7 @@ export async function GET(request: Request, { params }: { params: { code: string
     const cookieStore = await cookies()
 
     if (!user || user.id === "pending") {
-        cookieStore.set("pending_invite", code, {
+        cookieStore.set("pending_invite", trimmedCode, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
@@ -28,7 +32,7 @@ export async function GET(request: Request, { params }: { params: { code: string
     const result = await joinWorkspaceByCode({
         userId: user.id,
         userName: user.name,
-        code,
+        code: trimmedCode,
     })
 
     if (result.error) {
