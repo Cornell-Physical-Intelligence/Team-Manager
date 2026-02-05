@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Plus, Trash2, ChevronDown, FileText, Upload, X, ListChecks, Folder, ChevronRight, ArrowLeft, Loader2 } from "lucide-react"
+import { Plus, Trash2, ChevronDown, X, ListChecks, Folder, ChevronRight, Loader2 } from "lucide-react"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { createTask, updateTaskDetails, deleteTask } from "@/app/actions/kanban"
 import { RemoveScroll } from "react-remove-scroll"
@@ -121,14 +121,13 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [instructionsFile, setInstructionsFile] = useState<File | null>(null)
     const [existingInstructionsFile, setExistingInstructionsFile] = useState<{ url: string; name: string } | null>(null)
     const [isUploadingInstructions, setIsUploadingInstructions] = useState(false)
-    const instructionsFileRef = useRef<HTMLInputElement>(null)
     const [isDraggingFile, setIsDraggingFile] = useState(false)
+    const [dragFileName, setDragFileName] = useState<string | null>(null)
     const [driveConfig, setDriveConfig] = useState<DriveConfig | null>(null)
     const [driveLoading, setDriveLoading] = useState(false)
     const [folderTree, setFolderTree] = useState<FolderNode[]>([])
     const [pickerOpen, setPickerOpen] = useState(false)
     const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
-    const [folderStack, setFolderStack] = useState<string[]>([])
     const [loadingFolders, setLoadingFolders] = useState(false)
     const [selectedFolder, setSelectedFolder] = useState<{ id: string; name: string } | null>(null)
     const folderInitRef = useRef(false)
@@ -145,7 +144,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             folderInitRef.current = false
             setFolderTree([])
             setPickerOpen(false)
-            setFolderStack([])
             setCurrentFolderId(null)
             setSelectedFolder(null)
             if (task) {
@@ -270,8 +268,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     }, [folderTree])
 
     const children = currentFolderId ? childMap.get(currentFolderId) || [] : []
-    const atRoot = currentFolderId === rootId
-
     const readCachedTree = () => {
         if (!folderCacheKey) return null
         try {
@@ -345,7 +341,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (!rootId) return
         setPickerOpen(true)
         setCurrentFolderId(rootId)
-        setFolderStack([])
         if (folderTree.length === 0) {
             const cached = readCachedTree()
             const cachedAt = readCachedTreeTime()
@@ -361,19 +356,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
     const goFolder = (id: string) => {
         if (!id) return
-        if (currentFolderId) setFolderStack((s) => [...s, currentFolderId])
         setCurrentFolderId(id)
-    }
-
-    const backFolder = () => {
-        if (folderStack.length === 0) {
-            setCurrentFolderId(rootId)
-            return
-        }
-        const next = [...folderStack]
-        const prev = next.pop()!
-        setFolderStack(next)
-        setCurrentFolderId(prev)
     }
 
     const confirmFolder = () => {
@@ -611,6 +594,9 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault()
         e.stopPropagation()
+        const item = e.dataTransfer.items?.[0]
+        const file = item && item.kind === "file" ? item.getAsFile() : e.dataTransfer.files?.[0]
+        if (file?.name) setDragFileName(file.name)
         setIsDraggingFile(true)
     }
 
@@ -620,6 +606,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         // Only reset if we're leaving the form entirely
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
             setIsDraggingFile(false)
+            setDragFileName(null)
         }
     }
 
@@ -627,10 +614,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         e.preventDefault()
         e.stopPropagation()
         setIsDraggingFile(false)
+        setDragFileName(null)
 
         const files = e.dataTransfer.files
         if (files && files.length > 0) {
             setInstructionsFile(files[0])
+            setExistingInstructionsFile(null)
         }
     }
 
@@ -663,9 +652,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     <form
                         onSubmit={handleSubmit}
                         className="flex flex-col h-full max-h-[85vh]"
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
                     >
                         <DialogHeader className="p-6 pb-2">
                             <DialogTitle className="text-xl font-semibold tracking-tight">
@@ -681,32 +667,60 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                             )}
 
                             <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="title" className="text-sm font-medium inline-flex items-center">
-                                        Task Title
+                                <div className="space-y-1">
+                                    <Label htmlFor="title" className="sr-only">Task Title</Label>
+                                    <div className="flex justify-end">
                                         <span className={requiredTagClass(hasTitle)}>Required</span>
-                                    </Label>
+                                    </div>
                                     <Input
                                         id="title"
                                         value={title}
                                         onChange={(e) => setTitle(e.target.value)}
                                         autoComplete="off"
+                                        placeholder="Task Title"
                                         className="h-10"
                                     />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="description" className="text-sm font-medium inline-flex items-center">
-                                        Description
+                                <div className="space-y-1">
+                                    <Label htmlFor="description" className="sr-only">Description</Label>
+                                    <div className="flex justify-end">
                                         <span className={requiredTagClass(hasDescription)}>Required</span>
-                                    </Label>
-                                    <Textarea
-                                        id="description"
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        autoComplete="off"
-                                        className="min-h-[100px] resize-y"
-                                    />
+                                    </div>
+                                    <div
+                                        className="relative"
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                    >
+                                        <Textarea
+                                            id="description"
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            autoComplete="off"
+                                            placeholder="Type Description or Drag Files"
+                                            className={`min-h-[120px] resize-y ${isDraggingFile ? "ring-1 ring-primary/40" : ""}`}
+                                        />
+                                        {(isDraggingFile ? dragFileName : (instructionsFile?.name || existingInstructionsFile?.name)) && (
+                                            <div className="absolute top-2 right-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                                                <span className="max-w-[160px] truncate">
+                                                    {isDraggingFile ? dragFileName : (instructionsFile?.name || existingInstructionsFile?.name)}
+                                                </span>
+                                                {(instructionsFile || existingInstructionsFile) && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-muted-foreground hover:text-destructive transition-colors"
+                                                        onClick={() => {
+                                                            setInstructionsFile(null)
+                                                            setExistingInstructionsFile(null)
+                                                        }}
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -852,19 +866,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             <DialogHeader className="px-4 py-3 border-b">
                                                 <DialogTitle className="text-sm">Choose upload folder</DialogTitle>
                                             </DialogHeader>
-
-                                            <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-                                                <button
-                                                    onClick={backFolder}
-                                                    disabled={atRoot}
-                                                    className="p-1 rounded hover:bg-muted disabled:opacity-30 shrink-0 transition-colors"
-                                                >
-                                                    <ArrowLeft className="h-3.5 w-3.5" />
-                                                </button>
-                                                <span className="text-xs font-medium truncate flex-1">
-                                                    {currentFolderId === rootId ? rootName : folderMap.get(currentFolderId || "")?.name || "Folder"}
-                                                </span>
-                                            </div>
 
                                             <ScrollArea className="h-64">
                                                 {loadingFolders ? (
@@ -1031,66 +1032,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 )}
                             </div>
 
-                            <div className="space-y-3">
-                                <Label className="text-sm font-medium flex items-center gap-2">
-                                    Instructions File
-                                    <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
-                                </Label>
-                                <input
-                                    ref={instructionsFileRef}
-                                    type="file"
-                                    className="hidden"
-                                    accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg"
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0]
-                                        if (file) setInstructionsFile(file)
-                                    }}
-                                />
-
-                                {(instructionsFile || existingInstructionsFile) ? (
-                                    <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-lg border">
-                                        <div className="h-8 w-8 rounded bg-background border flex items-center justify-center shrink-0">
-                                            <FileText className="h-4 w-4 text-primary" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {instructionsFile?.name || existingInstructionsFile?.name}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {instructionsFile ? "Ready to upload" : "Attached"}
-                                            </p>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                            onClick={() => {
-                                                setInstructionsFile(null)
-                                                setExistingInstructionsFile(null)
-                                                if (instructionsFileRef.current) {
-                                                    instructionsFileRef.current.value = ''
-                                                }
-                                            }}
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div
-                                        onClick={() => instructionsFileRef.current?.click()}
-                                        className={`border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer flex flex-col items-center justify-center text-center gap-2 ${isDraggingFile ? 'border-primary bg-primary/10' : 'hover:bg-muted/30 border-muted-foreground/30'}`}
-                                    >
-                                        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
-                                            <Upload className="h-4 w-4 text-muted-foreground" />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-medium">Click or drag & drop to upload</p>
-                                            <p className="text-xs text-muted-foreground">PDF, Word, Images up to 10MB</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </div>
 
                         <div className="p-6 pt-2 border-t mt-auto bg-background rounded-b-lg">

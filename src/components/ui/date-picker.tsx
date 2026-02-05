@@ -423,8 +423,6 @@ function DateRangePicker({
     const isPreviewStart = (dateObj: Date | null) => isSameDay(dateObj, rangeStart)
     const isPreviewEnd = (dateObj: Date | null) => isSameDay(dateObj, rangeEnd)
 
-    const selectionHint = "Click or drag to set a timeline"
-
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -463,10 +461,6 @@ function DateRangePicker({
                         >
                             <ChevronRight className="h-4 w-4" />
                         </Button>
-                    </div>
-
-                    <div className="text-[11px] text-muted-foreground mb-1">
-                        {selectionHint}
                     </div>
 
                     <div className="grid grid-cols-7 gap-1 mb-1">
@@ -531,6 +525,7 @@ function DateRangePicker({
                                             disabled={isDateDisabled(day)}
                                             className={cn(
                                                 "h-8 w-8 rounded-md text-sm font-medium transition-colors",
+                                                "relative",
                                                 "hover:bg-accent hover:text-accent-foreground",
                                                 "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
                                                 "disabled:pointer-events-none disabled:opacity-30",
@@ -540,6 +535,16 @@ function DateRangePicker({
                                             )}
                                         >
                                             {day}
+                                            {isToday(day) && (
+                                                <span
+                                                    className={cn(
+                                                        "absolute -top-1 right-0 text-[8px] leading-none",
+                                                        (isStart || isEnd) ? "text-primary-foreground/80" : "text-muted-foreground"
+                                                    )}
+                                                >
+                                                    Today
+                                                </span>
+                                            )}
                                         </button>
                                     )}
                                 </div>
