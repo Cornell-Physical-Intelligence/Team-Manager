@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -123,6 +123,16 @@ function EditableName({
 export function MembersTab({ members, allProjects, currentUserEmail, canManage, showWorkload }: MembersTabProps) {
     const [workloadOpen, setWorkloadOpen] = useState(false)
     const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null)
+    const [visibleMembers, setVisibleMembers] = useState<Member[]>(members)
+
+    useEffect(() => {
+        setVisibleMembers(members)
+    }, [members])
+
+    const handleMemberRemoved = (removedUserId: string) => {
+        setVisibleMembers((prev) => prev.filter((member) => member.id !== removedUserId))
+    }
+
     const handleCopyEmail = (id: string, email: string) => {
         void navigator.clipboard.writeText(email)
         setCopiedEmailId(id)
@@ -141,7 +151,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
             <div className="border rounded-lg overflow-hidden">
                 {/* Mobile view */}
                 <div className="md:hidden divide-y">
-                    {members.map((m) => {
+                    {visibleMembers.map((m) => {
                         const isSelf = m.email === currentUserEmail
                         const assignedIds = m.projectMemberships.map((pm) => pm.project.id)
                         return (
@@ -200,7 +210,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                             </tr>
                         </thead>
                         <tbody className="divide-y">
-                            {members.map((m) => {
+                            {visibleMembers.map((m) => {
                                 const isSelf = m.email === currentUserEmail
                                 const assignedIds = m.projectMemberships.map((pm) => pm.project.id)
                                 return (
@@ -246,6 +256,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                                     userId={m.id}
                                                     isCurrentUser={isSelf}
                                                     canRemove={canManage}
+                                                    onRemoved={handleMemberRemoved}
                                                 />
                                             </td>
                                         )}

@@ -135,6 +135,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [folderSelectionChanged, setFolderSelectionChanged] = useState(false)
     const folderInitRef = useRef(false)
     const driveConfigLoadedRef = useRef(false)
+    const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
+    const assigneePopoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Checklist state
     const [enableChecklist, setEnableChecklist] = useState(false)
@@ -144,6 +146,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     // Reset form when task changes or dialog opens
     useEffect(() => {
         if (open) {
+            setAssigneePopoverOpen(false)
             setError(null)
             folderInitRef.current = false
             setPickerOpen(false)
@@ -190,6 +193,31 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             }
         }
     }, [task, today, open])
+
+    useEffect(() => {
+        return () => {
+            if (assigneePopoverCloseTimeoutRef.current) {
+                clearTimeout(assigneePopoverCloseTimeoutRef.current)
+            }
+        }
+    }, [])
+
+    const handleAssigneePopoverMouseEnter = () => {
+        if (assigneePopoverCloseTimeoutRef.current) {
+            clearTimeout(assigneePopoverCloseTimeoutRef.current)
+            assigneePopoverCloseTimeoutRef.current = null
+        }
+        setAssigneePopoverOpen(true)
+    }
+
+    const handleAssigneePopoverMouseLeave = () => {
+        if (assigneePopoverCloseTimeoutRef.current) {
+            clearTimeout(assigneePopoverCloseTimeoutRef.current)
+        }
+        assigneePopoverCloseTimeoutRef.current = setTimeout(() => {
+            setAssigneePopoverOpen(false)
+        }, 120)
+    }
 
     useEffect(() => {
         if (driveConfigLoadedRef.current) return
@@ -809,12 +837,14 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 <div className="space-y-1">
                                     <Label className="sr-only">Assignees</Label>
                                     <div className="relative">
-                                        <Popover>
+                                        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="outline"
                                                     role="combobox"
                                                     className="w-full justify-between h-10 font-normal px-3 pr-16"
+                                                    onMouseEnter={handleAssigneePopoverMouseEnter}
+                                                    onMouseLeave={handleAssigneePopoverMouseLeave}
                                                 >
                                                     <span className="truncate">
                                                         {assigneeIds.length === 0
@@ -825,7 +855,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                     </span>
                                                 </Button>
                                             </PopoverTrigger>
-                                        <PopoverContent className="w-[260px] p-0" align="start">
+                                        <PopoverContent
+                                            className="w-[260px] p-0"
+                                            align="start"
+                                            onMouseEnter={handleAssigneePopoverMouseEnter}
+                                            onMouseLeave={handleAssigneePopoverMouseLeave}
+                                        >
                                             <RemoveScroll shards={[dialogContentRef]}>
                                                 <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
                                                     {users.filter(u => u.isProjectMember).map(u => (
