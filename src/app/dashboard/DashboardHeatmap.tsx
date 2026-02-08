@@ -696,10 +696,6 @@ function QuickAddTaskDialog({
                                                     : "border-border hover:bg-muted/40"
                                             )}
                                         >
-                                            <span
-                                                className="h-2 w-2 rounded-full shrink-0"
-                                                style={{ backgroundColor: push.color || selectedProject?.color || '#9ca3af' }}
-                                            />
                                             <span className="text-xs text-foreground truncate">{push.name}</span>
                                         </button>
                                     )
