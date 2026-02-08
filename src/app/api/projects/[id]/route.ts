@@ -108,8 +108,9 @@ export async function PATCH(
             ? await getWorkspaceUserIds(uniqueMemberIds, user.workspaceId)
             : undefined
 
-        if (uniqueMemberIds && validMemberIds && validMemberIds.length !== uniqueMemberIds.length) {
-            return NextResponse.json({ error: 'One or more members are not in this workspace' }, { status: 400 })
+        const normalizedMemberIds = validMemberIds ? [...validMemberIds] : undefined
+        if (normalizedMemberIds && leadIdValue && !normalizedMemberIds.includes(leadIdValue)) {
+            normalizedMemberIds.push(leadIdValue)
         }
 
         const normalizedColor = typeof color === "string"
@@ -129,15 +130,15 @@ export async function PATCH(
                 }
             })
 
-            if (validMemberIds) {
+            if (normalizedMemberIds) {
                 // Replace members
                 await tx.projectMember.deleteMany({
                     where: { projectId: id }
                 })
 
-                if (validMemberIds.length > 0) {
+                if (normalizedMemberIds.length > 0) {
                     await tx.projectMember.createMany({
-                        data: validMemberIds.map((userId: string) => ({
+                        data: normalizedMemberIds.map((userId: string) => ({
                             projectId: id,
                             userId
                         }))

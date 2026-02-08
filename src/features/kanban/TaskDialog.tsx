@@ -462,12 +462,18 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     }
 
     const applyDateQuickAction = (days: number) => {
-        const base = startDate ? new Date(`${startDate}T00:00:00`) : new Date()
-        const start = startDate || base.toISOString().split("T")[0]
-        const end = new Date(base)
-        end.setDate(base.getDate() + days)
-        setStartDate(start)
-        setEndDate(end.toISOString().split("T")[0])
+        const formatDateOnly = (date: Date) => date.toISOString().split("T")[0]
+
+        const startBase = startDate ? new Date(`${startDate}T00:00:00`) : new Date()
+        const existingEnd = endDate ? new Date(`${endDate}T00:00:00`) : null
+        const nextStart = startDate || formatDateOnly(startBase)
+        const endBase = existingEnd || new Date(`${nextStart}T00:00:00`)
+
+        const nextEnd = new Date(endBase)
+        nextEnd.setDate(endBase.getDate() + days)
+
+        setStartDate(nextStart)
+        setEndDate(formatDateOnly(nextEnd))
     }
 
     // Validation - all fields required
@@ -870,22 +876,22 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
                                 <div className="space-y-1">
                                     <Label htmlFor="taskDates" className="sr-only">Dates</Label>
-                                    <div className="relative flex-1 pt-3">
+                                    <div className="relative flex-1">
                                         {!task && (
-                                            <div className="absolute right-0 top-0 z-10 flex items-center gap-2">
+                                            <div className="absolute right-2 top-1 z-10 flex items-center gap-2 rounded bg-background/90 px-1 py-0.5">
                                                 <button
                                                     type="button"
-                                                    className="text-[10px] leading-none text-muted-foreground hover:text-foreground hover:underline"
+                                                    className="text-[10px] leading-none font-medium text-muted-foreground hover:text-foreground"
                                                     onClick={() => applyDateQuickAction(1)}
                                                 >
                                                     +1 day
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className="text-[10px] leading-none text-muted-foreground hover:text-foreground hover:underline"
+                                                    className="text-[10px] leading-none font-medium text-muted-foreground hover:text-foreground"
                                                     onClick={() => applyDateQuickAction(7)}
                                                 >
-                                                    +7 days
+                                                    +1 week
                                                 </button>
                                             </div>
                                         )}

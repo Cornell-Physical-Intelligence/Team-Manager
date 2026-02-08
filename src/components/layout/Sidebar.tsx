@@ -449,6 +449,20 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         }
     }, [editingProject])
 
+    React.useEffect(() => {
+        if (!editingProject || allUsers.length === 0) return
+        const allowedIds = new Set(allUsers.map((u) => u.id))
+        setSelectedMemberIds((prev) => {
+            const next = prev.filter((id) => allowedIds.has(id))
+            return next.length === prev.length ? prev : next
+        })
+    }, [editingProject, allUsers])
+
+    React.useEffect(() => {
+        if (!editingProject || !editLeadId || editLeadId === "none") return
+        setSelectedMemberIds((prev) => (prev.includes(editLeadId) ? prev : [...prev, editLeadId]))
+    }, [editingProject, editLeadId])
+
     // When Create Dialog opens, reset members
     React.useEffect(() => {
         if (createDialogOpen) {
@@ -530,6 +544,8 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         setEditError(null)
 
         try {
+            const allowedIds = new Set(allUsers.map((u) => u.id))
+            const sanitizedMemberIds = selectedMemberIds.filter((id) => allowedIds.has(id))
             const res = await fetch(`/api/projects/${editingProject.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -538,7 +554,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                     description: editDescription.trim(),
                     color: editColor,
                     leadId: editLeadId === 'none' ? null : editLeadId,
-                    memberIds: selectedMemberIds
+                    memberIds: sanitizedMemberIds
                 })
             })
             if (res.ok) {
