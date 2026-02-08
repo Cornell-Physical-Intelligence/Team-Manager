@@ -79,7 +79,7 @@ const formatDate = (d: Date | string | null | undefined) => {
     return dateObj.toISOString().split('T')[0]
 }
 
-export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds }: {
+export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack }: {
     columnId?: string
     projectId: string
     pushId?: string | null
@@ -91,6 +91,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     onTaskUpdated?: (task: TaskDialogResultTask) => void
     onTaskDeleted?: (taskId: string) => void
     initialAssigneeIds?: string[]
+    onBack?: () => void
 }) {
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = externalOpen !== undefined
@@ -758,6 +759,18 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                         className="flex flex-col h-full max-h-[85vh]"
                     >
                         <DialogHeader className="p-6 pb-2">
+                            {onBack && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onBack}
+                                    className="w-fit -ml-2 mb-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                >
+                                    <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+                                    Back
+                                </Button>
+                            )}
                             <DialogTitle className="text-xl font-semibold tracking-tight">
                                 {task ? "Edit Task" : "Create New Task"}
                             </DialogTitle>

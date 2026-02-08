@@ -23,13 +23,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 
 type Task = {
@@ -575,13 +568,19 @@ function QuickAddTaskDialog({
     onOpenChange,
     user,
     projects,
-    onContinue
+    onContinue,
+    requireManualContinue,
+    initialProjectId,
+    initialPushId
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     user: UserStat | null
     projects: DashboardHeatmapProps['projects']
     onContinue: (projectId: string, pushId: string) => void
+    requireManualContinue: boolean
+    initialProjectId?: string | null
+    initialPushId?: string | null
 }) {
     const [selectedProjectId, setSelectedProjectId] = useState<string>('')
     const [selectedPushId, setSelectedPushId] = useState<string>('')
@@ -589,15 +588,47 @@ function QuickAddTaskDialog({
     const selectedProject = projects.find(p => p.id === selectedProjectId)
     const activePushes = selectedProject?.pushes || []
 
-    // Reset push if project changes
     useEffect(() => {
-        setSelectedPushId('')
-    }, [selectedProjectId])
+        if (!open || !user) return
+
+        const preferredProject = projects.find(
+            (project) => project.members.some((member) => member.userId === user.id)
+        )
+        const fallbackProject = projects[0]
+        const nextProjectId =
+            (initialProjectId && projects.some((project) => project.id === initialProjectId))
+                ? initialProjectId
+                : (preferredProject?.id || fallbackProject?.id || '')
+
+        const projectPushes = projects.find((project) => project.id === nextProjectId)?.pushes || []
+        const nextPushId =
+            (initialPushId && projectPushes.some((push) => push.id === initialPushId))
+                ? initialPushId
+                : ''
+
+        setSelectedProjectId(nextProjectId)
+        setSelectedPushId(nextPushId)
+    }, [open, user, projects, initialProjectId, initialPushId])
+
+    useEffect(() => {
+        if (selectedPushId && !activePushes.some((push) => push.id === selectedPushId)) {
+            setSelectedPushId('')
+        }
+    }, [selectedProjectId, selectedPushId, activePushes])
 
     const handleContinue = () => {
         if (!selectedProjectId || !selectedPushId || !user) return
         onContinue(selectedProjectId, selectedPushId)
         onOpenChange(false)
+    }
+
+    const handlePushSelect = (pushId: string) => {
+        if (!selectedProjectId || !user) return
+        setSelectedPushId(pushId)
+        if (!requireManualContinue) {
+            onContinue(selectedProjectId, pushId)
+            onOpenChange(false)
+        }
     }
 
     return (
@@ -612,42 +643,64 @@ function QuickAddTaskDialog({
                 <div className="space-y-4 py-2">
                     <div className="space-y-2">
                         <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Division</label>
-                        <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                            <SelectTrigger className="w-full text-xs h-9">
-                                <SelectValue placeholder="Choose a division" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {projects.map(project => (
-                                    <SelectItem key={project.id} value={project.id} className="text-xs text-foreground justify-start">
-                                        <div className="flex items-center gap-2">
-                                            <GripVertical className="h-3.5 w-3.5 opacity-60 shrink-0" style={{ color: project.color }} />
-                                            <span className="truncate">{project.name}</span>
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {projects.map((project) => {
+                                const selected = project.id === selectedProjectId
+                                const assignedToUser = !!user && project.members.some((member) => member.userId === user.id)
+                                return (
+                                    <button
+                                        key={project.id}
+                                        type="button"
+                                        onClick={() => setSelectedProjectId(project.id)}
+                                        className={cn(
+                                            "w-full flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left transition-colors",
+                                            selected
+                                                ? "border-foreground/20 bg-muted/60"
+                                                : "border-border hover:bg-muted/40"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <GripVertical className="h-3.5 w-3.5 opacity-70 shrink-0" style={{ color: project.color }} />
+                                            <span className="text-xs text-foreground truncate">{project.name}</span>
                                         </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                        {assignedToUser && (
+                                            <span className="text-[9px] uppercase tracking-wide text-muted-foreground shrink-0">
+                                                Assigned
+                                            </span>
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
                     </div>
 
                     {selectedProjectId && (
                         <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
                             <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Select Project</label>
-                            <Select
-                                value={selectedPushId}
-                                onValueChange={setSelectedPushId}
-                                disabled={activePushes.length === 0}
-                            >
-                                <SelectTrigger className="w-full text-xs h-9">
-                                    <SelectValue placeholder={activePushes.length === 0 ? "No active projects" : "Select target project"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {activePushes.map(push => (
-                                        <SelectItem key={push.id} value={push.id} className="text-xs text-foreground justify-start">
-                                            {push.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                {activePushes.map((push) => {
+                                    const selected = push.id === selectedPushId
+                                    return (
+                                        <button
+                                            key={push.id}
+                                            type="button"
+                                            onClick={() => handlePushSelect(push.id)}
+                                            className={cn(
+                                                "w-full flex items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-colors",
+                                                selected
+                                                    ? "border-foreground/20 bg-muted/60"
+                                                    : "border-border hover:bg-muted/40"
+                                            )}
+                                        >
+                                            <span
+                                                className="h-2 w-2 rounded-full shrink-0"
+                                                style={{ backgroundColor: push.color || selectedProject?.color || '#9ca3af' }}
+                                            />
+                                            <span className="text-xs text-foreground truncate">{push.name}</span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
                             {activePushes.length === 0 && (
                                 <p className="text-[9px] text-muted-foreground italic px-1">This division has no active projects. Tasks must be assigned to a project.</p>
                             )}
@@ -655,17 +708,19 @@ function QuickAddTaskDialog({
                     )}
                 </div>
 
-                <DialogFooter>
-                    <Button
-                        size="sm"
-                        onClick={handleContinue}
-                        disabled={!selectedProjectId || !selectedPushId || activePushes.length === 0}
-                        className="w-full h-9 text-xs"
-                    >
-                        Continue
-                        <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Button>
-                </DialogFooter>
+                {requireManualContinue && (
+                    <DialogFooter>
+                        <Button
+                            size="sm"
+                            onClick={handleContinue}
+                            disabled={!selectedProjectId || !selectedPushId || activePushes.length === 0}
+                            className="w-full h-9 text-xs"
+                        >
+                            Continue
+                            <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
+                        </Button>
+                    </DialogFooter>
+                )}
             </DialogContent>
         </Dialog>
     )
@@ -685,6 +740,8 @@ export function DashboardHeatmap({
     const [issuePopup, setIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
     const [previousIssuePopup, setPreviousIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
     const [quickAddTaskUser, setQuickAddTaskUser] = useState<UserStat | null>(null)
+    const [quickAddSelection, setQuickAddSelection] = useState<{ projectId: string; pushId: string } | null>(null)
+    const [quickAddRequireManualContinue, setQuickAddRequireManualContinue] = useState(false)
     const [localTaskDialog, setLocalTaskDialog] = useState<{
         userId: string
         projectId: string
@@ -837,6 +894,8 @@ export function DashboardHeatmap({
                                     className="h-5 w-8 rounded-sm p-0 border border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-primary/5 transition-opacity shrink-0"
                                     onClick={(e) => {
                                         e.stopPropagation();
+                                        setQuickAddSelection(null)
+                                        setQuickAddRequireManualContinue(false)
                                         setQuickAddTaskUser(user);
                                     }}
                                 >
@@ -920,6 +979,8 @@ export function DashboardHeatmap({
                 onAssignTasks={handleAssignTasks}
                 onAddTask={(user) => {
                     setSelectedUser(null);
+                    setQuickAddSelection(null)
+                    setQuickAddRequireManualContinue(false)
                     setQuickAddTaskUser(user);
                 }}
                 onBack={previousIssuePopup ? () => {
@@ -1019,11 +1080,21 @@ export function DashboardHeatmap({
             </Dialog>
             <QuickAddTaskDialog
                 open={!!quickAddTaskUser}
-                onOpenChange={(open) => !open && setQuickAddTaskUser(null)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setQuickAddTaskUser(null)
+                        setQuickAddSelection(null)
+                        setQuickAddRequireManualContinue(false)
+                    }
+                }}
                 user={quickAddTaskUser}
                 projects={projects}
+                requireManualContinue={quickAddRequireManualContinue}
+                initialProjectId={quickAddSelection?.projectId}
+                initialPushId={quickAddSelection?.pushId}
                 onContinue={(projectId, pushId) => {
                     if (quickAddTaskUser) {
+                        setQuickAddSelection({ projectId, pushId })
                         setLocalTaskDialog({
                             userId: quickAddTaskUser.id,
                             projectId,
@@ -1042,6 +1113,16 @@ export function DashboardHeatmap({
                     users={projectUsers[localTaskDialog.projectId] || []}
                     open={true}
                     onOpenChange={(open) => !open && setLocalTaskDialog(null)}
+                    onBack={() => {
+                        const targetUser = userStats.find((user) => user.id === localTaskDialog.userId) || null
+                        setQuickAddTaskUser(targetUser)
+                        setQuickAddSelection({
+                            projectId: localTaskDialog.projectId,
+                            pushId: localTaskDialog.pushId
+                        })
+                        setQuickAddRequireManualContinue(true)
+                        setLocalTaskDialog(null)
+                    }}
                     onTaskCreated={() => {
                         setLocalTaskDialog(null)
                         // Note: Data will update via server components/revalidation
