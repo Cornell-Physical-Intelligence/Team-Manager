@@ -358,8 +358,10 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
         const sourceColumnName = task.column?.name || ''
         const targetColumnName = targetColumn.name
 
-        // SERVER-SIDE: Check if task requires attachment when moving to Review or Done
-        if ((targetColumnName === 'Review' || targetColumnName === 'Done') && task.requireAttachment) {
+        const canOverrideAttachmentRequirement = user.role === 'Admin' || user.role === 'Team Lead'
+
+        // SERVER-SIDE: Members must attach a file before moving to Review/Done.
+        if (!canOverrideAttachmentRequirement && (targetColumnName === 'Review' || targetColumnName === 'Done') && task.requireAttachment) {
             const hasAttachments = task.attachments && task.attachments.length > 0
             if (!hasAttachments) {
                 return {
