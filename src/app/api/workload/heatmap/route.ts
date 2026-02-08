@@ -3,13 +3,15 @@ import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { buildWorkloadTasks, computeWorkloadStats, getWorkloadConfig } from "@/lib/workload"
 
-export async function GET() {
+export async function GET(request: Request) {
     const user = await getCurrentUser()
     if (!user || !user.workspaceId) {
         return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
     try {
+        const requestUrl = new URL(request.url)
+        const streamMode = requestUrl.searchParams.get("stream") === "1"
         const workspaceId = user.workspaceId
         const [config, memberships, tasks, projects] = await Promise.all([
             getWorkloadConfig(workspaceId),
@@ -86,6 +88,7 @@ export async function GET() {
         const now = new Date()
         const workloadTasks = buildWorkloadTasks(tasks, now, config)
         const { userStats, overloadedUsers, idleUsers } = computeWorkloadStats(users, workloadTasks, config, now)
+        const sortedUserStats = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
 
         const criticalIssues: { type: string; severity: "critical" | "warning" | "info"; message: string; count: number; tasks: typeof workloadTasks }[] = []
 
@@ -134,8 +137,43 @@ export async function GET() {
             })
         }
 
+        if (streamMode) {
+            const encoder = new TextEncoder()
+            const stream = new ReadableStream<Uint8Array>({
+                async start(controller) {
+                    const push = (payload: unknown) => {
+                        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`))
+                    }
+
+                    push({
+                        type: "meta",
+                        criticalIssues,
+                        overloadedUsers,
+                        idleUsers,
+                        allTasks: workloadTasks,
+                        projects
+                    })
+
+                    for (const userStat of sortedUserStats) {
+                        push({ type: "user", userStat })
+                        await Promise.resolve()
+                    }
+
+                    push({ type: "done" })
+                    controller.close()
+                }
+            })
+
+            return new Response(stream, {
+                headers: {
+                    "Content-Type": "application/x-ndjson; charset=utf-8",
+                    "Cache-Control": "no-store"
+                }
+            })
+        }
+
         return NextResponse.json({
-            userStats,
+            userStats: sortedUserStats,
             criticalIssues,
             overloadedUsers,
             idleUsers,

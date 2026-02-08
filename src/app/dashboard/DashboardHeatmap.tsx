@@ -571,7 +571,8 @@ function QuickAddTaskDialog({
     onContinue,
     requireManualContinue,
     initialProjectId,
-    initialPushId
+    initialPushId,
+    suspended
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -581,6 +582,7 @@ function QuickAddTaskDialog({
     requireManualContinue: boolean
     initialProjectId?: string | null
     initialPushId?: string | null
+    suspended?: boolean
 }) {
     const [selectedProjectId, setSelectedProjectId] = useState<string>('')
     const [selectedPushId, setSelectedPushId] = useState<string>('')
@@ -631,7 +633,11 @@ function QuickAddTaskDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-sm">
+            <DialogContent
+                className={cn("max-w-sm", suspended && "opacity-0 pointer-events-none")}
+                showOverlay={!suspended}
+                showCloseButton={!suspended}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-base font-semibold">
                         Add Task for {user?.name.split(' ')[0]}
@@ -738,7 +744,6 @@ export function DashboardHeatmap({
     const [quickAddTaskUser, setQuickAddTaskUser] = useState<UserStat | null>(null)
     const [quickAddSelection, setQuickAddSelection] = useState<{ projectId: string; pushId: string } | null>(null)
     const [quickAddRequireManualContinue, setQuickAddRequireManualContinue] = useState(false)
-    const [visibleUserCount, setVisibleUserCount] = useState(0)
     const [localTaskDialog, setLocalTaskDialog] = useState<{
         userId: string
         projectId: string
@@ -766,20 +771,6 @@ export function DashboardHeatmap({
     // Sort users by workload (most active first)
     const sortedUsers = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
 
-    useEffect(() => {
-        setVisibleUserCount(0)
-        if (sortedUsers.length === 0) return
-        let count = 0
-        const timer = window.setInterval(() => {
-            count += 1
-            setVisibleUserCount(count)
-            if (count >= sortedUsers.length) {
-                window.clearInterval(timer)
-            }
-        }, 45)
-        return () => window.clearInterval(timer)
-    }, [userStats])
-
     const handleAssignTasks = async (taskIds: string[], userId: string) => {
         const errors: string[] = []
         for (const taskId of taskIds) {
@@ -800,10 +791,6 @@ export function DashboardHeatmap({
             console.error(`Failed to assign ${errors.length} task(s)`)
         }
         router.refresh()
-    }
-
-    if (userStats.length === 0) {
-        return null
     }
 
     return (
@@ -868,7 +855,12 @@ export function DashboardHeatmap({
 
             {/* User Cards Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {sortedUsers.slice(0, visibleUserCount).map(user => {
+                {sortedUsers.length === 0 && (
+                    <div className="col-span-full text-[11px] text-muted-foreground py-6">
+                        Loading members...
+                    </div>
+                )}
+                {sortedUsers.map(user => {
                     const status = user.status
 
                     return (
@@ -1090,8 +1082,9 @@ export function DashboardHeatmap({
                 </DialogContent>
             </Dialog>
             <QuickAddTaskDialog
-                open={!!quickAddTaskUser && !localTaskDialog}
+                open={!!quickAddTaskUser}
                 onOpenChange={(open) => {
+                    if (!open && localTaskDialog) return
                     if (!open) {
                         setQuickAddTaskUser(null)
                         setQuickAddSelection(null)
@@ -1103,6 +1096,7 @@ export function DashboardHeatmap({
                 requireManualContinue={quickAddRequireManualContinue}
                 initialProjectId={quickAddSelection?.projectId}
                 initialPushId={quickAddSelection?.pushId}
+                suspended={!!localTaskDialog}
                 onContinue={(projectId, pushId) => {
                     if (quickAddTaskUser) {
                         setQuickAddSelection({ projectId, pushId })
