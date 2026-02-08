@@ -79,7 +79,7 @@ const formatDate = (d: Date | string | null | undefined) => {
     return dateObj.toISOString().split('T')[0]
 }
 
-export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack }: {
+export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack, showOverlay = true }: {
     columnId?: string
     projectId: string
     pushId?: string | null
@@ -92,6 +92,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     onTaskDeleted?: (taskId: string) => void
     initialAssigneeIds?: string[]
     onBack?: () => void
+    showOverlay?: boolean
 }) {
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = externalOpen !== undefined
@@ -753,7 +754,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                         </Button>
                     </DialogTrigger>
                 )}
-                <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] p-0">
+                <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] p-0" showOverlay={showOverlay}>
                     <form
                         onSubmit={handleSubmit}
                         className="flex flex-col h-full max-h-[85vh]"

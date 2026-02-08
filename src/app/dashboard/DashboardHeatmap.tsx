@@ -635,7 +635,7 @@ function QuickAddTaskDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 className={cn("max-w-sm", suspended && "opacity-0 pointer-events-none")}
-                showOverlay={!suspended}
+                showOverlay={true}
                 showCloseButton={!suspended}
             >
                 <DialogHeader>
@@ -1113,6 +1113,7 @@ export function DashboardHeatmap({
                     columnId={projects.find(p => p.id === localTaskDialog.projectId)?.boards[0]?.columns[0]?.id}
                     users={projectUsers[localTaskDialog.projectId] || []}
                     open={true}
+                    showOverlay={false}
                     onOpenChange={(open) => {
                         if (!open) {
                             setLocalTaskDialog(null)
