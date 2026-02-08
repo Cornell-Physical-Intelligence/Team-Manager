@@ -13,6 +13,15 @@ type HeatmapResponse = {
     projects: any[]
 }
 
+type HeatmapSummaryResponse = {
+    userIds: string[]
+    criticalIssues: any[]
+    overloadedUsers: any[]
+    idleUsers: any[]
+    allTasks: any[]
+    projects: any[]
+}
+
 export function DashboardHeatmapLoader() {
     const [data, setData] = useState<HeatmapResponse>({
         userStats: [],
@@ -29,83 +38,47 @@ export function DashboardHeatmapLoader() {
         let cancelled = false
         const load = async () => {
             try {
-                const res = await fetch("/api/workload/heatmap?stream=1", { cache: "no-store" })
-                if (!res.ok || !res.body) {
-                    throw new Error("Failed to stream heatmap")
+                const summaryRes = await fetch("/api/workload/heatmap?summary=1", { cache: "no-store" })
+                const summaryPayload = await summaryRes.json() as HeatmapSummaryResponse
+                if (!summaryRes.ok) {
+                    throw new Error("Failed to load workload summary")
                 }
 
-                const reader = res.body.getReader()
-                const decoder = new TextDecoder()
-                let buffer = ""
+                const userIds = Array.isArray(summaryPayload?.userIds) ? summaryPayload.userIds : []
+                if (cancelled) return
 
-                while (!cancelled) {
-                    const { done, value } = await reader.read()
-                    if (done) break
-                    buffer += decoder.decode(value, { stream: true })
+                setData((prev) => ({
+                    ...prev,
+                    criticalIssues: Array.isArray(summaryPayload?.criticalIssues) ? summaryPayload.criticalIssues : [],
+                    overloadedUsers: Array.isArray(summaryPayload?.overloadedUsers) ? summaryPayload.overloadedUsers : [],
+                    idleUsers: Array.isArray(summaryPayload?.idleUsers) ? summaryPayload.idleUsers : [],
+                    allTasks: Array.isArray(summaryPayload?.allTasks) ? summaryPayload.allTasks : [],
+                    projects: Array.isArray(summaryPayload?.projects) ? summaryPayload.projects : [],
+                    userStats: []
+                }))
+                setHasMeta(true)
+                setLoading(false)
 
-                    let newLineIndex = buffer.indexOf("\n")
-                    while (newLineIndex >= 0) {
-                        const rawLine = buffer.slice(0, newLineIndex).trim()
-                        buffer = buffer.slice(newLineIndex + 1)
-                        newLineIndex = buffer.indexOf("\n")
-
-                        if (!rawLine) continue
-
-                        let event: any = null
-                        try {
-                            event = JSON.parse(rawLine)
-                        } catch {
-                            continue
-                        }
-
-                        if (event?.type === "meta") {
-                            setData((prev) => ({
-                                ...prev,
-                                criticalIssues: Array.isArray(event.criticalIssues) ? event.criticalIssues : [],
-                                overloadedUsers: Array.isArray(event.overloadedUsers) ? event.overloadedUsers : [],
-                                idleUsers: Array.isArray(event.idleUsers) ? event.idleUsers : [],
-                                allTasks: Array.isArray(event.allTasks) ? event.allTasks : [],
-                                projects: Array.isArray(event.projects) ? event.projects : []
-                            }))
-                            setHasMeta(true)
-                            setLoading(false)
-                            continue
-                        }
-
-                        if (event?.type === "user" && event.userStat) {
-                            setData((prev) => ({
-                                ...prev,
-                                userStats: [...prev.userStats, event.userStat]
-                            }))
-                            setHasMeta(true)
-                            setLoading(false)
-                            continue
-                        }
-                    }
-                }
-
-                if (!cancelled && buffer.trim()) {
+                for (const userId of userIds) {
+                    if (cancelled) return
                     try {
-                        const tailEvent = JSON.parse(buffer.trim())
-                        if (tailEvent?.type === "user" && tailEvent.userStat) {
-                            setData((prev) => ({
+                        const userRes = await fetch(`/api/workload/heatmap?userId=${encodeURIComponent(userId)}`, {
+                            cache: "no-store"
+                        })
+                        const userPayload = await userRes.json()
+                        if (!userRes.ok || !userPayload?.userStat) continue
+
+                        setData((prev) => {
+                            if (prev.userStats.some((existingUser) => existingUser.id === userPayload.userStat.id)) {
+                                return prev
+                            }
+                            return {
                                 ...prev,
-                                userStats: [...prev.userStats, tailEvent.userStat]
-                            }))
-                            setHasMeta(true)
-                        } else if (tailEvent?.type === "meta") {
-                            setData((prev) => ({
-                                ...prev,
-                                criticalIssues: Array.isArray(tailEvent.criticalIssues) ? tailEvent.criticalIssues : [],
-                                overloadedUsers: Array.isArray(tailEvent.overloadedUsers) ? tailEvent.overloadedUsers : [],
-                                idleUsers: Array.isArray(tailEvent.idleUsers) ? tailEvent.idleUsers : [],
-                                allTasks: Array.isArray(tailEvent.allTasks) ? tailEvent.allTasks : [],
-                                projects: Array.isArray(tailEvent.projects) ? tailEvent.projects : []
-                            }))
-                            setHasMeta(true)
-                        }
+                                userStats: [...prev.userStats, userPayload.userStat]
+                            }
+                        })
                     } catch {
-                        // ignore malformed trailing payload
+                        // Skip failed user card and continue loading remaining cards.
                     }
                 }
             } catch {

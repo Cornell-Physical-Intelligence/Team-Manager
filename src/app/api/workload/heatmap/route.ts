@@ -11,7 +11,8 @@ export async function GET(request: Request) {
 
     try {
         const requestUrl = new URL(request.url)
-        const streamMode = requestUrl.searchParams.get("stream") === "1"
+        const summaryMode = requestUrl.searchParams.get("summary") === "1"
+        const requestedUserId = requestUrl.searchParams.get("userId")
         const workspaceId = user.workspaceId
         const [config, memberships, tasks, projects] = await Promise.all([
             getWorkloadConfig(workspaceId),
@@ -137,38 +138,22 @@ export async function GET(request: Request) {
             })
         }
 
-        if (streamMode) {
-            const encoder = new TextEncoder()
-            const stream = new ReadableStream<Uint8Array>({
-                async start(controller) {
-                    const push = (payload: unknown) => {
-                        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`))
-                    }
+        if (requestedUserId) {
+            const userStat = sortedUserStats.find((userStat) => userStat.id === requestedUserId)
+            if (!userStat) {
+                return NextResponse.json({ error: "User not found in workload stats" }, { status: 404 })
+            }
+            return NextResponse.json({ userStat })
+        }
 
-                    push({
-                        type: "meta",
-                        criticalIssues,
-                        overloadedUsers,
-                        idleUsers,
-                        allTasks: workloadTasks,
-                        projects
-                    })
-
-                    for (const userStat of sortedUserStats) {
-                        push({ type: "user", userStat })
-                        await Promise.resolve()
-                    }
-
-                    push({ type: "done" })
-                    controller.close()
-                }
-            })
-
-            return new Response(stream, {
-                headers: {
-                    "Content-Type": "application/x-ndjson; charset=utf-8",
-                    "Cache-Control": "no-store"
-                }
+        if (summaryMode) {
+            return NextResponse.json({
+                userIds: sortedUserStats.map((userStat) => userStat.id),
+                criticalIssues,
+                overloadedUsers,
+                idleUsers,
+                allTasks: workloadTasks,
+                projects
             })
         }
 
