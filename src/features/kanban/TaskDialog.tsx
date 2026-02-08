@@ -878,7 +878,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                     <Label htmlFor="taskDates" className="sr-only">Dates</Label>
                                     <div className="relative flex-1">
                                         {!task && (
-                                            <div className="absolute right-2 top-1 z-10 flex items-center gap-2 rounded bg-background/90 px-1 py-0.5">
+                                            <div className="absolute right-2 -top-1 z-10 flex -translate-y-full items-center gap-2 bg-background px-1 py-0.5">
                                                 <button
                                                     type="button"
                                                     className="text-[10px] leading-none font-medium text-muted-foreground hover:text-foreground"
