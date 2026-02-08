@@ -619,7 +619,6 @@ function QuickAddTaskDialog({
     const handleContinue = () => {
         if (!selectedProjectId || !selectedPushId || !user) return
         onContinue(selectedProjectId, selectedPushId)
-        onOpenChange(false)
     }
 
     const handlePushSelect = (pushId: string) => {
@@ -627,7 +626,6 @@ function QuickAddTaskDialog({
         setSelectedPushId(pushId)
         if (!requireManualContinue) {
             onContinue(selectedProjectId, pushId)
-            onOpenChange(false)
         }
     }
 
@@ -708,19 +706,17 @@ function QuickAddTaskDialog({
                     )}
                 </div>
 
-                {requireManualContinue && (
-                    <DialogFooter>
-                        <Button
-                            size="sm"
-                            onClick={handleContinue}
-                            disabled={!selectedProjectId || !selectedPushId || activePushes.length === 0}
-                            className="w-full h-9 text-xs"
-                        >
-                            Continue
-                            <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-                        </Button>
-                    </DialogFooter>
-                )}
+                <DialogFooter>
+                    <Button
+                        size="sm"
+                        onClick={handleContinue}
+                        disabled={!selectedProjectId || !selectedPushId || activePushes.length === 0}
+                        className="w-full h-9 text-xs"
+                    >
+                        Continue
+                        <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     )
@@ -742,6 +738,7 @@ export function DashboardHeatmap({
     const [quickAddTaskUser, setQuickAddTaskUser] = useState<UserStat | null>(null)
     const [quickAddSelection, setQuickAddSelection] = useState<{ projectId: string; pushId: string } | null>(null)
     const [quickAddRequireManualContinue, setQuickAddRequireManualContinue] = useState(false)
+    const [visibleUserCount, setVisibleUserCount] = useState(0)
     const [localTaskDialog, setLocalTaskDialog] = useState<{
         userId: string
         projectId: string
@@ -768,6 +765,20 @@ export function DashboardHeatmap({
 
     // Sort users by workload (most active first)
     const sortedUsers = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
+
+    useEffect(() => {
+        setVisibleUserCount(0)
+        if (sortedUsers.length === 0) return
+        let count = 0
+        const timer = window.setInterval(() => {
+            count += 1
+            setVisibleUserCount(count)
+            if (count >= sortedUsers.length) {
+                window.clearInterval(timer)
+            }
+        }, 45)
+        return () => window.clearInterval(timer)
+    }, [userStats])
 
     const handleAssignTasks = async (taskIds: string[], userId: string) => {
         const errors: string[] = []
@@ -857,14 +868,14 @@ export function DashboardHeatmap({
 
             {/* User Cards Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {sortedUsers.map(user => {
+                {sortedUsers.slice(0, visibleUserCount).map(user => {
                     const status = user.status
 
                     return (
                         <div
                             key={user.id}
                             onClick={() => setSelectedUser(user)}
-                            className="relative p-3 rounded-lg border border-border text-left transition-all hover:shadow-md overflow-hidden bg-card cursor-pointer group"
+                            className="relative p-3 rounded-lg border border-border text-left transition-all hover:shadow-md overflow-hidden bg-card cursor-pointer group animate-in fade-in zoom-in-95 slide-in-from-bottom-1 duration-200"
                         >
                             {/* User header */}
                             <div className="relative flex items-center gap-2 mb-2">
@@ -1079,7 +1090,7 @@ export function DashboardHeatmap({
                 </DialogContent>
             </Dialog>
             <QuickAddTaskDialog
-                open={!!quickAddTaskUser}
+                open={!!quickAddTaskUser && !localTaskDialog}
                 onOpenChange={(open) => {
                     if (!open) {
                         setQuickAddTaskUser(null)
@@ -1112,7 +1123,14 @@ export function DashboardHeatmap({
                     columnId={projects.find(p => p.id === localTaskDialog.projectId)?.boards[0]?.columns[0]?.id}
                     users={projectUsers[localTaskDialog.projectId] || []}
                     open={true}
-                    onOpenChange={(open) => !open && setLocalTaskDialog(null)}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setLocalTaskDialog(null)
+                            setQuickAddTaskUser(null)
+                            setQuickAddSelection(null)
+                            setQuickAddRequireManualContinue(false)
+                        }
+                    }}
                     onBack={() => {
                         const targetUser = userStats.find((user) => user.id === localTaskDialog.userId) || null
                         setQuickAddTaskUser(targetUser)
@@ -1125,6 +1143,9 @@ export function DashboardHeatmap({
                     }}
                     onTaskCreated={() => {
                         setLocalTaskDialog(null)
+                        setQuickAddTaskUser(null)
+                        setQuickAddSelection(null)
+                        setQuickAddRequireManualContinue(false)
                         // Note: Data will update via server components/revalidation
                     }}
                 />
