@@ -18,8 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Plus, Trash2, X, ListChecks, Folder, ChevronRight, Loader2, ArrowLeft } from "lucide-react"
-import { useState, useEffect, useMemo, useRef } from "react"
+import { Plus, Trash2, X, ListChecks, Folder, ChevronRight, Loader2, ArrowLeft, AlertCircle } from "lucide-react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { createTask, updateTaskDetails, deleteTask } from "@/app/actions/kanban"
 import { RemoveScroll } from "react-remove-scroll"
 
@@ -139,6 +139,14 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const driveConfigLoadedRef = useRef(false)
     const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
     const assigneePopoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [removedAssigneeNotice, setRemovedAssigneeNotice] = useState<{ removedCount: number; targetAssigneeCount: number } | null>(null)
+    const initialAssigneeIdsRef = useRef<string[] | undefined>(initialAssigneeIds)
+    const workspaceUserIdsRef = useRef<Set<string>>(new Set(users.map((u) => u.id)))
+
+    const sanitizeAssigneeIds = useCallback((ids: string[]) => {
+        const workspaceUserIds = workspaceUserIdsRef.current
+        return Array.from(new Set(ids.filter((id) => id.trim().length > 0 && workspaceUserIds.has(id))))
+    }, [])
 
     // Checklist state
     const [enableChecklist, setEnableChecklist] = useState(false)
@@ -159,14 +167,23 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             if (task) {
                 setTitle(task.title || "")
                 setDescription(task.description || "")
-                setAssigneeId(task.assigneeId || "")
-                // Load assigneeIds from task.assignees if available, otherwise fall back to assigneeId
-                if (task.assignees && task.assignees.length > 0) {
-                    setAssigneeIds(task.assignees.map(ta => ta.user.id))
-                } else if (task.assigneeId) {
-                    setAssigneeIds([task.assigneeId])
+                const rawAssigneeIds =
+                    task.assignees && task.assignees.length > 0
+                        ? task.assignees.map((ta) => ta.user.id)
+                        : task.assigneeId
+                            ? [task.assigneeId]
+                            : []
+                const sanitizedAssigneeIds = sanitizeAssigneeIds(rawAssigneeIds)
+                const uniqueRawAssigneeCount = Array.from(new Set(rawAssigneeIds.filter((id) => id.trim().length > 0))).length
+                setAssigneeId(sanitizedAssigneeIds[0] || "")
+                setAssigneeIds(sanitizedAssigneeIds)
+                if (uniqueRawAssigneeCount > sanitizedAssigneeIds.length) {
+                    setRemovedAssigneeNotice({
+                        removedCount: uniqueRawAssigneeCount - sanitizedAssigneeIds.length,
+                        targetAssigneeCount: uniqueRawAssigneeCount
+                    })
                 } else {
-                    setAssigneeIds([])
+                    setRemovedAssigneeNotice(null)
                 }
                 setStartDate(formatDate(task.startDate) || today)
                 setEndDate(formatDate(task.endDate) || "")
@@ -183,8 +200,10 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setExistingInstructionsFile(null)
                 setTitle("")
                 setDescription("")
-                setAssigneeId(initialAssigneeIds?.[0] || "")
-                setAssigneeIds(initialAssigneeIds || [])
+                const sanitizedInitialAssigneeIds = sanitizeAssigneeIds(initialAssigneeIdsRef.current || [])
+                setAssigneeId(sanitizedInitialAssigneeIds[0] || "")
+                setAssigneeIds(sanitizedInitialAssigneeIds)
+                setRemovedAssigneeNotice(null)
                 setStartDate("")
                 setEndDate("")
                 setRequireAttachment(true)
@@ -194,7 +213,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setNewChecklistItem("")
             }
         }
-    }, [task, today, open])
+    }, [task, today, open, sanitizeAssigneeIds])
 
     useEffect(() => {
         return () => {
@@ -203,6 +222,34 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             }
         }
     }, [])
+
+    useEffect(() => {
+        workspaceUserIdsRef.current = new Set(users.map((u) => u.id))
+    }, [users])
+
+    useEffect(() => {
+        initialAssigneeIdsRef.current = initialAssigneeIds
+    }, [initialAssigneeIds])
+
+    useEffect(() => {
+        if (!open || assigneeIds.length === 0) return
+        const sanitizedAssigneeIds = sanitizeAssigneeIds(assigneeIds)
+        if (sanitizedAssigneeIds.length === assigneeIds.length) return
+        const removedCount = assigneeIds.length - sanitizedAssigneeIds.length
+        setAssigneeIds(sanitizedAssigneeIds)
+        setAssigneeId(sanitizedAssigneeIds[0] || "")
+        setRemovedAssigneeNotice((prev) => ({
+            removedCount: (prev?.removedCount || 0) + removedCount,
+            targetAssigneeCount: Math.max(prev?.targetAssigneeCount || assigneeIds.length, assigneeIds.length)
+        }))
+    }, [open, assigneeIds, users, sanitizeAssigneeIds])
+
+    useEffect(() => {
+        if (!removedAssigneeNotice) return
+        if (assigneeIds.length >= removedAssigneeNotice.targetAssigneeCount) {
+            setRemovedAssigneeNotice(null)
+        }
+    }, [assigneeIds.length, removedAssigneeNotice])
 
     const handleAssigneePopoverMouseEnter = () => {
         if (assigneePopoverCloseTimeoutRef.current) {
@@ -542,7 +589,18 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         e.preventDefault()
         setError(null)
 
-        if (!isValid) {
+        const sanitizedAssigneeIds = sanitizeAssigneeIds(assigneeIds)
+        if (sanitizedAssigneeIds.length !== assigneeIds.length) {
+            const removedCount = assigneeIds.length - sanitizedAssigneeIds.length
+            setAssigneeIds(sanitizedAssigneeIds)
+            setAssigneeId(sanitizedAssigneeIds[0] || "")
+            setRemovedAssigneeNotice((prev) => ({
+                removedCount: (prev?.removedCount || 0) + removedCount,
+                targetAssigneeCount: Math.max(prev?.targetAssigneeCount || assigneeIds.length, assigneeIds.length)
+            }))
+        }
+
+        if (!hasTitle || !hasDescriptionValue || sanitizedAssigneeIds.length === 0 || !hasDateRange) {
             return
         }
 
@@ -558,8 +616,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 const result = await updateTaskDetails(task.id, {
                     title: title.trim(),
                     description: description.trim(),
-                    assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
-                    assigneeIds: assigneeIds,
+                    assigneeId: sanitizedAssigneeIds.length > 0 ? sanitizedAssigneeIds[0] : "",
+                    assigneeIds: sanitizedAssigneeIds,
                     startDate,
                     endDate,
                     requireAttachment,
@@ -615,8 +673,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 const result = await createTask({
                     title: title.trim(),
                     description: description.trim(),
-                    assigneeId: assigneeIds.length > 0 ? assigneeIds[0] : "",
-                    assigneeIds: assigneeIds,
+                    assigneeId: sanitizedAssigneeIds.length > 0 ? sanitizedAssigneeIds[0] : "",
+                    assigneeIds: sanitizedAssigneeIds,
                     startDate,
                     endDate,
                     requireAttachment,
@@ -666,6 +724,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setDescription("")
                 setAssigneeId("")
                 setAssigneeIds([])
+                setRemovedAssigneeNotice(null)
                 setStartDate(today)
                 setEndDate("")
                 setInstructionsFile(null)
@@ -783,6 +842,17 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                     <span className="font-medium">Error:</span> {error}
                                 </div>
                             )}
+                            {removedAssigneeNotice && assigneeIds.length < removedAssigneeNotice.targetAssigneeCount && (
+                                <div className="border border-amber-200/80 bg-amber-50/70 text-amber-900/90 text-sm p-3 rounded-md flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-700/80" />
+                                    <span>
+                                        {removedAssigneeNotice.removedCount === 1
+                                            ? "A previous assignee was removed from this workspace and has been unassigned."
+                                            : `${removedAssigneeNotice.removedCount} previous assignees were removed from this workspace and have been unassigned.`}
+                                        {" "}Add a replacement assignee to swap them.
+                                    </span>
+                                </div>
+                            )}
 
                             <div className="space-y-4">
                                 <div className="space-y-1">
@@ -864,7 +934,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                         {assigneeIds.length === 0
                                                             ? "Select assignee..."
                                                             : assigneeIds.length === 1
-                                                                ? users.find(u => u.id === assigneeIds[0])?.name || "1 selected"
+                                                                ? sortedUsers.find(u => u.id === assigneeIds[0])?.name || "1 selected"
                                                                 : `${assigneeIds.length} selected`}
                                                     </span>
                                                 </Button>
@@ -877,7 +947,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                         >
                                             <RemoveScroll shards={[dialogContentRef]}>
                                                 <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
-                                                    {users.filter(u => u.isProjectMember).map(u => (
+                                                    {sortedUsers.filter(u => u.isProjectMember).map(u => (
                                                         <div
                                                             key={u.id}
                                                             className="flex items-center space-x-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
@@ -893,11 +963,11 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                         </div>
                                                     ))}
 
-                                                    {users.some(u => !u.isProjectMember) && (
+                                                    {sortedUsers.some(u => !u.isProjectMember) && (
                                                         <>
                                                             <div className="h-px bg-border my-1" />
                                                             <p className="px-2 py-1.5 text-xs text-muted-foreground font-medium">Other Users</p>
-                                                            {users.filter(u => !u.isProjectMember).map(u => (
+                                                            {sortedUsers.filter(u => !u.isProjectMember).map(u => (
                                                                 <div
                                                                     key={u.id}
                                                                     className="flex items-center space-x-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"

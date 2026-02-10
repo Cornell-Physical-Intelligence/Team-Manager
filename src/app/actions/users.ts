@@ -254,6 +254,31 @@ export async function removeUserFromWorkspace(userId: string) {
                     }
                 })
 
+                // Remove stale task assignments inside this workspace.
+                const workspaceTaskScope = {
+                    OR: [
+                        { column: { board: { project: { workspaceId: currentUser.workspaceId! } } } },
+                        { push: { project: { workspaceId: currentUser.workspaceId! } } }
+                    ]
+                }
+
+                await tx.task.updateMany({
+                    where: {
+                        assigneeId: userId,
+                        ...workspaceTaskScope
+                    },
+                    data: {
+                        assigneeId: null
+                    }
+                })
+
+                await tx.taskAssignee.deleteMany({
+                    where: {
+                        userId,
+                        task: workspaceTaskScope
+                    }
+                })
+
                 // Also clear user's workspaceId and role if this was their main workspace
                 if (targetUser?.workspaceId === currentUser.workspaceId) {
                     console.log(`[Users] Resetting user ${userId} role to 'Member' because they were removed from their main workspace.`)
@@ -270,6 +295,7 @@ export async function removeUserFromWorkspace(userId: string) {
 
         revalidatePath('/dashboard/members')
         revalidatePath('/dashboard/projects')
+        revalidatePath('/dashboard')
         return { success: true }
     } catch (error) {
         console.error("Failed to remove user from workspace", error)
