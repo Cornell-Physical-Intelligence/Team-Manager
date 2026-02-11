@@ -102,15 +102,21 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
     const today = useMemo(() => new Date().toISOString().split('T')[0], [])
+    const [workspaceUsers, setWorkspaceUsers] = useState(users)
+    const projectMembershipById = useMemo(() => {
+        const map = new Map<string, boolean>()
+        users.forEach((user) => map.set(user.id, !!user.isProjectMember))
+        return map
+    }, [users])
 
     // Sort users: project members first, then alphabetical
     const sortedUsers = useMemo(() => {
-        return [...users].sort((a, b) => {
+        return [...workspaceUsers].sort((a, b) => {
             if (a.isProjectMember && !b.isProjectMember) return -1
             if (!a.isProjectMember && b.isProjectMember) return 1
             return a.name.localeCompare(b.name)
         })
-    }, [users])
+    }, [workspaceUsers])
 
     const [title, setTitle] = useState(task?.title || "")
     const [description, setDescription] = useState(task?.description || "")
@@ -141,11 +147,66 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const assigneePopoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [removedAssigneeNotice, setRemovedAssigneeNotice] = useState<{ removedCount: number; targetAssigneeCount: number } | null>(null)
     const initialAssigneeIdsRef = useRef<string[] | undefined>(initialAssigneeIds)
-    const workspaceUserIdsRef = useRef<Set<string>>(new Set(users.map((u) => u.id)))
+    const workspaceUserIdsRef = useRef<Set<string>>(new Set(workspaceUsers.map((u) => u.id)))
 
     const sanitizeAssigneeIds = useCallback((ids: string[]) => {
         const workspaceUserIds = workspaceUserIdsRef.current
         return Array.from(new Set(ids.filter((id) => id.trim().length > 0 && workspaceUserIds.has(id))))
+    }, [])
+
+    const refreshWorkspaceUsers = useCallback(async () => {
+        try {
+            const response = await fetch("/api/users")
+            if (!response.ok) return null
+
+            const data: unknown = await response.json().catch(() => null)
+            const rawUsers: unknown[] =
+                Array.isArray(data)
+                    ? data
+                    : typeof data === "object" && data !== null && Array.isArray((data as { users?: unknown[] }).users)
+                        ? (data as { users: unknown[] }).users
+                        : []
+
+            const normalizedUsers = rawUsers
+                .filter((user: unknown): user is { id: string; name?: string | null } =>
+                    typeof user === "object" &&
+                    user !== null &&
+                    typeof (user as { id?: unknown }).id === "string" &&
+                    (user as { id: string }).id.trim().length > 0
+                )
+                .map((user: { id: string; name?: string | null }) => ({
+                    id: user.id,
+                    name: typeof user.name === "string" && user.name.trim().length > 0 ? user.name : "Unknown"
+                }))
+
+            if (normalizedUsers.length === 0) return null
+
+            const nextIdSet = new Set(normalizedUsers.map((user) => user.id))
+
+            setWorkspaceUsers((previousUsers) => {
+                const previousMembershipById = new Map(previousUsers.map((user) => [user.id, !!user.isProjectMember]))
+                return normalizedUsers.map((user) => ({
+                    ...user,
+                    isProjectMember: projectMembershipById.get(user.id) ?? previousMembershipById.get(user.id) ?? false
+                }))
+            })
+            workspaceUserIdsRef.current = nextIdSet
+            return nextIdSet
+        } catch {
+            return null
+        }
+    }, [projectMembershipById])
+
+    const applySanitizedAssignees = useCallback((originalIds: string[], sanitizedIds: string[]) => {
+        setAssigneeIds(sanitizedIds)
+        setAssigneeId(sanitizedIds[0] || "")
+        if (sanitizedIds.length < originalIds.length) {
+            const removedCount = originalIds.length - sanitizedIds.length
+            setRemovedAssigneeNotice((prev) => ({
+                removedCount: (prev?.removedCount || 0) + removedCount,
+                targetAssigneeCount: Math.max(prev?.targetAssigneeCount || originalIds.length, originalIds.length)
+            }))
+        }
     }, [])
 
     // Checklist state
@@ -224,8 +285,17 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     }, [])
 
     useEffect(() => {
-        workspaceUserIdsRef.current = new Set(users.map((u) => u.id))
+        setWorkspaceUsers(users)
     }, [users])
+
+    useEffect(() => {
+        workspaceUserIdsRef.current = new Set(workspaceUsers.map((u) => u.id))
+    }, [workspaceUsers])
+
+    useEffect(() => {
+        if (!open) return
+        void refreshWorkspaceUsers()
+    }, [open, refreshWorkspaceUsers])
 
     useEffect(() => {
         initialAssigneeIdsRef.current = initialAssigneeIds
@@ -235,14 +305,8 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (!open || assigneeIds.length === 0) return
         const sanitizedAssigneeIds = sanitizeAssigneeIds(assigneeIds)
         if (sanitizedAssigneeIds.length === assigneeIds.length) return
-        const removedCount = assigneeIds.length - sanitizedAssigneeIds.length
-        setAssigneeIds(sanitizedAssigneeIds)
-        setAssigneeId(sanitizedAssigneeIds[0] || "")
-        setRemovedAssigneeNotice((prev) => ({
-            removedCount: (prev?.removedCount || 0) + removedCount,
-            targetAssigneeCount: Math.max(prev?.targetAssigneeCount || assigneeIds.length, assigneeIds.length)
-        }))
-    }, [open, assigneeIds, users, sanitizeAssigneeIds])
+        applySanitizedAssignees(assigneeIds, sanitizedAssigneeIds)
+    }, [open, assigneeIds, workspaceUsers, sanitizeAssigneeIds, applySanitizedAssignees])
 
     useEffect(() => {
         if (!removedAssigneeNotice) return
@@ -591,13 +655,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
         const sanitizedAssigneeIds = sanitizeAssigneeIds(assigneeIds)
         if (sanitizedAssigneeIds.length !== assigneeIds.length) {
-            const removedCount = assigneeIds.length - sanitizedAssigneeIds.length
-            setAssigneeIds(sanitizedAssigneeIds)
-            setAssigneeId(sanitizedAssigneeIds[0] || "")
-            setRemovedAssigneeNotice((prev) => ({
-                removedCount: (prev?.removedCount || 0) + removedCount,
-                targetAssigneeCount: Math.max(prev?.targetAssigneeCount || assigneeIds.length, assigneeIds.length)
-            }))
+            applySanitizedAssignees(assigneeIds, sanitizedAssigneeIds)
         }
 
         if (!hasTitle || !hasDescriptionValue || sanitizedAssigneeIds.length === 0 || !hasDateRange) {
@@ -627,6 +685,24 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 })
 
                 if (result?.error) {
+                    if (result.error === "One or more assignees are not in this workspace") {
+                        const refreshedWorkspaceIds = await refreshWorkspaceUsers()
+                        if (refreshedWorkspaceIds) {
+                            const refreshedAssigneeIds = Array.from(
+                                new Set(
+                                    assigneeIds.filter((id) => id.trim().length > 0 && refreshedWorkspaceIds.has(id))
+                                )
+                            )
+                            if (refreshedAssigneeIds.length !== assigneeIds.length) {
+                                applySanitizedAssignees(assigneeIds, refreshedAssigneeIds)
+                            }
+                            setError(null)
+                        } else {
+                            setError(result.error)
+                        }
+                        setIsLoading(false)
+                        return
+                    }
                     setError(result.error)
                     setIsLoading(false)
                     return
@@ -686,6 +762,24 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 })
 
                 if (result?.error) {
+                    if (result.error === "One or more assignees are not in this workspace") {
+                        const refreshedWorkspaceIds = await refreshWorkspaceUsers()
+                        if (refreshedWorkspaceIds) {
+                            const refreshedAssigneeIds = Array.from(
+                                new Set(
+                                    assigneeIds.filter((id) => id.trim().length > 0 && refreshedWorkspaceIds.has(id))
+                                )
+                            )
+                            if (refreshedAssigneeIds.length !== assigneeIds.length) {
+                                applySanitizedAssignees(assigneeIds, refreshedAssigneeIds)
+                            }
+                            setError(null)
+                        } else {
+                            setError(result.error)
+                        }
+                        setIsLoading(false)
+                        return
+                    }
                     setError(result.error)
                     setIsLoading(false)
                     return

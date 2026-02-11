@@ -65,7 +65,15 @@ export async function PATCH(
     try {
         const { id } = await params
         const body = await request.json()
-        const { assigneeIds } = body
+        const { assigneeIds } = body as { assigneeIds?: unknown }
+
+        if (assigneeIds !== undefined && !Array.isArray(assigneeIds)) {
+            return NextResponse.json({ error: "assigneeIds must be an array" }, { status: 400 })
+        }
+
+        if (Array.isArray(assigneeIds) && assigneeIds.some((id) => typeof id !== "string")) {
+            return NextResponse.json({ error: "assigneeIds must contain only strings" }, { status: 400 })
+        }
 
         // Verify task exists and belongs to user's workspace
         const task = await prisma.task.findUnique({
@@ -80,30 +88,47 @@ export async function PATCH(
                             }
                         }
                     }
+                },
+                push: {
+                    select: {
+                        project: { select: { workspaceId: true } }
+                    }
                 }
             }
         })
 
-        if (!task?.column?.board?.project?.workspaceId) {
+        const taskWorkspaceId = task?.column?.board?.project?.workspaceId ?? task?.push?.project?.workspaceId
+
+        if (!taskWorkspaceId) {
             return NextResponse.json({ error: "Task not found" }, { status: 404 })
         }
 
-        if (task.column.board.project.workspaceId !== user.workspaceId) {
+        if (taskWorkspaceId !== user.workspaceId) {
             return NextResponse.json({ error: "Task not found" }, { status: 404 })
         }
 
         // Handle assignee updates
-        if (assigneeIds && Array.isArray(assigneeIds)) {
-            // Verify all assignees belong to the same workspace
+        if (Array.isArray(assigneeIds)) {
+            const normalizedAssigneeIds = Array.from(
+                new Set(
+                    assigneeIds
+                        .map((id) => id.trim())
+                        .filter((id) => id.length > 0)
+                )
+            )
+
             const validUsers = await prisma.workspaceMember.findMany({
                 where: {
                     workspaceId: user.workspaceId,
-                    userId: { in: assigneeIds }
+                    userId: { in: normalizedAssigneeIds }
                 },
                 select: { userId: true }
             })
 
             const validUserIds = validUsers.map(u => u.userId)
+            if (validUserIds.length !== normalizedAssigneeIds.length) {
+                return NextResponse.json({ error: "One or more assignees are not in this workspace" }, { status: 400 })
+            }
 
             // Update task assignees
             await prisma.$transaction(async (tx) => {
@@ -112,7 +137,7 @@ export async function PATCH(
                     where: { taskId: id }
                 })
 
-                // Add new assignees (only valid ones from same workspace)
+                // Add new assignees
                 if (validUserIds.length > 0) {
                     await tx.taskAssignee.createMany({
                         data: validUserIds.map(userId => ({
@@ -120,13 +145,13 @@ export async function PATCH(
                             userId
                         }))
                     })
-
-                    // Also update the legacy assigneeId field with first assignee
-                    await tx.task.update({
-                        where: { id },
-                        data: { assigneeId: validUserIds[0] }
-                    })
                 }
+
+                // Keep legacy field synchronized, including explicit unassign.
+                await tx.task.update({
+                    where: { id },
+                    data: { assigneeId: validUserIds[0] ?? null }
+                })
             })
         }
 

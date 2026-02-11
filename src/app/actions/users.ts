@@ -254,6 +254,17 @@ export async function removeUserFromWorkspace(userId: string) {
                     }
                 })
 
+                // If they lead projects in this workspace, clear lead ownership.
+                await tx.project.updateMany({
+                    where: {
+                        workspaceId: currentUser.workspaceId!,
+                        leadId: userId
+                    },
+                    data: {
+                        leadId: null
+                    }
+                })
+
                 // Remove stale task assignments inside this workspace.
                 const workspaceTaskScope = {
                     OR: [

@@ -1,12 +1,18 @@
 import prisma from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import { ProjectContent } from "@/features/projects/ProjectContent"
+import { getCurrentUser } from "@/lib/auth"
 
 interface ProjectPageProps {
     params: Promise<{ id: string }>
 }
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
+    const currentUser = await getCurrentUser()
+    if (!currentUser?.workspaceId) {
+        notFound()
+    }
+
     const { id } = await params
 
     const projectPromise = prisma.project.findUnique({
@@ -43,6 +49,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     const [project, projectPushes] = await Promise.all([projectPromise, pushesPromise])
 
     if (!project) {
+        notFound()
+    }
+
+    if (project.workspaceId !== currentUser.workspaceId) {
         notFound()
     }
 
