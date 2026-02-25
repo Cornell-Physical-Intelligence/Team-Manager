@@ -17,62 +17,35 @@ export default async function MembersPage() {
     if (!currentUser) {
         redirect('/')
     }
+    if (!currentUser.workspaceId) {
+        redirect('/workspaces')
+    }
+
+    const workspaceId = currentUser.workspaceId
     const canChangeRoles = currentUser.role === 'Admin' || currentUser.role === 'Team Lead'
 
-    // Fetch users with their tasks
+    // Fetch workspace members and profile data
     const usersRaw = await prisma.user.findMany({
         where: {
             memberships: {
                 some: {
-                    workspaceId: currentUser.workspaceId || 'non-existent-id'
+                    workspaceId
                 }
             }
         },
         include: {
             memberships: {
                 where: {
-                    workspaceId: currentUser.workspaceId || 'non-existent-id'
+                    workspaceId
                 },
                 select: { role: true, name: true }
             },
             projectMemberships: {
+                where: {
+                    project: { workspaceId }
+                },
                 include: {
                     project: { select: { id: true, name: true, color: true } }
-                }
-            },
-            tasks: {
-                include: {
-                    column: {
-                        select: {
-                            name: true,
-                            board: {
-                                select: {
-                                    project: { select: { id: true, name: true, color: true } }
-                                }
-                            }
-                        }
-                    },
-                    push: { select: { name: true, color: true } }
-                },
-                orderBy: { updatedAt: 'desc' }
-            },
-            taskAssignments: {
-                include: {
-                    task: {
-                        include: {
-                            column: {
-                                select: {
-                                    name: true,
-                                    board: {
-                                        select: {
-                                            project: { select: { id: true, name: true, color: true } }
-                                        }
-                                    }
-                                }
-                            },
-                            push: { select: { name: true, color: true } }
-                        }
-                    }
                 }
             }
         },
@@ -88,11 +61,73 @@ export default async function MembersPage() {
         }
     })
 
-    // Fetch activity logs separately by user ID
     const userIds = users.map(u => u.id)
+    const userIdSet = new Set(userIds)
+
+    // Fetch workspace tasks once and distribute to users by assignment.
+    const workspaceTasks = await prisma.task.findMany({
+        where: {
+            OR: [
+                { column: { board: { project: { workspaceId } } } },
+                { push: { project: { workspaceId } } }
+            ]
+        },
+        select: {
+            id: true,
+            title: true,
+            description: true,
+            dueDate: true,
+            endDate: true,
+            startDate: true,
+            updatedAt: true,
+            progress: true,
+            enableProgress: true,
+            assigneeId: true,
+            assignees: { select: { userId: true } },
+            column: {
+                select: {
+                    name: true,
+                    board: {
+                        select: {
+                            project: { select: { id: true, name: true, color: true } }
+                        }
+                    }
+                }
+            },
+            push: { select: { name: true, color: true } }
+        },
+        orderBy: { updatedAt: 'desc' }
+    }).catch((error: any) => {
+        if (error?.code === 'P2021') {
+            console.warn('[MembersPage] Task query failed due to missing table. Returning empty task list.')
+            return []
+        }
+        throw error
+    })
+
+    const tasksByUser = new Map<string, typeof workspaceTasks>()
+    for (const task of workspaceTasks) {
+        const assigneeIds = new Set<string>()
+        if (task.assigneeId) assigneeIds.add(task.assigneeId)
+        for (const assignee of task.assignees) assigneeIds.add(assignee.userId)
+
+        for (const assigneeId of assigneeIds) {
+            if (!userIdSet.has(assigneeId)) continue
+            const current = tasksByUser.get(assigneeId) || []
+            current.push(task)
+            tasksByUser.set(assigneeId, current)
+        }
+    }
+
+    // Fetch activity logs separately by user ID
     const activityLogs = await prisma.activityLog.findMany({
         where: {
-            changedBy: { in: userIds }
+            changedBy: { in: userIds },
+            OR: [
+                { task: { column: { board: { project: { workspaceId } } } } },
+                { task: { push: { project: { workspaceId } } } },
+                { task: null }
+            ]
         },
         orderBy: { createdAt: 'desc' },
         take: 100, // Get recent logs
@@ -105,6 +140,12 @@ export default async function MembersPage() {
             details: true,
             changedBy: true
         }
+    }).catch((error: any) => {
+        if (error?.code === 'P2021') {
+            console.warn('[MembersPage] Activity log query failed due to missing table. Returning empty activity list.')
+            return []
+        }
+        throw error
     })
 
     // Group activity logs by user
@@ -114,22 +155,14 @@ export default async function MembersPage() {
     }, {} as Record<string, typeof activityLogs>)
 
     const allProjects = await prisma.project.findMany({
-        where: { workspaceId: currentUser.workspaceId || 'non-existent-id' },
+        where: { workspaceId },
         select: { id: true, name: true, color: true },
         orderBy: { createdAt: 'desc' }
     })
 
     // Process user stats
     const userStats = users.map(user => {
-        // Combine both assignment types
-        const allTasks = [
-            ...user.tasks,
-            ...user.taskAssignments.map(ta => ta.task)
-        ]
-        // Remove duplicates
-        const uniqueTasks = allTasks.filter((task, index, self) =>
-            index === self.findIndex(t => t.id === task.id)
-        )
+        const uniqueTasks = tasksByUser.get(user.id) || []
 
         const completedTasks = uniqueTasks.filter(t => t.column?.name === 'Done')
         const inProgressTasks = uniqueTasks.filter(t => t.column?.name === 'In Progress')
