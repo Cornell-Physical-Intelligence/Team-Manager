@@ -317,13 +317,6 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
     return (
         <div className="flex flex-col h-full animate-fade-in-up">
             <div className="shrink-0 border-b bg-background relative overflow-hidden">
-                {/* Project color gradient */}
-                <div
-                    className="absolute inset-y-0 left-0 w-32 pointer-events-none"
-                    style={{
-                        background: `linear-gradient(to right, ${projectColor}20, transparent)`
-                    }}
-                />
                 <div className="relative flex items-center justify-between gap-2 p-3">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0">
                         <TooltipProvider delayDuration={500}>

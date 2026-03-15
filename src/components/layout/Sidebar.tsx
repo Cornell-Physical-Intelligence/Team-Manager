@@ -117,6 +117,52 @@ const PROJECT_COLOR_OPTIONS = [
     "#ec4899", // pink
 ] as const
 
+const LEAN_TASK_CACHE_TTL_MS = 2 * 60 * 1000
+const pendingLeanTaskPrefetches = new Map<string, Promise<void>>()
+
+function isLeanTaskCacheFresh(projectId: string) {
+    if (typeof window === "undefined") return false
+
+    try {
+        const raw = window.sessionStorage.getItem(`cupi:leanTasks:${projectId}`)
+        if (!raw) return false
+
+        const parsed = JSON.parse(raw) as { ts?: number }
+        return typeof parsed.ts === "number" && Date.now() - parsed.ts < LEAN_TASK_CACHE_TTL_MS
+    } catch {
+        return false
+    }
+}
+
+function prefetchLeanTasks(projectId: string) {
+    if (typeof window === "undefined" || isLeanTaskCacheFresh(projectId)) {
+        return
+    }
+
+    if (pendingLeanTaskPrefetches.has(projectId)) {
+        return
+    }
+
+    const task = (async () => {
+        try {
+            const res = await fetch(`/api/projects/${projectId}/tasks?lean=true`)
+            const data = await res.json()
+            if (!res.ok || !Array.isArray(data?.tasks)) return
+
+            window.sessionStorage.setItem(
+                `cupi:leanTasks:${projectId}`,
+                JSON.stringify({ ts: Date.now(), tasks: data.tasks })
+            )
+        } catch {
+            // ignore prefetch failures
+        } finally {
+            pendingLeanTaskPrefetches.delete(projectId)
+        }
+    })()
+
+    pendingLeanTaskPrefetches.set(projectId, task)
+}
+
 const SortableProjectRow = React.memo(({
     project,
     pathname,
@@ -177,6 +223,9 @@ const SortableProjectRow = React.memo(({
             <Link
                 href={`/dashboard/projects/${project.id}`}
                 onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
+                onMouseEnter={() => prefetchLeanTasks(project.id)}
+                onFocus={() => prefetchLeanTasks(project.id)}
+                onTouchStart={() => prefetchLeanTasks(project.id)}
                 className={cn(
                     "relative z-10 rounded-md pl-2 py-1.5 text-sm transition-colors flex-1 min-w-0",
                     isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
@@ -369,68 +418,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         fetchProjects()
         fetchUsers()
     }, [fetchProjects, fetchUsers])
-
-    // Prefetch lean tasks for projects after list loads (to speed up opening divisions)
-    React.useEffect(() => {
-        if (projects.length === 0 || typeof window === "undefined") return
-        let cancelled = false
-        const maxConcurrent = 2
-        const queue = projects.map((p) => p.id)
-
-        const isFresh = (projectId: string) => {
-            try {
-                const raw = window.sessionStorage.getItem(`cupi:leanTasks:${projectId}`)
-                if (!raw) return false
-                const parsed = JSON.parse(raw) as { ts?: number }
-                if (!parsed?.ts) return false
-                return Date.now() - parsed.ts < 2 * 60 * 1000
-            } catch {
-                return false
-            }
-        }
-
-        const runNext = async () => {
-            if (cancelled) return
-            const projectId = queue.shift()
-            if (!projectId) return
-            if (isFresh(projectId)) {
-                runNext()
-                return
-            }
-            try {
-                const res = await fetch(`/api/projects/${projectId}/tasks?lean=true`)
-                const data = await res.json()
-                if (!res.ok) throw new Error(data?.error || "Failed to prefetch tasks")
-                if (!cancelled && Array.isArray(data?.tasks)) {
-                    window.sessionStorage.setItem(
-                        `cupi:leanTasks:${projectId}`,
-                        JSON.stringify({ ts: Date.now(), tasks: data.tasks })
-                    )
-                }
-            } catch {
-                // ignore
-            } finally {
-                if (!cancelled) runNext()
-            }
-        }
-
-        const start = () => {
-            for (let i = 0; i < maxConcurrent; i += 1) {
-                runNext()
-            }
-        }
-
-        const idle = window.requestIdleCallback?.bind(window)
-        if (idle) {
-            idle(start, { timeout: 2000 })
-        } else {
-            setTimeout(start, 800)
-        }
-
-        return () => {
-            cancelled = true
-        }
-    }, [projects])
 
     // When editing division changes, update the lead id state
     React.useEffect(() => {
