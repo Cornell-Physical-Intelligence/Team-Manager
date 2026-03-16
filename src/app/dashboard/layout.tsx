@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Menu } from "lucide-react"
 import { NotificationBell } from "@/components/NotificationBell"
 import { ThemeClient } from "@/components/ThemeClient"
+import { SidebarMutationBridge } from "@/components/layout/SidebarMutationBridge"
 
 import { Metadata } from 'next'
 
@@ -29,6 +30,7 @@ export default async function DashboardLayout({
 
     return (
         <div className="flex min-h-[100svh] w-full bg-background">
+            <SidebarMutationBridge />
             <div className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 bg-background">
                 <Sidebar initialUserData={{ id: user.id, name: user.name, role: user.role, workspaceName: user.workspaceName, avatar: user.avatar }} />
             </div>

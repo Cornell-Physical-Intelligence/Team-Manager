@@ -57,7 +57,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { GeneralChat } from "@/components/layout/GeneralChat"
 import { CreateProjectWizard } from "@/features/projects/CreateProjectWizard"
-import { subscribeWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
+import { subscribeSidebarSync } from "@/lib/sidebar-sync"
 
 type Project = {
     id: string
@@ -396,7 +396,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
     // Fetch user data
     const fetchUserData = React.useCallback(() => {
-        fetch('/api/auth/role')
+        fetch('/api/auth/role', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 setUserData({
@@ -419,7 +419,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
     // Fetch divisions with lead info
     const fetchProjects = React.useCallback(() => {
-        fetch('/api/projects?includeLead=true&includeArchived=true')
+        fetch('/api/projects?includeLead=true&includeArchived=true', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 if (!Array.isArray(data)) return
@@ -502,17 +502,19 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             .catch(() => { })
     }, [])
 
-    React.useEffect(() => {
+    const refreshSidebarData = React.useCallback(() => {
         fetchProjects()
         fetchUsers()
-    }, [fetchProjects, fetchUsers])
+        fetchUserData()
+    }, [fetchProjects, fetchUserData, fetchUsers])
 
     React.useEffect(() => {
-        return subscribeWorkspaceMembersUpdated(() => {
-            fetchUsers()
-            fetchUserData()
-        })
-    }, [fetchUserData, fetchUsers])
+        refreshSidebarData()
+    }, [refreshSidebarData])
+
+    React.useEffect(() => {
+        return subscribeSidebarSync(refreshSidebarData)
+    }, [refreshSidebarData])
 
     // When editing division changes, update the lead id state
     React.useEffect(() => {

@@ -7,10 +7,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { updateUserRole } from "@/app/actions/users"
 import { useEffect, useState, useTransition } from "react"
 import { useToast } from "@/components/ui/use-toast"
-import { dispatchWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
 
 export function RoleSelect({
     userId,
@@ -37,22 +35,36 @@ export function RoleSelect({
         setRole(newRole) // Optimistic update
 
         startTransition(async () => {
-            const result = await updateUserRole(userId, newRole)
-
-            if (result?.error) {
-                setRole(currentRole) // Revert on error
-                toast({
-                    title: "Error",
-                    description: result.error,
-                    variant: "destructive"
+            try {
+                const response = await fetch(`/api/users/${userId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ role: newRole }),
                 })
-            } else {
+                const result = await response.json().catch(() => ({}))
+
+                if (!response.ok) {
+                    setRole(currentRole) // Revert on error
+                    toast({
+                        title: "Error",
+                        description: typeof result?.error === "string" ? result.error : "Failed to update role",
+                        variant: "destructive"
+                    })
+                    return
+                }
+
                 onRoleUpdated?.(newRole)
-                dispatchWorkspaceMembersUpdated()
                 toast({
                     title: "Role Updated",
                     description: `User role changed to ${newRole}`,
                     variant: "success"
+                })
+            } catch {
+                setRole(currentRole) // Revert on error
+                toast({
+                    title: "Error",
+                    description: "Failed to update role",
+                    variant: "destructive"
                 })
             }
         })

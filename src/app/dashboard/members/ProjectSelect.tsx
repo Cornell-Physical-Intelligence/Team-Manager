@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ChevronDown } from "lucide-react"
-import { updateUserProjects } from "@/app/actions/users"
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useToast } from "@/components/ui/use-toast"
 
 type Project = {
@@ -23,17 +22,23 @@ export function ProjectSelect({
     userId,
     currentProjectIds,
     allProjects,
-    disabled
+    disabled,
+    onProjectsUpdated
 }: {
     userId: string
     currentProjectIds: string[]
     allProjects: Project[]
     disabled?: boolean
+    onProjectsUpdated?: (projectIds: string[]) => void
 }) {
     const [isPending, startTransition] = useTransition()
     const [open, setOpen] = useState(false)
     const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(currentProjectIds)
     const { toast } = useToast()
+
+    useEffect(() => {
+        setSelectedProjectIds(currentProjectIds)
+    }, [currentProjectIds])
 
     function toggleProject(projectId: string) {
         const newIds = selectedProjectIds.includes(projectId)
@@ -44,22 +49,38 @@ export function ProjectSelect({
 
     function handleSave() {
         startTransition(async () => {
-            const result = await updateUserProjects(userId, selectedProjectIds)
-
-            if (result?.error) {
-                setSelectedProjectIds(currentProjectIds) // Revert on error
-                toast({
-                    title: "Error",
-                    description: result.error,
-                    variant: "destructive"
+            try {
+                const response = await fetch(`/api/users/${userId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ projectIds: selectedProjectIds }),
                 })
-            } else {
+                const result = await response.json().catch(() => ({}))
+
+                if (!response.ok) {
+                    setSelectedProjectIds(currentProjectIds) // Revert on error
+                    toast({
+                        title: "Error",
+                        description: typeof result?.error === "string" ? result.error : "Failed to update divisions",
+                        variant: "destructive"
+                    })
+                    return
+                }
+
+                onProjectsUpdated?.(selectedProjectIds)
                 toast({
                     title: "Divisions Updated",
                     description: `User is now assigned to ${selectedProjectIds.length} division(s)`,
                     variant: "success"
                 })
                 setOpen(false)
+            } catch {
+                setSelectedProjectIds(currentProjectIds) // Revert on error
+                toast({
+                    title: "Error",
+                    description: "Failed to update divisions",
+                    variant: "destructive"
+                })
             }
         })
     }

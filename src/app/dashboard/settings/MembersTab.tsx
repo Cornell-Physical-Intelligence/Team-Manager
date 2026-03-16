@@ -8,9 +8,7 @@ import { BarChart3, Check, ChevronDown, ChevronRight, Copy, Loader2, Pencil, X }
 import { RoleSelect } from "../members/RoleSelect"
 import { ProjectSelect } from "../members/ProjectSelect"
 import { MemberActions } from "../members/MemberActions"
-import { updateMemberName } from "@/app/actions/user-settings"
 import { WorkloadSettings } from "./WorkloadSettings"
-import { dispatchWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
 import { useToast } from "@/components/ui/use-toast"
 
 type Project = {
@@ -69,17 +67,32 @@ function EditableName({
         }
 
         startTransition(async () => {
-            const res = await updateMemberName(userId, trimmed)
-            if (res.error) {
+            try {
+                const response = await fetch(`/api/users/${userId}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: trimmed }),
+                })
+                const res = await response.json().catch(() => ({}))
+
+                if (!response.ok) {
+                    setValue(name)
+                    toast({
+                        title: "Error",
+                        description: typeof res?.error === "string" ? res.error : "Failed to update name",
+                        variant: "destructive"
+                    })
+                    return
+                }
+
+                onNameUpdated?.(trimmed)
+            } catch {
                 setValue(name)
                 toast({
                     title: "Error",
-                    description: res.error,
+                    description: "Failed to update name",
                     variant: "destructive"
                 })
-            } else {
-                onNameUpdated?.(trimmed)
-                dispatchWorkspaceMembersUpdated()
             }
             setEditing(false)
         })
@@ -173,6 +186,28 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
         )
     }
 
+    const handleMemberProjectsUpdated = (memberId: string, nextProjectIds: string[]) => {
+        const projectsById = new Map(allProjects.map((project) => [project.id, project]))
+        setVisibleMembers((prev) =>
+            prev.map((member) =>
+                member.id === memberId
+                    ? {
+                        ...member,
+                        projectMemberships: nextProjectIds
+                            .map((projectId) => projectsById.get(projectId))
+                            .filter((project): project is Project => Boolean(project))
+                            .map((project) => ({
+                                project: {
+                                    id: project.id,
+                                    name: project.name,
+                                },
+                            })),
+                    }
+                    : member
+            )
+        )
+    }
+
     const handleCopyEmail = (id: string, email: string) => {
         void navigator.clipboard.writeText(email)
         setCopiedEmailId(id)
@@ -233,6 +268,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                         currentProjectIds={assignedIds}
                                         allProjects={allProjects}
                                         disabled={!canManage}
+                                        onProjectsUpdated={(nextProjectIds) => handleMemberProjectsUpdated(m.id, nextProjectIds)}
                                     />
                                 </div>
                             </div>
@@ -307,6 +343,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                                     currentProjectIds={assignedIds}
                                                     allProjects={allProjects}
                                                     disabled={!canManage}
+                                                    onProjectsUpdated={(nextProjectIds) => handleMemberProjectsUpdated(m.id, nextProjectIds)}
                                                 />
                                             </div>
                                         </td>
