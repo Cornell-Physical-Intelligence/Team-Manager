@@ -191,29 +191,30 @@ function ProjectRowInner({
 }: ProjectRowProps & {
     dragHandle?: React.ReactNode
     rowRef?: React.Ref<HTMLDivElement>
-    style?: React.CSSProperties & { '--project-active-bg': string }
+    style?: React.CSSProperties & { '--project-active-bg'?: string }
 }) {
     const isActive = pathname === `/dashboard/projects/${project.id}`
-    const projectColor = project.color || "#3b82f6"
 
     return (
         <div
             ref={rowRef}
             style={style}
             className={cn(
-                "group relative flex items-center rounded-md transition-all duration-300",
-                project.archivedAt && "opacity-80",
-                !isActive && "hover:bg-muted/50"
+                "group relative flex w-full min-w-0 items-center rounded-md transition-all duration-300",
+                project.archivedAt && "opacity-60",
+                !isActive && (project.archivedAt ? "hover:bg-muted/30" : "hover:bg-muted/50")
             )}
         >
             {/* Active gradient indicator - animates from right */}
             <div
                 className={cn(
-                    "absolute inset-0 rounded-md pointer-events-none",
-                    isActive ? "animate-sidebar-gradient" : "scale-x-0 origin-right"
+                    "absolute inset-0 rounded-md pointer-events-none transition-all duration-300",
+                    isActive
+                        ? (project.archivedAt ? "bg-muted/50" : "animate-sidebar-gradient")
+                        : "scale-x-0 origin-right"
                 )}
-                style={{
-                    background: `linear-gradient(to left, var(--project-active-bg), transparent 60%)`,
+                style={project.archivedAt ? undefined : {
+                    background: "linear-gradient(to left, var(--project-active-bg, rgba(59, 130, 246, 0.22)), transparent 60%)",
                 }}
             />
             {dragHandle ?? <div className="h-6 w-6 shrink-0" />}
@@ -226,7 +227,7 @@ function ProjectRowInner({
                 className={cn(
                     "relative z-10 rounded-md pl-2 py-1.5 text-sm transition-colors flex-1 min-w-0",
                     isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground",
-                    project.archivedAt && !isActive && "text-muted-foreground/80"
+                    project.archivedAt && !isActive && "text-muted-foreground/70 group-hover:text-muted-foreground"
                 )}
                 title={project.name}
             >
@@ -321,12 +322,7 @@ const SortableProjectRow = React.memo((props: ProjectRowProps) => {
 SortableProjectRow.displayName = "SortableProjectRow"
 
 const StaticProjectRow = React.memo((props: ProjectRowProps) => {
-    const projectColor = props.project.color || "#3b82f6"
-    const style: React.CSSProperties & { '--project-active-bg': string } = {
-        '--project-active-bg': hexToRgba(projectColor, 0.22),
-    }
-
-    return <ProjectRowInner {...props} style={style} />
+    return <ProjectRowInner {...props} />
 })
 StaticProjectRow.displayName = "StaticProjectRow"
 
@@ -470,10 +466,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 const data = await res.json().catch(() => ({}))
                 alert(data.error || `Failed to ${nextArchived ? 'archive' : 'restore'} division`)
                 return
-            }
-
-            if (nextArchived) {
-                setArchivedProjectsOpen(true)
             }
 
             fetchProjects()
@@ -682,7 +674,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     }
 
     return (
-        <div className="flex h-full flex-col bg-background w-64 border-r overflow-hidden">
+        <div className="flex h-full w-64 min-w-64 shrink-0 flex-col overflow-hidden border-r bg-background">
             <div className={cn(
                 "relative flex items-center px-0 h-10 border-b transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
                 chatState === 'large' ? "max-h-0 opacity-0 border-b-0" : "max-h-10 opacity-100"
@@ -726,8 +718,8 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 "transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden",
                 chatState === 'large' ? "flex-[0.001] opacity-0" : chatState === 'hidden' ? "flex-1 opacity-100" : "flex-1 opacity-100"
             )}>
-                <ScrollArea className="h-full">
-                    <nav className="p-3">
+                <ScrollArea className="h-full w-full min-w-0 [&_[data-slot=scroll-area-viewport]]:[scrollbar-gutter:stable]">
+                    <nav className="w-full min-w-0 p-3">
                         {/* Dashboard Link */}
                         <Link
                             href="/dashboard"
@@ -757,9 +749,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                         </Link>
 
                         {/* Divisions Section */}
-                        <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen} className="mt-2">
+                        <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen} className="mt-2 min-w-0">
                             <div className="flex items-center">
-                                <CollapsibleTrigger className="flex-1 flex items-center gap-3 rounded-md px-3 py-2 text-muted-foreground transition-all hover:translate-x-0.5 text-sm">
+                                <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-all hover:translate-x-0.5">
                                     <ChevronDown className={cn("h-5 w-5 transition-transform", !projectsOpen && "-rotate-90")} />
                                     <FolderKanban className="h-5 w-5" />
                                     <span>Divisions</span>
@@ -773,7 +765,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                     <Plus className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <CollapsibleContent className="pl-6 pr-1 mt-1 space-y-1 overflow-hidden">
+                            <CollapsibleContent className="mt-1 min-w-0 space-y-1 overflow-hidden pl-6 pr-1">
                                 {projects.length === 0 ? (
                                     <p className="text-sm text-muted-foreground px-3 py-1">
                                         {archivedProjects.length > 0 ? 'No active divisions' : 'No divisions yet'}
@@ -805,13 +797,13 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                 )}
 
                                 {archivedProjects.length > 0 && (
-                                    <Collapsible open={archivedProjectsOpen} onOpenChange={setArchivedProjectsOpen} className="pt-1">
-                                        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+                                    <Collapsible open={archivedProjectsOpen} onOpenChange={setArchivedProjectsOpen} className="min-w-0 pt-1">
+                                        <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground/75 transition-colors hover:bg-muted/30 hover:text-muted-foreground">
                                             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !archivedProjectsOpen && "-rotate-90")} />
-                                            <span className="flex-1 text-left">Archived</span>
-                                            <span>{archivedProjects.length}</span>
+                                            <span className="flex-1 text-left text-muted-foreground/80">Archived</span>
+                                            <span className="text-muted-foreground/70">{archivedProjects.length}</span>
                                         </CollapsibleTrigger>
-                                        <CollapsibleContent className="mt-1 space-y-1">
+                                        <CollapsibleContent className="mt-1 min-w-0 space-y-1">
                                             {archivedProjects.map((project) => (
                                                 <StaticProjectRow
                                                     key={project.id}
