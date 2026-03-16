@@ -1304,7 +1304,7 @@ export function Board({
                                         </div>
 
                                         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                                            <div className="flex items-center justify-end md:w-28 md:shrink-0">
+                                            <div className="flex items-center justify-end md:w-[8.75rem] md:shrink-0">
                                                 {showMarkCompleteAction ? (
                                                     <TooltipProvider delayDuration={100}>
                                                         <Tooltip>
@@ -1316,10 +1316,10 @@ export function Board({
                                                                         setPushStatus(push.id, isComplete ? 'Active' : 'Completed')
                                                                     }}
                                                                     className={cn(
-                                                                        "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1 overflow-hidden rounded-md border px-0 md:px-2 text-xs font-medium transition-colors",
+                                                                        "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-colors",
                                                                         isComplete
-                                                                            ? "border-border/60 bg-background text-muted-foreground hover:bg-muted/50"
-                                                                            : "border-border bg-background text-foreground hover:bg-muted/50"
+                                                                            ? "border-green-200/80 bg-green-50/50 text-green-800 hover:border-green-300/80 hover:bg-green-50/80"
+                                                                            : "border-green-200/75 bg-green-50/30 text-foreground hover:border-green-300/80 hover:bg-green-50/60"
                                                                     )}
                                                                     title={isComplete ? "Mark as not complete" : "Mark this push complete"}
                                                                 >
