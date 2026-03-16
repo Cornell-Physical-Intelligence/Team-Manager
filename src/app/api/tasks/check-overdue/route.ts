@@ -26,12 +26,12 @@ export async function POST() {
                             {
                                 column: {
                                     name: { not: 'Done' },
-                                    board: { project: { workspaceId: user.workspaceId } }
+                                    board: { project: { workspaceId: user.workspaceId, archivedAt: null } }
                                 }
                             },
                             {
                                 push: {
-                                    project: { workspaceId: user.workspaceId }
+                                    project: { workspaceId: user.workspaceId, archivedAt: null }
                                 }
                             }
                         ]

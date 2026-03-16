@@ -64,7 +64,7 @@ export async function PATCH(
         // Verify project exists and belongs to user's workspace
         const existingProject = await prisma.project.findUnique({
             where: { id },
-            select: { workspaceId: true, leadId: true }
+            select: { workspaceId: true, leadId: true, archivedAt: true }
         })
 
         if (!existingProject) {
@@ -80,9 +80,10 @@ export async function PATCH(
         }
 
         const body = await request.json()
-        const { name, description, leadId, memberIds, color } = body
+        const { name, description, leadId, memberIds, color, archived } = body
         const normalizedName = typeof name === 'string' ? name.trim() : undefined
         const normalizedDescription = typeof description === 'string' ? description.trim() : description
+        const archivedValue = typeof archived === 'boolean' ? archived : undefined
 
         if (name !== undefined && !normalizedName) {
             return NextResponse.json({ error: 'Division name is required' }, { status: 400 })
@@ -122,6 +123,9 @@ export async function PATCH(
             : null
         const isValidColor = normalizedColor ? /^#([0-9a-f]{6}|[0-9a-f]{3})$/.test(normalizedColor) : false
         const colorUpdate = isValidColor ? { color: normalizedColor as string } : {}
+        const archiveUpdate = archivedValue === undefined
+            ? {}
+            : { archivedAt: archivedValue ? (existingProject.archivedAt ?? new Date()) : null }
 
         const project = await prisma.$transaction(async (tx) => {
             const updatedProject = await tx.project.update({
@@ -130,6 +134,7 @@ export async function PATCH(
                     ...(name !== undefined && { name: normalizedName }),
                     ...(description !== undefined && { description: normalizedDescription || null }),
                     ...(leadId !== undefined && { leadId: leadIdValue }),
+                    ...archiveUpdate,
                     ...colorUpdate
                 }
             })
@@ -151,6 +156,13 @@ export async function PATCH(
             }
             return updatedProject
         })
+
+        if (archivedValue !== undefined) {
+            return NextResponse.json({
+                success: true,
+                archivedAt: archivedValue ? (project.archivedAt ?? existingProject.archivedAt ?? new Date()) : null
+            })
+        }
 
         return NextResponse.json(project)
     } catch (error) {

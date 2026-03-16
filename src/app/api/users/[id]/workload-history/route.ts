@@ -34,8 +34,8 @@ export async function GET(
                 AND: [
                     {
                         OR: [
-                            { column: { board: { project: { workspaceId: user.workspaceId } } } },
-                            { push: { project: { workspaceId: user.workspaceId } } }
+                            { column: { board: { project: { workspaceId: user.workspaceId, archivedAt: null } } } },
+                            { push: { project: { workspaceId: user.workspaceId, archivedAt: null } } }
                         ]
                     }
                 ]

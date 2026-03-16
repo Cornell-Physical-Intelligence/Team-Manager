@@ -43,7 +43,8 @@ export default async function HeatmapPage() {
                 column: {
                     board: {
                         project: {
-                            workspaceId: dbUser.workspaceId
+                            workspaceId: dbUser.workspaceId,
+                            archivedAt: null
                         }
                     }
                 }
@@ -85,7 +86,7 @@ export default async function HeatmapPage() {
             }
         }),
         prisma.project.findMany({
-            where: { workspaceId: dbUser.workspaceId },
+            where: { workspaceId: dbUser.workspaceId, archivedAt: null },
             select: {
                 id: true,
                 name: true,

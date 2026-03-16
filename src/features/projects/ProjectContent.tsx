@@ -78,6 +78,7 @@ type ProjectContentProps = {
         id: string
         name: string
         color?: string | null
+        archivedAt?: string | null
         lead: { id: string; name: string } | null
     }
     board: {
@@ -331,6 +332,11 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                                 )}
                             </Tooltip>
                         </TooltipProvider>
+                        {project.archivedAt && (
+                            <span className="inline-flex items-center rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                                Archived
+                            </span>
+                        )}
                         {view === 'kanban' && (
                             <TooltipProvider delayDuration={1000}>
                                 <Tooltip>

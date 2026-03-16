@@ -16,7 +16,7 @@ export async function GET() {
 
         // Fetch all projects in workspace with their pushes and task counts
         const projects = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId },
+            where: { workspaceId: user.workspaceId, archivedAt: null },
             select: {
                 id: true,
                 name: true,

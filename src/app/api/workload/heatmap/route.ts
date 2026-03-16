@@ -24,7 +24,7 @@ export async function GET() {
             }),
             prisma.task.findMany({
                 where: {
-                    column: { board: { project: { workspaceId } } }
+                    column: { board: { project: { workspaceId, archivedAt: null } } }
                 },
                 include: {
                     assignee: { select: { id: true } },
@@ -47,7 +47,7 @@ export async function GET() {
                 }
             }),
             prisma.project.findMany({
-                where: { workspaceId },
+                where: { workspaceId, archivedAt: null },
                 select: {
                     id: true,
                     name: true,

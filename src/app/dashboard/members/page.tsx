@@ -43,7 +43,7 @@ export default async function MembersPage() {
             },
             projectMemberships: {
                 where: {
-                    project: { workspaceId }
+                    project: { workspaceId, archivedAt: null }
                 },
                 include: {
                     project: { select: { id: true, name: true, color: true } }
@@ -69,8 +69,8 @@ export default async function MembersPage() {
     const workspaceTasks = await prisma.task.findMany({
         where: {
             OR: [
-                { column: { board: { project: { workspaceId } } } },
-                { push: { project: { workspaceId } } }
+                { column: { board: { project: { workspaceId, archivedAt: null } } } },
+                { push: { project: { workspaceId, archivedAt: null } } }
             ]
         },
         select: {
@@ -125,8 +125,8 @@ export default async function MembersPage() {
         where: {
             changedBy: { in: userIds },
             OR: [
-                { task: { column: { board: { project: { workspaceId } } } } },
-                { task: { push: { project: { workspaceId } } } },
+                { task: { column: { board: { project: { workspaceId, archivedAt: null } } } } },
+                { task: { push: { project: { workspaceId, archivedAt: null } } } },
                 { task: null }
             ]
         },
@@ -156,7 +156,7 @@ export default async function MembersPage() {
     }, {} as Record<string, typeof activityLogs>)
 
     const allProjects = await prisma.project.findMany({
-        where: { workspaceId },
+        where: { workspaceId, archivedAt: null },
         select: { id: true, name: true, color: true },
         orderBy: { createdAt: 'desc' }
     })

@@ -133,7 +133,7 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
 
     const uniqueProjectIds = Array.from(new Set(projectIds))
     const workspaceProjects = await prisma.project.findMany({
-        where: { workspaceId: currentUser.workspaceId, id: { in: uniqueProjectIds } },
+        where: { workspaceId: currentUser.workspaceId, archivedAt: null, id: { in: uniqueProjectIds } },
         select: { id: true }
     })
 
@@ -145,12 +145,12 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
         // Use transaction to ensure atomic operation
         await prisma.$transaction(async (tx) => {
             // Delete existing project memberships for this workspace only
-            await tx.projectMember.deleteMany({
-                where: {
-                    userId,
-                    project: { workspaceId: currentUser.workspaceId }
-                }
-            })
+                await tx.projectMember.deleteMany({
+                    where: {
+                        userId,
+                        project: { workspaceId: currentUser.workspaceId, archivedAt: null }
+                    }
+                })
 
             // Create new project memberships
             if (uniqueProjectIds.length > 0) {
@@ -250,7 +250,7 @@ export async function removeUserFromWorkspace(userId: string) {
                 await tx.projectMember.deleteMany({
                     where: {
                         userId,
-                        project: { workspaceId: currentUser.workspaceId! }
+                        project: { workspaceId: currentUser.workspaceId!, archivedAt: null }
                     }
                 })
 
@@ -268,8 +268,8 @@ export async function removeUserFromWorkspace(userId: string) {
                 // Remove stale task assignments inside this workspace.
                 const workspaceTaskScope = {
                     OR: [
-                        { column: { board: { project: { workspaceId: currentUser.workspaceId! } } } },
-                        { push: { project: { workspaceId: currentUser.workspaceId! } } }
+                        { column: { board: { project: { workspaceId: currentUser.workspaceId!, archivedAt: null } } } },
+                        { push: { project: { workspaceId: currentUser.workspaceId!, archivedAt: null } } }
                     ]
                 }
 

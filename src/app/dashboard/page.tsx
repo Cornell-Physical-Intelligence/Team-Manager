@@ -39,28 +39,41 @@ export default async function DashboardPage() {
 
     // Parallel data fetching
     const fetchMyTasks = async () => {
-        const where: Prisma.TaskWhereInput = {
-            OR: [
-                { assigneeId: dbUser.id },
-                { assignees: { some: { userId: dbUser.id } } }
-            ]
-        }
+        const andFilters: Prisma.TaskWhereInput[] = [
+            {
+                OR: [
+                    { assigneeId: dbUser.id },
+                    { assignees: { some: { userId: dbUser.id } } }
+                ]
+            },
+            {
+                OR: [
+                    { column: { board: { project: { workspaceId, archivedAt: null } } } },
+                    { push: { project: { workspaceId, archivedAt: null } } }
+                ]
+            }
+        ]
 
         if (user.role === 'Member') {
             const memberProjects = await prisma.projectMember.findMany({
-                where: { userId: dbUser.id },
+                where: { userId: dbUser.id, project: { archivedAt: null } },
                 select: { projectId: true }
             })
             const projectIds = memberProjects.map(pm => pm.projectId)
             if (projectIds.length > 0) {
-                where.column = { board: { projectId: { in: projectIds } } }
+                andFilters.push({
+                    OR: [
+                        { column: { board: { projectId: { in: projectIds } } } },
+                        { push: { projectId: { in: projectIds } } }
+                    ]
+                })
             } else {
                 return []
             }
         }
 
         return prisma.task.findMany({
-            where,
+            where: { AND: andFilters },
             include: {
                 assignee: { select: { id: true, name: true } },
                 assignees: { include: { user: { select: { id: true, name: true } } } },
@@ -81,8 +94,8 @@ export default async function DashboardPage() {
         if (!isLeadership) return []
 
         const where = isAdmin
-            ? { column: { name: 'Review', board: { project: { workspaceId } } } }
-            : { column: { name: 'Review', board: { project: { leadId: dbUser.id } } } }
+            ? { column: { name: 'Review', board: { project: { workspaceId, archivedAt: null } } } }
+            : { column: { name: 'Review', board: { project: { leadId: dbUser.id, archivedAt: null } } } }
 
         return prisma.task.findMany({
             where,
@@ -120,7 +133,7 @@ export default async function DashboardPage() {
                 }
             }),
             prisma.task.findMany({
-                where: { column: { board: { project: { workspaceId } } } },
+                where: { column: { board: { project: { workspaceId, archivedAt: null } } } },
                 select: {
                     id: true,
                     title: true,
@@ -175,7 +188,7 @@ export default async function DashboardPage() {
         if (!isLeadership) return []
 
         return prisma.activityLog.findMany({
-            where: { task: { column: { board: { project: { workspaceId } } } } },
+            where: { task: { column: { board: { project: { workspaceId, archivedAt: null } } } } },
             orderBy: { createdAt: 'desc' },
             take: 10,
             select: {

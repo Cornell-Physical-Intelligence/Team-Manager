@@ -72,6 +72,9 @@ export default async function SettingsPage() {
                     select: { role: true, name: true },
                 },
                 projectMemberships: {
+                    where: {
+                        project: { archivedAt: null },
+                    },
                     include: {
                         project: { select: { id: true, name: true } },
                     },
@@ -80,7 +83,7 @@ export default async function SettingsPage() {
             orderBy: { name: "asc" },
         }),
         prisma.project.findMany({
-            where: { workspaceId: user.workspaceId || "non-existent-id" },
+            where: { workspaceId: user.workspaceId || "non-existent-id", archivedAt: null },
             select: { id: true, name: true, color: true },
             orderBy: { createdAt: "desc" },
         }),

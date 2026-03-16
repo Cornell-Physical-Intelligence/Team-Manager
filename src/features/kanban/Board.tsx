@@ -1306,34 +1306,25 @@ export function Board({
                                         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
                                             <div className="flex items-center justify-end md:w-[8.75rem] md:shrink-0">
                                                 {showMarkCompleteAction ? (
-                                                    <TooltipProvider delayDuration={100}>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation()
-                                                                        setPushStatus(push.id, isComplete ? 'Active' : 'Completed')
-                                                                    }}
-                                                                    className={cn(
-                                                                        "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-colors",
-                                                                        isComplete
-                                                                            ? "border-green-200/80 bg-green-50/50 text-green-800 hover:border-green-300/80 hover:bg-green-50/80"
-                                                                            : "border-green-200/75 bg-green-50/30 text-foreground hover:border-green-300/80 hover:bg-green-50/60"
-                                                                    )}
-                                                                    title={isComplete ? "Mark as not complete" : "Mark this push complete"}
-                                                                >
-                                                                    <Check className="h-3.5 w-3.5 shrink-0" />
-                                                                    <span className="hidden md:inline whitespace-nowrap">
-                                                                        {isComplete ? "Completed" : "Mark Complete"}
-                                                                    </span>
-                                                                </button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent side="top" className="text-xs">
-                                                                {isComplete ? "Click to unmark complete" : "Mark this project complete"}
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setPushStatus(push.id, isComplete ? 'Active' : 'Completed')
+                                                        }}
+                                                        aria-label={isComplete ? "Mark as not complete" : "Mark this push complete"}
+                                                        className={cn(
+                                                            "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-[background-color,border-color,color]",
+                                                            isComplete
+                                                                ? "border-green-200/80 bg-green-50/60 text-green-800 hover:border-green-300 hover:bg-green-100/80"
+                                                                : "border-green-200/80 bg-green-50/35 text-foreground hover:border-green-300 hover:bg-green-100/70"
+                                                        )}
+                                                    >
+                                                        <Check className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="hidden md:inline whitespace-nowrap">
+                                                            {isComplete ? "Completed" : "Mark Complete"}
+                                                        </span>
+                                                    </button>
                                                 ) : (
                                                     <div
                                                         className={cn(

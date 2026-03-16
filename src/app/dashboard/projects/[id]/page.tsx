@@ -21,6 +21,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             id: true,
             name: true,
             color: true,
+            archivedAt: true,
             workspaceId: true,
             lead: { select: { id: true, name: true } },
             members: { select: { userId: true } },
@@ -139,6 +140,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 id: project.id,
                 name: project.name,
                 color: project.color,
+                archivedAt: project.archivedAt ? project.archivedAt.toISOString() : null,
                 lead: project.lead
             }}
             board={board}

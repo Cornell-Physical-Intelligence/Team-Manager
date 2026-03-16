@@ -41,19 +41,24 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const includeLead = searchParams.get('includeLead') === 'true'
+        const includeArchived = searchParams.get('includeArchived') === 'true'
         const user = await getCurrentUser()
         if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
         const projects = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId },
+            where: {
+                workspaceId: user.workspaceId,
+                ...(includeArchived ? {} : { archivedAt: null })
+            },
             orderBy: { createdAt: 'desc' },
             select: {
                 id: true,
                 name: true,
                 description: true,
                 color: true,
+                archivedAt: true,
                 createdAt: true,
                 leadId: includeLead,
                 lead: includeLead ? { select: { id: true, name: true } } : false,

@@ -22,9 +22,19 @@ export default async function MyBoardPage() {
     // Fetch all tasks assigned to this user across all divisions
     const tasks = await prisma.task.findMany({
         where: {
-            OR: [
-                { assigneeId: dbUser.id },
-                { assignees: { some: { userId: dbUser.id } } }
+            AND: [
+                {
+                    OR: [
+                        { assigneeId: dbUser.id },
+                        { assignees: { some: { userId: dbUser.id } } }
+                    ]
+                },
+                {
+                    OR: [
+                        { column: { board: { project: { archivedAt: null } } } },
+                        { push: { project: { archivedAt: null } } }
+                    ]
+                }
             ]
         },
         include: {

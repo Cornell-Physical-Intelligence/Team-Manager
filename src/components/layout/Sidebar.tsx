@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
     Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical,
-    Kanban, Loader2, Smile
+    Kanban, Loader2, Smile, Archive, ArchiveRestore
 } from "lucide-react"
 import { DiscordIcon } from "@/components/icons/DiscordIcon"
 import { SpinningDots } from "@/components/ui/spinning-dots"
@@ -33,6 +33,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -64,6 +65,7 @@ type Project = {
     name: string
     description: string | null
     color?: string | null
+    archivedAt: string | null
     leadId: string | null
     lead: { id: string; name: string } | null
     members: { userId: string }[]
@@ -163,15 +165,7 @@ function prefetchLeanTasks(projectId: string) {
     pendingLeanTaskPrefetches.set(projectId, task)
 }
 
-const SortableProjectRow = React.memo(({
-    project,
-    pathname,
-    navigatingTo,
-    isAdmin,
-    setNavigatingTo,
-    setEditingProject,
-    setDeleteConfirm
-}: {
+type ProjectRowProps = {
     project: Project
     pathname: string
     navigatingTo: string | null
@@ -179,23 +173,36 @@ const SortableProjectRow = React.memo(({
     setNavigatingTo: (path: string) => void
     setEditingProject: (project: Project) => void
     setDeleteConfirm: (project: Project) => void
-}) => {
+    onToggleArchive: (project: Project) => void
+}
+
+function ProjectRowInner({
+    project,
+    pathname,
+    navigatingTo,
+    isAdmin,
+    setNavigatingTo,
+    setEditingProject,
+    setDeleteConfirm,
+    onToggleArchive,
+    dragHandle,
+    rowRef,
+    style
+}: ProjectRowProps & {
+    dragHandle?: React.ReactNode
+    rowRef?: React.Ref<HTMLDivElement>
+    style?: React.CSSProperties & { '--project-active-bg': string }
+}) {
     const isActive = pathname === `/dashboard/projects/${project.id}`
-    const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
     const projectColor = project.color || "#3b82f6"
-    const style: React.CSSProperties & { '--project-active-bg': string } = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.6 : 1,
-        '--project-active-bg': hexToRgba(projectColor, 0.22),
-    }
 
     return (
         <div
-            ref={setNodeRef}
+            ref={rowRef}
             style={style}
             className={cn(
                 "group relative flex items-center rounded-md transition-all duration-300",
+                project.archivedAt && "opacity-80",
                 !isActive && "hover:bg-muted/50"
             )}
         >
@@ -209,17 +216,7 @@ const SortableProjectRow = React.memo(({
                     background: `linear-gradient(to left, var(--project-active-bg), transparent 60%)`,
                 }}
             />
-            <button
-                type="button"
-                className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
-                style={{ color: projectColor }}
-                onClick={(e) => e.preventDefault()}
-                {...attributes}
-                {...listeners}
-                title="Reorder"
-            >
-                <GripVertical className="h-4 w-4" />
-            </button>
+            {dragHandle ?? <div className="h-6 w-6 shrink-0" />}
             <Link
                 href={`/dashboard/projects/${project.id}`}
                 onClick={() => !isActive && setNavigatingTo(`/dashboard/projects/${project.id}`)}
@@ -228,7 +225,8 @@ const SortableProjectRow = React.memo(({
                 onTouchStart={() => prefetchLeanTasks(project.id)}
                 className={cn(
                     "relative z-10 rounded-md pl-2 py-1.5 text-sm transition-colors flex-1 min-w-0",
-                    isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground"
+                    isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground",
+                    project.archivedAt && !isActive && "text-muted-foreground/80"
                 )}
                 title={project.name}
             >
@@ -260,11 +258,20 @@ const SortableProjectRow = React.memo(({
                             )}
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="right" className="w-32 z-50">
+                    <DropdownMenuContent align="start" side="right" className="w-40 z-50">
                         <DropdownMenuItem onSelect={() => setEditingProject(project)}>
                             <Pencil className="h-4 w-4 mr-2" />
                             Edit
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onToggleArchive(project)}>
+                            {project.archivedAt ? (
+                                <ArchiveRestore className="h-4 w-4 mr-2" />
+                            ) : (
+                                <Archive className="h-4 w-4 mr-2" />
+                            )}
+                            {project.archivedAt ? 'Restore' : 'Archive'}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                             onSelect={() => setDeleteConfirm(project)}
                             className="text-red-600"
@@ -277,8 +284,51 @@ const SortableProjectRow = React.memo(({
             )}
         </div>
     )
+}
+
+const SortableProjectRow = React.memo((props: ProjectRowProps) => {
+    const { project } = props
+    const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
+    const projectColor = project.color || "#3b82f6"
+    const style: React.CSSProperties & { '--project-active-bg': string } = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : 1,
+        '--project-active-bg': hexToRgba(projectColor, 0.22),
+    }
+
+    return (
+        <ProjectRowInner
+            {...props}
+            rowRef={setNodeRef}
+            style={style}
+            dragHandle={(
+                <button
+                    type="button"
+                    className="relative z-10 h-6 w-6 shrink-0 flex items-center justify-center rounded-md cursor-grab active:cursor-grabbing opacity-60 group-hover:opacity-100"
+                    style={{ color: projectColor }}
+                    onClick={(e) => e.preventDefault()}
+                    {...attributes}
+                    {...listeners}
+                    title="Reorder"
+                >
+                    <GripVertical className="h-4 w-4" />
+                </button>
+            )}
+        />
+    )
 })
 SortableProjectRow.displayName = "SortableProjectRow"
+
+const StaticProjectRow = React.memo((props: ProjectRowProps) => {
+    const projectColor = props.project.color || "#3b82f6"
+    const style: React.CSSProperties & { '--project-active-bg': string } = {
+        '--project-active-bg': hexToRgba(projectColor, 0.22),
+    }
+
+    return <ProjectRowInner {...props} style={style} />
+})
+StaticProjectRow.displayName = "StaticProjectRow"
 
 export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUserData?: Partial<UserData>; isMobileSheet?: boolean } = {}) {
     const pathname = usePathname()
@@ -291,9 +341,11 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         avatar: initialUserData?.avatar ?? null,
     }))
     const [projects, setProjects] = React.useState<Project[]>([])
+    const [archivedProjects, setArchivedProjects] = React.useState<Project[]>([])
     const [leadCandidates, setLeadCandidates] = React.useState<UserCandidate[]>([])
     const [allUsers, setAllUsers] = React.useState<UserCandidate[]>([])
     const [projectsOpen, setProjectsOpen] = React.useState(true)
+    const [archivedProjectsOpen, setArchivedProjectsOpen] = React.useState(false)
     const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
     const [editingProject, setEditingProject] = React.useState<Project | null>(null)
     const [deleteConfirm, setDeleteConfirm] = React.useState<Project | null>(null)
@@ -321,6 +373,13 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             return () => clearTimeout(timer)
         }
     }, [pathname, navigatingTo])
+
+    React.useEffect(() => {
+        if (archivedProjects.some((project) => pathname === `/dashboard/projects/${project.id}`)) {
+            setArchivedProjectsOpen(true)
+            setProjectsOpen(true)
+        }
+    }, [archivedProjects, pathname])
 
     // Form state for editing
     const [newProjectLeadId, setNewProjectLeadId] = React.useState("none")
@@ -358,10 +417,12 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
     // Fetch divisions with lead info
     const fetchProjects = React.useCallback(() => {
-        fetch('/api/projects?includeLead=true')
+        fetch('/api/projects?includeLead=true&includeArchived=true')
             .then(res => res.json())
             .then(data => {
-                if (Array.isArray(data)) setProjects(data)
+                if (!Array.isArray(data)) return
+                setProjects(data.filter((project) => !project.archivedAt))
+                setArchivedProjects(data.filter((project) => Boolean(project.archivedAt)))
             })
             .catch(() => { })
     }, [])
@@ -394,6 +455,36 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             return next
         })
     }, [persistProjectOrder])
+
+    const handleToggleArchive = React.useCallback(async (project: Project) => {
+        setIsSubmitting(true)
+        try {
+            const nextArchived = !project.archivedAt
+            const res = await fetch(`/api/projects/${project.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ archived: nextArchived })
+            })
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                alert(data.error || `Failed to ${nextArchived ? 'archive' : 'restore'} division`)
+                return
+            }
+
+            if (nextArchived) {
+                setArchivedProjectsOpen(true)
+            }
+
+            fetchProjects()
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            alert(`Failed to ${project.archivedAt ? 'restore' : 'archive'} division`)
+        } finally {
+            setIsSubmitting(false)
+        }
+    }, [fetchProjects, router])
 
     // Fetch lead candidates & all users
     const fetchUsers = React.useCallback(() => {
@@ -684,7 +775,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                             </div>
                             <CollapsibleContent className="pl-6 pr-1 mt-1 space-y-1 overflow-hidden">
                                 {projects.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground px-3 py-1">No divisions yet</p>
+                                    <p className="text-sm text-muted-foreground px-3 py-1">
+                                        {archivedProjects.length > 0 ? 'No active divisions' : 'No divisions yet'}
+                                    </p>
                                 ) : (
                                     <DndContext
                                         sensors={sensors}
@@ -703,11 +796,37 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                                         setNavigatingTo={setNavigatingTo}
                                                         setEditingProject={setEditingProject}
                                                         setDeleteConfirm={setDeleteConfirm}
+                                                        onToggleArchive={handleToggleArchive}
                                                     />
                                                 ))}
                                             </SortableContext>
                                         </TooltipProvider>
                                     </DndContext>
+                                )}
+
+                                {archivedProjects.length > 0 && (
+                                    <Collapsible open={archivedProjectsOpen} onOpenChange={setArchivedProjectsOpen} className="pt-1">
+                                        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground">
+                                            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !archivedProjectsOpen && "-rotate-90")} />
+                                            <span className="flex-1 text-left">Archived</span>
+                                            <span>{archivedProjects.length}</span>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent className="mt-1 space-y-1">
+                                            {archivedProjects.map((project) => (
+                                                <StaticProjectRow
+                                                    key={project.id}
+                                                    project={project}
+                                                    pathname={pathname}
+                                                    navigatingTo={navigatingTo}
+                                                    isAdmin={isAdmin}
+                                                    setNavigatingTo={setNavigatingTo}
+                                                    setEditingProject={setEditingProject}
+                                                    setDeleteConfirm={setDeleteConfirm}
+                                                    onToggleArchive={handleToggleArchive}
+                                                />
+                                            ))}
+                                        </CollapsibleContent>
+                                    </Collapsible>
                                 )}
                             </CollapsibleContent>
                         </Collapsible>

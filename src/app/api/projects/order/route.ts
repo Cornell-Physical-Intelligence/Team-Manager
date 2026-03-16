@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         }
 
         const workspaceProjects = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId, id: { in: projectIds } },
+            where: { workspaceId: user.workspaceId, archivedAt: null, id: { in: projectIds } },
             select: { id: true },
         })
 
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         }
 
         const workspaceProjectIds = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId },
+            where: { workspaceId: user.workspaceId, archivedAt: null },
             select: { id: true },
         })
         const workspaceProjectIdSet = workspaceProjectIds.map((p) => p.id)
