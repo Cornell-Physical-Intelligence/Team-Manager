@@ -459,17 +459,28 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
                 select: {
                     name: true,
                     workspaceId: true,
-                    lead: { select: { name: true, discordId: true } },
+                    leadAssignments: {
+                        orderBy: { createdAt: 'asc' },
+                        select: { user: { select: { name: true, discordId: true } } }
+                    },
                     workspace: { select: { discordChannelId: true } }
                 }
             })
 
-            if (project?.workspaceId && project.lead?.discordId && project.workspace?.discordChannelId) {
+            const leadMentions = Array.from(
+                new Set(
+                    (project?.leadAssignments || [])
+                        .map((assignment) => assignment.user.discordId)
+                        .filter((discordId): discordId is string => Boolean(discordId))
+                )
+            )
+
+            if (project?.workspaceId && leadMentions.length > 0 && project.workspace?.discordChannelId) {
                 await sendDiscordNotification(
                     "",
                     [{
                         title: "🔍 Needs Review",
-                        description: `<@${project.lead.discordId}>, **${updatedTask.title}** needs review`,
+                        description: `${leadMentions.map((discordId) => `<@${discordId}>`).join(' ')}, **${updatedTask.title}** needs review`,
                         color: 0xFEE75C,
                         timestamp: new Date().toISOString(),
                     }],

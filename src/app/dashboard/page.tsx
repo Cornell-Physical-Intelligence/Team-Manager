@@ -95,7 +95,17 @@ export default async function DashboardPage() {
 
         const where = isAdmin
             ? { column: { name: 'Review', board: { project: { workspaceId, archivedAt: null } } } }
-            : { column: { name: 'Review', board: { project: { leadId: dbUser.id, archivedAt: null } } } }
+            : {
+                column: {
+                    name: 'Review',
+                    board: {
+                        project: {
+                            archivedAt: null,
+                            leadAssignments: { some: { userId: dbUser.id } }
+                        }
+                    }
+                }
+            }
 
         return prisma.task.findMany({
             where,

@@ -1,11 +1,12 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { updateProjectLead } from "@/app/actions/projects"
 import { useState, useTransition } from "react"
-import { User, ExternalLink } from "lucide-react"
+import { ChevronDown, User, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
 type Project = {
@@ -14,6 +15,8 @@ type Project = {
     description: string | null
     leadId: string | null
     lead: { id: string; name: string } | null
+    leadIds: string[]
+    leads: { id: string; name: string }[]
     _count: { pushes: number }
 }
 
@@ -25,14 +28,18 @@ type Props = {
 
 export function ProjectCard({ project, users, isAdmin }: Props) {
     const [isPending, startTransition] = useTransition()
-    const [leadId, setLeadId] = useState(project.leadId || "none")
+    const [leadIds, setLeadIds] = useState(project.leadIds || [])
+    const selectedLeadNames = users.filter((user) => leadIds.includes(user.id)).map((user) => user.name)
 
-    const handleLeadChange = (value: string, e: React.MouseEvent) => {
+    const handleLeadToggle = (userId: string, e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        setLeadId(value)
+        const nextLeadIds = leadIds.includes(userId)
+            ? leadIds.filter((id) => id !== userId)
+            : [...leadIds, userId]
+        setLeadIds(nextLeadIds)
         startTransition(async () => {
-            await updateProjectLead(project.id, value === "none" ? null : value)
+            await updateProjectLead(project.id, nextLeadIds)
         })
     }
 
@@ -55,27 +62,40 @@ export function ProjectCard({ project, users, isAdmin }: Props) {
                             className="relative z-10"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <Select
-                                value={leadId}
-                                onValueChange={(v) => handleLeadChange(v, { preventDefault: () => { }, stopPropagation: () => { } } as React.MouseEvent)}
-                                disabled={isPending}
-                            >
-                                <SelectTrigger className="h-6 w-[100px] text-xs border-0 bg-transparent hover:bg-muted">
-                                    <User className="h-3 w-3 mr-1" />
-                                    <SelectValue placeholder="Lead" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">No Lead</SelectItem>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="ghost" className="h-6 w-[150px] justify-between px-2 text-xs" disabled={isPending}>
+                                        <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                                            <User className="h-3 w-3 shrink-0" />
+                                            <span className="truncate">
+                                                {selectedLeadNames.length === 0
+                                                    ? "Select leads"
+                                                    : selectedLeadNames.length <= 2
+                                                        ? selectedLeadNames.join(', ')
+                                                        : `${selectedLeadNames.length} leads`}
+                                            </span>
+                                        </span>
+                                        <ChevronDown className="h-3 w-3 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[220px] p-1" align="start">
                                     {users.map(u => (
-                                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                                        <div
+                                            key={u.id}
+                                            className="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent cursor-pointer"
+                                            onClick={(e) => handleLeadToggle(u.id, e as unknown as React.MouseEvent)}
+                                        >
+                                            <Checkbox checked={leadIds.includes(u.id)} />
+                                            <span className="text-sm">{u.name}</span>
+                                        </div>
                                     ))}
-                                </SelectContent>
-                            </Select>
+                                </PopoverContent>
+                            </Popover>
                         </div>
-                    ) : project.lead ? (
+                    ) : selectedLeadNames.length > 0 ? (
                         <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
-                            <span>{project.lead.name}</span>
+                            <span>{selectedLeadNames.join(', ')}</span>
                         </div>
                     ) : null}
                 </div>
@@ -89,7 +109,3 @@ export function ProjectCard({ project, users, isAdmin }: Props) {
         </Card>
     )
 }
-
-
-
-

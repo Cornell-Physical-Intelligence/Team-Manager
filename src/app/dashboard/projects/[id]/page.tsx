@@ -23,7 +23,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
             color: true,
             archivedAt: true,
             workspaceId: true,
-            lead: { select: { id: true, name: true } },
+            leadAssignments: {
+                orderBy: { createdAt: 'asc' },
+                select: { user: { select: { id: true, name: true } } }
+            },
             members: { select: { userId: true } },
             boards: {
                 select: {
@@ -141,7 +144,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
                 name: project.name,
                 color: project.color,
                 archivedAt: project.archivedAt ? project.archivedAt.toISOString() : null,
-                lead: project.lead
+                leads: project.leadAssignments.map((assignment) => assignment.user)
             }}
             board={board}
             users={users}

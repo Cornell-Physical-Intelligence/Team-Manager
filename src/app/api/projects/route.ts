@@ -4,6 +4,12 @@ import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getWorkspaceUserIds } from '@/lib/access'
 import { getErrorCode, getErrorMessage } from '@/lib/errors'
+import {
+    getPrimaryProjectLeadId,
+    mapProjectLeadUsers,
+    mergeProjectMemberIds,
+    parseProjectLeadPayload,
+} from '@/lib/project-leads'
 
 const PROJECT_COLORS = [
     "#ef4444", // red
@@ -62,6 +68,12 @@ export async function GET(request: Request) {
                 createdAt: true,
                 leadId: includeLead,
                 lead: includeLead ? { select: { id: true, name: true } } : false,
+                leadAssignments: includeLead
+                    ? {
+                        orderBy: { createdAt: 'asc' },
+                        select: { user: { select: { id: true, name: true } } }
+                    }
+                    : false,
                 members: { select: { userId: true, user: { select: { name: true } } } }
             }
         })
@@ -83,7 +95,29 @@ export async function GET(request: Request) {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         })
 
-        return NextResponse.json(sorted)
+        if (!includeLead) {
+            return NextResponse.json(sorted)
+        }
+
+        const serialized = sorted.map((project) => {
+            const { leadAssignments, ...rest } = project
+            const leads = mapProjectLeadUsers(
+                leadAssignments as unknown as Array<{ user: { id: string; name: string } }>
+            )
+            const leadIds = leads.map((lead) => lead.id)
+            const primaryLeadId = getPrimaryProjectLeadId(leadIds) ?? rest.leadId ?? null
+            const primaryLead = rest.lead ?? leads[0] ?? null
+
+            return {
+                ...rest,
+                leadId: primaryLeadId,
+                lead: primaryLead,
+                leadIds,
+                leads
+            }
+        })
+
+        return NextResponse.json(serialized)
     } catch (error) {
         console.error('Failed to fetch projects:', error)
         return NextResponse.json([], { status: 500 })
@@ -103,32 +137,33 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json()
-        const { name, description, leadId, memberIds, color, pushes } = body
+        const { name, description, memberIds, color, pushes } = body
+        const { leadIds } = parseProjectLeadPayload(body)
 
         if (!name || name.trim().length === 0) {
             return NextResponse.json({ error: 'Name is required' }, { status: 400 })
         }
 
-        if (!leadId || leadId === 'none') {
-            return NextResponse.json({ error: 'Division Lead is required' }, { status: 400 })
+        if (leadIds.length === 0) {
+            return NextResponse.json({ error: 'At least one division lead is required' }, { status: 400 })
         }
 
         const memberIdsInput = Array.isArray(memberIds)
             ? memberIds.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
             : []
         const uniqueMemberIds = Array.from(new Set(memberIdsInput))
-
-        const userIdsToCheck = [leadId, ...uniqueMemberIds].filter((id) => typeof id === 'string') as string[]
-        const allowedUserIds = await getWorkspaceUserIds(userIdsToCheck, user.workspaceId)
-
-        if (!allowedUserIds.includes(leadId)) {
-            return NextResponse.json({ error: 'Division Lead must belong to this workspace' }, { status: 400 })
+        const validLeadIds = await getWorkspaceUserIds(leadIds, user.workspaceId)
+        if (validLeadIds.length !== leadIds.length) {
+            return NextResponse.json({ error: 'One or more division leads are not in this workspace' }, { status: 400 })
         }
 
         const validMemberIds = await getWorkspaceUserIds(uniqueMemberIds, user.workspaceId)
         if (validMemberIds.length !== uniqueMemberIds.length) {
             return NextResponse.json({ error: 'One or more members are not in this workspace' }, { status: 400 })
         }
+
+        const memberIdsToPersist = mergeProjectMemberIds(validMemberIds, validLeadIds)
+        const primaryLeadId = getPrimaryProjectLeadId(validLeadIds)
 
         // Create division with default board and columns
         const project = await prisma.$transaction(async (tx) => {
@@ -144,20 +179,23 @@ export async function POST(request: Request) {
                     name,
                     description: description || null,
                     color: generatedColor,
-                    leadId: leadId || null,
+                    leadId: primaryLeadId,
                     workspaceId: user.workspaceId
                 }
             })
 
-            // Ensure lead is added as a member
-            const uniqueMemberIds = new Set(validMemberIds)
-            if (leadId) {
-                uniqueMemberIds.add(leadId)
+            if (validLeadIds.length > 0) {
+                await tx.projectLeadAssignment.createMany({
+                    data: validLeadIds.map((userId) => ({
+                        projectId: p.id,
+                        userId
+                    }))
+                })
             }
 
-            if (uniqueMemberIds.size > 0) {
+            if (memberIdsToPersist.length > 0) {
                 await tx.projectMember.createMany({
-                    data: (Array.from(uniqueMemberIds) as string[]).map((userId) => ({
+                    data: memberIdsToPersist.map((userId) => ({
                         projectId: p.id,
                         userId
                     }))

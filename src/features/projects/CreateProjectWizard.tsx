@@ -17,13 +17,6 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
-import {
     Popover,
     PopoverContent,
     PopoverTrigger,
@@ -49,7 +42,7 @@ type CreateProjectWizardProps = {
 type ProjectData = {
     name: string
     description: string
-    leadId: string
+    leadIds: string[]
     memberIds: string[]
 }
 
@@ -75,7 +68,7 @@ export function CreateProjectWizard({
     const [projectData, setProjectData] = useState<ProjectData>({
         name: '',
         description: '',
-        leadId: '',
+        leadIds: [],
         memberIds: []
     })
 
@@ -86,11 +79,20 @@ export function CreateProjectWizard({
     useEffect(() => {
         if (open) {
             setCurrentStep(0)
-            setProjectData({ name: '', description: '', leadId: '', memberIds: [] })
+            setProjectData({ name: '', description: '', leadIds: [], memberIds: [] })
             setPushes([])
             setError(null)
         }
     }, [open])
+
+    const toggleLead = (userId: string) => {
+        setProjectData(prev => ({
+            ...prev,
+            leadIds: prev.leadIds.includes(userId)
+                ? prev.leadIds.filter(id => id !== userId)
+                : [...prev.leadIds, userId]
+        }))
+    }
 
     const toggleMember = (userId: string) => {
         setProjectData(prev => ({
@@ -101,7 +103,15 @@ export function CreateProjectWizard({
         }))
     }
 
-    const isStep1Valid = projectData.name.trim() && projectData.leadId && projectData.leadId !== 'none'
+    const selectedMemberIds = Array.from(new Set([
+        ...projectData.memberIds,
+        ...projectData.leadIds
+    ]))
+    const selectedLeadNames = leadCandidates
+        .filter((user) => projectData.leadIds.includes(user.id))
+        .map((user) => user.name)
+
+    const isStep1Valid = projectData.name.trim() && projectData.leadIds.length > 0
 
     const handleNext = () => {
         if (currentStep === 0 && isStep1Valid) {
@@ -129,8 +139,8 @@ export function CreateProjectWizard({
                 body: JSON.stringify({
                     name: projectData.name.trim(),
                     description: projectData.description.trim() || undefined,
-                    leadId: projectData.leadId,
-                    memberIds: projectData.memberIds,
+                    leadIds: projectData.leadIds,
+                    memberIds: selectedMemberIds,
                     pushes: pushes.map(p => ({
                         tempId: p.tempId,
                         name: p.name,
@@ -237,23 +247,41 @@ export function CreateProjectWizard({
 
                             <div className="grid gap-1.5">
                                 <Label className="text-sm font-medium">
-                                    Division Lead <span className="text-red-500">*</span>
+                                    Division Leads <span className="text-red-500">*</span>
                                 </Label>
-                                <Select
-                                    value={projectData.leadId}
-                                    onValueChange={(value) => setProjectData(prev => ({ ...prev, leadId: value }))}
-                                >
-                                    <SelectTrigger className="h-10">
-                                        <SelectValue placeholder="Select a lead" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {leadCandidates.map(user => (
-                                            <SelectItem key={user.id} value={user.id}>
-                                                {user.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full justify-between h-10 font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {selectedLeadNames.length === 0
+                                                    ? "Select division leads..."
+                                                    : selectedLeadNames.length <= 2
+                                                        ? selectedLeadNames.join(', ')
+                                                        : `${selectedLeadNames.length} leads selected`}
+                                            </span>
+                                            <ChevronDown className="h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[280px] p-0" align="start">
+                                        <RemoveScroll shards={[dialogRef]}>
+                                            <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
+                                                {leadCandidates.map(user => (
+                                                    <div
+                                                        key={user.id}
+                                                        className="flex items-center space-x-2 px-2 py-2 rounded-sm hover:bg-accent cursor-pointer"
+                                                        onClick={() => toggleLead(user.id)}
+                                                    >
+                                                        <Checkbox checked={projectData.leadIds.includes(user.id)} />
+                                                        <div className="text-sm flex-1">{user.name}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </RemoveScroll>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
 
                             <div className="grid gap-1.5">
@@ -265,9 +293,9 @@ export function CreateProjectWizard({
                                             className="w-full justify-between h-10 font-normal"
                                         >
                                             <span className="truncate">
-                                                {projectData.memberIds.length === 0
+                                                {selectedMemberIds.length === 0
                                                     ? "Select team members..."
-                                                    : `${projectData.memberIds.length} member${projectData.memberIds.length !== 1 ? 's' : ''} selected`}
+                                                    : `${selectedMemberIds.length} member${selectedMemberIds.length !== 1 ? 's' : ''} selected`}
                                             </span>
                                             <ChevronDown className="h-4 w-4 opacity-50" />
                                         </Button>
@@ -276,7 +304,7 @@ export function CreateProjectWizard({
                                         <RemoveScroll shards={[dialogRef]}>
                                             <div className="max-h-[240px] overflow-y-auto overscroll-contain p-1">
                                                 {allUsers.map(user => {
-                                                    const isLead = user.id === projectData.leadId
+                                                    const isLead = projectData.leadIds.includes(user.id)
                                                     return (
                                                         <div
                                                             key={user.id}
@@ -287,7 +315,7 @@ export function CreateProjectWizard({
                                                             onClick={() => !isLead && toggleMember(user.id)}
                                                         >
                                                             <Checkbox
-                                                                checked={isLead || projectData.memberIds.includes(user.id)}
+                                                                checked={selectedMemberIds.includes(user.id)}
                                                                 disabled={isLead}
                                                             />
                                                             <div className="text-sm flex-1">

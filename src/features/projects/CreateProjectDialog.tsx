@@ -13,10 +13,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { createProject } from "@/app/actions/projects"
 import { useState, useTransition } from "react"
-import { Plus } from "lucide-react"
+import { ChevronDown, Plus } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 type User = {
@@ -32,16 +33,19 @@ type Props = {
 export function CreateProjectDialog({ users }: Props) {
     const [open, setOpen] = useState(false)
     const [isPending, startTransition] = useTransition()
-    const [leadId, setLeadId] = useState<string>("")
+    const [leadIds, setLeadIds] = useState<string[]>([])
     const { toast } = useToast()
+    const selectedLeadNames = users.filter((user) => leadIds.includes(user.id)).map((user) => user.name)
 
     async function handleSubmit(formData: FormData) {
-        if (!leadId) {
-            toast({ title: "Error", description: "Division Lead is required", variant: "destructive" })
+        if (leadIds.length === 0) {
+            toast({ title: "Error", description: "At least one division lead is required", variant: "destructive" })
             return
         }
 
-        formData.set('leadId', leadId)
+        formData.delete('leadId')
+        formData.delete('leadIds')
+        leadIds.forEach((leadId) => formData.append('leadIds', leadId))
 
         startTransition(async () => {
             const result = await createProject(formData)
@@ -51,9 +55,17 @@ export function CreateProjectDialog({ users }: Props) {
             } else {
                 toast({ title: "Division Created" })
                 setOpen(false)
-                setLeadId("")
+                setLeadIds([])
             }
         })
+    }
+
+    const toggleLead = (userId: string) => {
+        setLeadIds((prev) =>
+            prev.includes(userId)
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId]
+        )
     }
 
     return (
@@ -85,22 +97,36 @@ export function CreateProjectDialog({ users }: Props) {
                         </div>
                         <div className="grid gap-2">
                             <Label className="flex items-center gap-1">
-                                Division Lead <span className="text-red-500">*</span>
+                                Division Leads <span className="text-red-500">*</span>
                             </Label>
-                            <Select value={leadId} onValueChange={setLeadId} required>
-                                <SelectTrigger className={!leadId ? "border-red-300" : ""}>
-                                    <SelectValue placeholder="Select a lead" />
-                                </SelectTrigger>
-                                <SelectContent>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={leadIds.length === 0 ? "justify-between border-red-300" : "justify-between"}>
+                                        <span className="truncate">
+                                            {selectedLeadNames.length === 0
+                                                ? "Select division leads"
+                                                : selectedLeadNames.length <= 2
+                                                    ? selectedLeadNames.join(', ')
+                                                    : `${selectedLeadNames.length} leads selected`}
+                                        </span>
+                                        <ChevronDown className="h-4 w-4 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[260px] p-1" align="start">
                                     {users.map(user => (
-                                        <SelectItem key={user.id} value={user.id}>
-                                            {user.name} ({user.role})
-                                        </SelectItem>
+                                        <div
+                                            key={user.id}
+                                            className="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent cursor-pointer"
+                                            onClick={() => toggleLead(user.id)}
+                                        >
+                                            <Checkbox checked={leadIds.includes(user.id)} />
+                                            <span className="text-sm">{user.name} ({user.role})</span>
+                                        </div>
                                     ))}
-                                </SelectContent>
-                            </Select>
-                            {!leadId && (
-                                <p className="text-xs text-red-500">Division Lead is required</p>
+                                </PopoverContent>
+                            </Popover>
+                            {leadIds.length === 0 && (
+                                <p className="text-xs text-red-500">At least one division lead is required</p>
                             )}
                         </div>
                     </div>
@@ -114,5 +140,4 @@ export function CreateProjectDialog({ users }: Props) {
         </Dialog>
     )
 }
-
 

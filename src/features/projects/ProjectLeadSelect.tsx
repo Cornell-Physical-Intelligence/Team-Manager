@@ -1,27 +1,31 @@
 "use client"
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { updateProjectLead } from "@/app/actions/projects"
 import { useState, useTransition } from "react"
-import { User } from "lucide-react"
+import { ChevronDown, User } from "lucide-react"
 
 type Props = {
     projectId: string
-    currentLeadId: string | null
+    currentLeadIds: string[]
     users: { id: string; name: string; role: string }[]
     isAdmin: boolean
 }
 
-export function ProjectLeadSelect({ projectId, currentLeadId, users, isAdmin }: Props) {
+export function ProjectLeadSelect({ projectId, currentLeadIds, users, isAdmin }: Props) {
     const [isPending, startTransition] = useTransition()
-    const [leadId, setLeadId] = useState(currentLeadId || "none")
+    const [leadIds, setLeadIds] = useState(currentLeadIds)
+    const currentLeadNames = users.filter((user) => leadIds.includes(user.id)).map((user) => user.name)
 
-    const currentLead = users.find(u => u.id === currentLeadId)
-
-    const handleChange = (value: string) => {
-        setLeadId(value)
+    const handleToggle = (userId: string) => {
+        const nextLeadIds = leadIds.includes(userId)
+            ? leadIds.filter((id) => id !== userId)
+            : [...leadIds, userId]
+        setLeadIds(nextLeadIds)
         startTransition(async () => {
-            await updateProjectLead(projectId, value === "none" ? null : value)
+            await updateProjectLead(projectId, nextLeadIds)
         })
     }
 
@@ -29,7 +33,7 @@ export function ProjectLeadSelect({ projectId, currentLeadId, users, isAdmin }: 
         return (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
-                <span>Lead: {currentLead?.name || 'None'}</span>
+                <span>Leads: {currentLeadNames.join(', ') || 'None'}</span>
             </div>
         )
     }
@@ -37,23 +41,32 @@ export function ProjectLeadSelect({ projectId, currentLeadId, users, isAdmin }: 
     return (
         <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
-            <Select value={leadId} onValueChange={handleChange} disabled={isPending}>
-                <SelectTrigger className="h-8 w-[180px]">
-                    <SelectValue placeholder="Select lead" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="none">No Lead</SelectItem>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-8 w-[220px] justify-between" disabled={isPending}>
+                        <span className="truncate">
+                            {currentLeadNames.length === 0
+                                ? "Select leads"
+                                : currentLeadNames.length <= 2
+                                    ? currentLeadNames.join(', ')
+                                    : `${currentLeadNames.length} leads selected`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] p-1" align="start">
                     {users.map(user => (
-                        <SelectItem key={user.id} value={user.id}>
-                            {user.name}
-                        </SelectItem>
+                        <div
+                            key={user.id}
+                            className="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-accent cursor-pointer"
+                            onClick={() => handleToggle(user.id)}
+                        >
+                            <Checkbox checked={leadIds.includes(user.id)} />
+                            <span className="text-sm">{user.name}</span>
+                        </div>
                     ))}
-                </SelectContent>
-            </Select>
+                </PopoverContent>
+            </Popover>
         </div>
     )
 }
-
-
-
-

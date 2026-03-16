@@ -73,7 +73,7 @@ type Project = {
     id: string
     name: string
     color: string
-    leadName: string | null
+    leadNames: string[]
 }
 
 type HeatmapViewProps = {

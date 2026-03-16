@@ -65,7 +65,10 @@ export async function POST(
                             include: {
                                 project: {
                                     include: {
-                                        lead: true
+                                        leadAssignments: {
+                                            orderBy: { createdAt: 'asc' },
+                                            include: { user: true }
+                                        }
                                     }
                                 }
                             }
@@ -125,17 +128,24 @@ export async function POST(
         const workspaceId = project?.workspaceId
 
         if (workspaceId) {
-            // Notify project lead
-            if (project?.leadId && project.leadId !== user.id) {
-                await prisma.notification.create({
-                    data: {
+            const leadIds = Array.from(
+                new Set(
+                    (project?.leadAssignments || [])
+                        .map((assignment) => assignment.userId)
+                        .filter((leadId) => leadId !== user.id)
+                )
+            )
+
+            if (leadIds.length > 0) {
+                await prisma.notification.createMany({
+                    data: leadIds.map((leadId) => ({
                         workspaceId,
-                        userId: project.leadId,
+                        userId: leadId,
                         type: 'help_requested',
                         title: 'Help Requested',
                         message: `${user.name} needs help with "${task.title}"${message ? `: ${message}` : ''}`,
-                        link: `/dashboard/projects/${project.id}?task=${id}`
-                    }
+                        link: `/dashboard/projects/${project?.id}?task=${id}`
+                    }))
                 })
             }
 
@@ -144,7 +154,7 @@ export async function POST(
                 where: {
                     workspaceId,
                     role: 'Admin',
-                    userId: { notIn: [user.id, project?.leadId || ''].filter(Boolean) }
+                    userId: { notIn: [user.id, ...leadIds] }
                 },
                 select: { userId: true }
             })

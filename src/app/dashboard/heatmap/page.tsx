@@ -61,7 +61,10 @@ export default async function HeatmapPage() {
                                         id: true,
                                         name: true,
                                         color: true,
-                                        leadId: true
+                                        leadAssignments: {
+                                            orderBy: { createdAt: 'asc' },
+                                            select: { userId: true, user: { select: { name: true } } }
+                                        }
                                     }
                                 }
                             }
@@ -91,8 +94,10 @@ export default async function HeatmapPage() {
                 id: true,
                 name: true,
                 color: true,
-                leadId: true,
-                lead: { select: { name: true } }
+                leadAssignments: {
+                    orderBy: { createdAt: 'asc' },
+                    select: { userId: true, user: { select: { name: true } } }
+                }
             }
         })
     ])
@@ -230,7 +235,7 @@ export default async function HeatmapPage() {
                     id: p.id,
                     name: p.name,
                     color: p.color || '#6b7280',
-                    leadName: p.lead?.name || null
+                    leadNames: p.leadAssignments.map((assignment) => assignment.user.name)
                 }))}
                 overloadedUsers={overloadedUsers}
                 idleUsers={idleUsers}

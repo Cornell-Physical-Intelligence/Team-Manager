@@ -79,7 +79,7 @@ type ProjectContentProps = {
         name: string
         color?: string | null
         archivedAt?: string | null
-        lead: { id: string; name: string } | null
+        leads: { id: string; name: string }[]
     }
     board: {
         id: string
@@ -165,6 +165,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
 
     const canManagePushes = userRole === 'Admin' || userRole === 'Team Lead'
     const projectColor = project.color || "#3b82f6"
+    const leadNames = project.leads.map((lead) => lead.name)
 
     // Get all tasks for Gantt chart with column and push info
     const allTasks = boardState?.columns.flatMap(col =>
@@ -325,9 +326,9 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                                 <TooltipTrigger asChild>
                                     <h1 className="text-base md:text-lg font-semibold truncate cursor-default">{project.name}</h1>
                                 </TooltipTrigger>
-                                {project.lead && (
+                                {leadNames.length > 0 && (
                                     <TooltipContent side="bottom" align="start">
-                                        <p className="text-xs">Lead: {project.lead.name}</p>
+                                        <p className="text-xs">Leads: {leadNames.join(', ')}</p>
                                     </TooltipContent>
                                 )}
                             </Tooltip>

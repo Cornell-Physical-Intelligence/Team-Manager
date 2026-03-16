@@ -56,7 +56,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { GeneralChat } from "@/components/layout/GeneralChat"
 import { CreateProjectWizard } from "@/features/projects/CreateProjectWizard"
 
@@ -68,6 +67,8 @@ type Project = {
     archivedAt: string | null
     leadId: string | null
     lead: { id: string; name: string } | null
+    leadIds: string[]
+    leads: { id: string; name: string }[]
     members: { userId: string }[]
 }
 
@@ -226,7 +227,9 @@ function ProjectRowInner({
                 onTouchStart={() => prefetchLeanTasks(project.id)}
                 className={cn(
                     "relative z-10 rounded-md pl-2 py-1.5 text-sm transition-colors flex-1 min-w-0",
-                    isActive ? "font-medium" : "text-muted-foreground group-hover:text-foreground",
+                    isActive
+                        ? (project.archivedAt ? "font-normal text-foreground" : "font-medium")
+                        : "text-muted-foreground group-hover:text-foreground",
                     project.archivedAt && !isActive && "text-muted-foreground/70 group-hover:text-muted-foreground"
                 )}
                 title={project.name}
@@ -349,7 +352,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [navigatingTo, setNavigatingTo] = React.useState<string | null>(null)
     const [chatState, setChatState] = React.useState<'small' | 'large' | 'hidden'>('hidden')
-    const createProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
     const editProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
     const [settingsSpinNonce, setSettingsSpinNonce] = React.useState(0)
     const previousPathRef = React.useRef<string>('/dashboard')
@@ -378,13 +380,17 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     }, [archivedProjects, pathname])
 
     // Form state for editing
-    const [newProjectLeadId, setNewProjectLeadId] = React.useState("none")
-    const [editLeadId, setEditLeadId] = React.useState<string>("none")
+    const [editLeadIds, setEditLeadIds] = React.useState<string[]>([])
     const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
     const [editColor, setEditColor] = React.useState<string>("#3b82f6")
     const [editName, setEditName] = React.useState<string>("")
     const [editDescription, setEditDescription] = React.useState<string>("")
     const [editError, setEditError] = React.useState<string | null>(null)
+
+    const selectedEditMemberIds = React.useMemo(
+        () => Array.from(new Set([...selectedMemberIds, ...editLeadIds])),
+        [editLeadIds, selectedMemberIds]
+    )
 
     const isAdmin = userData.role === 'Admin' || userData.role === 'Team Lead'
 
@@ -505,13 +511,14 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     // When editing division changes, update the lead id state
     React.useEffect(() => {
         if (editingProject) {
-            setEditLeadId(editingProject.leadId || "none")
+            setEditLeadIds(editingProject.leadIds || [])
             setSelectedMemberIds(editingProject.members?.map(m => m.userId) || [])
             setEditColor(editingProject.color || "#3b82f6")
             setEditName(editingProject.name || "")
             setEditDescription(editingProject.description || "")
             setEditError(null)
         } else {
+            setEditLeadIds([])
             setSelectedMemberIds([])
             setEditName("")
             setEditDescription("")
@@ -528,19 +535,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         })
     }, [editingProject, allUsers])
 
-    React.useEffect(() => {
-        if (!editingProject || !editLeadId || editLeadId === "none") return
-        setSelectedMemberIds((prev) => (prev.includes(editLeadId) ? prev : [...prev, editLeadId]))
-    }, [editingProject, editLeadId])
-
-    // When Create Dialog opens, reset members
-    React.useEffect(() => {
-        if (createDialogOpen) {
-            setSelectedMemberIds([])
-            setNewProjectLeadId("none")
-        }
-    }, [createDialogOpen])
-
     const toggleMember = (userId: string) => {
         setSelectedMemberIds(prev =>
             prev.includes(userId)
@@ -549,56 +543,13 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         )
     }
 
-    // Create division
-    const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-        setIsSubmitting(true)
-        const formData = new FormData(e.currentTarget)
-
-        const leadId = newProjectLeadId
-        if (!leadId || leadId === 'none') {
-            alert('Division Lead is required')
-            setIsSubmitting(false)
-            return
-        }
-
-        const payload = {
-            name: formData.get('name'),
-            description: formData.get('description'),
-            leadId: leadId,
-            memberIds: selectedMemberIds
-        }
-
-        try {
-            const res = await fetch('/api/projects', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            if (res.ok) {
-                fetchProjects()
-                setCreateDialogOpen(false)
-                router.refresh()
-            } else {
-                const text = await res.text()
-                console.error("Division creation failed. Status:", res.status, res.statusText)
-                console.error("Raw response body:", text)
-
-                let errorData: { error?: string } = {}
-                try {
-                    errorData = JSON.parse(text) as { error?: string }
-                } catch (e) {
-                    errorData = { error: `Response not JSON: ${text.substring(0, 50)}...` }
-                }
-
-                alert(`Error (${res.status}): ${errorData.error || text || 'Unknown error'}`)
-            }
-        } catch (err) {
-            console.error(err)
-            alert('Failed to create division')
-        }
-        setIsSubmitting(false)
-    }
+    const toggleEditLead = React.useCallback((userId: string) => {
+        setEditLeadIds((prev) =>
+            prev.includes(userId)
+                ? prev.filter((id) => id !== userId)
+                : [...prev, userId]
+        )
+    }, [])
 
     // Update division
     const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -615,7 +566,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
         try {
             const allowedIds = new Set(allUsers.map((u) => u.id))
-            const sanitizedMemberIds = selectedMemberIds.filter((id) => allowedIds.has(id))
+            const sanitizedMemberIds = selectedEditMemberIds.filter((id) => allowedIds.has(id))
             const res = await fetch(`/api/projects/${editingProject.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -623,7 +574,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                     name: trimmedName,
                     description: editDescription.trim(),
                     color: editColor,
-                    leadId: editLeadId === 'none' ? null : editLeadId,
+                    leadIds: editLeadIds,
                     memberIds: sanitizedMemberIds
                 })
             })
@@ -955,20 +906,40 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                 </div>
                             </div>
                             <div className="grid gap-1.5">
-                                <Label className="text-xs">Division Lead</Label>
-                                <Select value={editLeadId} onValueChange={setEditLeadId}>
-                                    <SelectTrigger className="h-8 text-sm">
-                                        <SelectValue placeholder="Select lead" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">No Lead</SelectItem>
-                                        {leadCandidates.map(user => (
-                                            <SelectItem key={user.id} value={user.id}>
-                                                {user.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Label className="text-xs">Division Leads</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-between h-8 text-sm px-2 font-normal">
+                                            <span className="truncate">
+                                                {editLeadIds.length === 0
+                                                    ? "Select leads..."
+                                                    : editLeadIds.length <= 2
+                                                        ? leadCandidates
+                                                            .filter((user) => editLeadIds.includes(user.id))
+                                                            .map((user) => user.name)
+                                                            .join(', ')
+                                                        : `${editLeadIds.length} selected`}
+                                            </span>
+                                            <ChevronDown className="h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[200px] p-0" align="start">
+                                        <RemoveScroll shards={[editProjectDialogContentRef]}>
+                                            <div className="max-h-[200px] overflow-y-auto overscroll-contain p-1">
+                                                {leadCandidates.map((user) => (
+                                                    <div
+                                                        key={user.id}
+                                                        className="flex items-center space-x-2 px-2 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
+                                                        onClick={() => toggleEditLead(user.id)}
+                                                    >
+                                                        <Checkbox checked={editLeadIds.includes(user.id)} />
+                                                        <div className="text-sm flex-1">{user.name}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </RemoveScroll>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="grid gap-1.5">
                                 <Label className="text-xs">Members</Label>
@@ -976,9 +947,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-full justify-between h-8 text-sm px-2 font-normal">
                                             <span className="truncate">
-                                                {selectedMemberIds.length === 0
+                                                {selectedEditMemberIds.length === 0
                                                     ? "Select members..."
-                                                    : `${selectedMemberIds.length} selected`}
+                                                    : `${selectedEditMemberIds.length} selected`}
                                             </span>
                                             <ChevronDown className="h-4 w-4 opacity-50" />
                                         </Button>
@@ -987,7 +958,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                         <RemoveScroll shards={[editProjectDialogContentRef]}>
                                             <div className="max-h-[200px] overflow-y-auto overscroll-contain p-1">
                                                 {allUsers.map(user => {
-                                                    const isLead = user.id === editLeadId
+                                                    const isLead = editLeadIds.includes(user.id)
                                                     return (
                                                         <div
                                                             key={user.id}
@@ -998,7 +969,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                                             onClick={() => !isLead && toggleMember(user.id)}
                                                         >
                                                             <Checkbox
-                                                                checked={isLead || selectedMemberIds.includes(user.id)}
+                                                                checked={selectedEditMemberIds.includes(user.id)}
                                                                 disabled={isLead}
                                                             />
                                                             <div className="text-sm flex-1">

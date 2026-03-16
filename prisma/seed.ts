@@ -84,6 +84,13 @@ async function main() {
             }
         })
 
+        await prisma.projectLeadAssignment.create({
+            data: {
+                projectId: project.id,
+                userId: pData.lead.id
+            }
+        })
+
         // Create Board and Columns
         const board = await prisma.board.create({
             data: {

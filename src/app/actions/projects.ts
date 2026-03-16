@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
+import { getPrimaryProjectLeadId, mergeProjectMemberIds } from '@/lib/project-leads'
 
 export async function createProject(formData: FormData) {
     try {
@@ -26,15 +27,28 @@ export async function createProject(formData: FormData) {
 
         const name = formData.get('name') as string
         const description = formData.get('description') as string
-        const leadId = formData.get('leadId') as string | null
+        const leadIds = Array.from(
+            new Set(
+                [
+                    ...formData.getAll('leadIds'),
+                    formData.get('leadId')
+                ]
+                    .filter((value): value is string => typeof value === 'string')
+                    .map((value) => value.trim())
+                    .filter((value) => value.length > 0 && value !== 'none')
+            )
+        )
 
         if (!name || name.trim().length === 0) return { error: 'Division Name is required' }
-        if (!leadId || leadId === 'none') return { error: 'Division Lead is required' }
+        if (leadIds.length === 0) return { error: 'At least one division lead is required' }
 
-        const allowedLeadIds = await getWorkspaceUserIds([leadId], user.workspaceId)
-        if (allowedLeadIds.length !== 1) {
-            return { error: 'Division Lead must belong to this workspace' }
+        const allowedLeadIds = await getWorkspaceUserIds(leadIds, user.workspaceId)
+        if (allowedLeadIds.length !== leadIds.length) {
+            return { error: 'One or more division leads are not in this workspace' }
         }
+
+        const primaryLeadId = getPrimaryProjectLeadId(allowedLeadIds)
+        const memberIdsToPersist = mergeProjectMemberIds([], allowedLeadIds)
 
         // Use interactive transaction to ensure all parts are created or none
         const project = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -42,16 +56,23 @@ export async function createProject(formData: FormData) {
                 data: {
                     name,
                     description: description || null,
-                    leadId: leadId || null,
+                    leadId: primaryLeadId,
                     workspaceId: user.workspaceId
                 }
             })
 
-            await tx.projectMember.create({
-                data: {
+            await tx.projectLeadAssignment.createMany({
+                data: allowedLeadIds.map((userId) => ({
                     projectId: p.id,
-                    userId: leadId
-                }
+                    userId
+                }))
+            })
+
+            await tx.projectMember.createMany({
+                data: memberIdsToPersist.map((userId) => ({
+                    projectId: p.id,
+                    userId
+                }))
             })
 
             await tx.board.create({
@@ -80,7 +101,7 @@ export async function createProject(formData: FormData) {
     }
 }
 
-export async function updateProjectLead(projectId: string, leadId: string | null) {
+export async function updateProjectLead(projectId: string, leadInput: string | string[] | null) {
     try {
         const user = await getCurrentUser()
         if (!user) {
@@ -96,11 +117,18 @@ export async function updateProjectLead(projectId: string, leadId: string | null
             return { error: 'Unauthorized' }
         }
 
-        if (leadId) {
-            const allowedLeadIds = await getWorkspaceUserIds([leadId], user.workspaceId)
-            if (allowedLeadIds.length !== 1) {
-                return { error: 'Division Lead must belong to this workspace' }
-            }
+        const requestedLeadIds = Array.from(
+            new Set(
+                (Array.isArray(leadInput) ? leadInput : [leadInput])
+                    .filter((value): value is string => typeof value === 'string')
+                    .map((value) => value.trim())
+                    .filter((value) => value.length > 0 && value !== 'none')
+            )
+        )
+
+        const allowedLeadIds = await getWorkspaceUserIds(requestedLeadIds, user.workspaceId)
+        if (allowedLeadIds.length !== requestedLeadIds.length) {
+            return { error: 'One or more division leads are not in this workspace' }
         }
 
         const projectContext = await getProjectContext(projectId)
@@ -108,9 +136,49 @@ export async function updateProjectLead(projectId: string, leadId: string | null
             return { error: 'Division not found' }
         }
 
-        await prisma.project.update({
-            where: { id: projectId },
-            data: { leadId }
+        const primaryLeadId = getPrimaryProjectLeadId(allowedLeadIds)
+
+        await prisma.$transaction(async (tx) => {
+            const existingMemberIds = await tx.projectMember.findMany({
+                where: { projectId },
+                select: { userId: true }
+            })
+
+            await tx.project.update({
+                where: { id: projectId },
+                data: { leadId: primaryLeadId }
+            })
+
+            await tx.projectLeadAssignment.deleteMany({
+                where: { projectId }
+            })
+
+            if (allowedLeadIds.length > 0) {
+                await tx.projectLeadAssignment.createMany({
+                    data: allowedLeadIds.map((userId) => ({
+                        projectId,
+                        userId
+                    }))
+                })
+            }
+
+            const memberIdsToPersist = mergeProjectMemberIds(
+                existingMemberIds.map((member) => member.userId),
+                allowedLeadIds
+            )
+
+            await tx.projectMember.deleteMany({
+                where: { projectId }
+            })
+
+            if (memberIdsToPersist.length > 0) {
+                await tx.projectMember.createMany({
+                    data: memberIdsToPersist.map((userId) => ({
+                        projectId,
+                        userId
+                    }))
+                })
+            }
         })
 
         revalidatePath('/dashboard/projects')

@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getWorkspaceUserIds } from '@/lib/access'
+import {
+    getPrimaryProjectLeadId,
+    mapProjectLeadUsers,
+    mergeProjectMemberIds,
+    parseProjectLeadPayload,
+} from '@/lib/project-leads'
 
 export async function GET(
     request: Request,
@@ -18,6 +24,10 @@ export async function GET(
             where: { id },
             include: {
                 lead: { select: { id: true, name: true } },
+                leadAssignments: {
+                    orderBy: { createdAt: 'asc' },
+                    select: { user: { select: { id: true, name: true } } }
+                },
                 members: {
                     select: {
                         userId: true,
@@ -37,7 +47,16 @@ export async function GET(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        return NextResponse.json(project)
+        const leads = mapProjectLeadUsers(project.leadAssignments)
+        const leadIds = leads.map((lead) => lead.id)
+
+        return NextResponse.json({
+            ...project,
+            leadId: getPrimaryProjectLeadId(leadIds) ?? project.leadId ?? null,
+            lead: project.lead ?? leads[0] ?? null,
+            leadIds,
+            leads
+        })
     } catch (error) {
         console.error('Failed to fetch project:', error)
         return NextResponse.json({ error: 'Failed' }, { status: 500 })
@@ -64,7 +83,16 @@ export async function PATCH(
         // Verify project exists and belongs to user's workspace
         const existingProject = await prisma.project.findUnique({
             where: { id },
-            select: { workspaceId: true, leadId: true, archivedAt: true }
+            select: {
+                workspaceId: true,
+                leadId: true,
+                archivedAt: true,
+                members: { select: { userId: true } },
+                leadAssignments: {
+                    orderBy: { createdAt: 'asc' },
+                    select: { userId: true }
+                }
+            }
         })
 
         if (!existingProject) {
@@ -75,15 +103,19 @@ export async function PATCH(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        if (user.role === 'Team Lead' && existingProject.leadId !== user.id) {
+        const currentLeadIds = existingProject.leadAssignments.map((assignment) => assignment.userId)
+        const canManageAsLead = currentLeadIds.includes(user.id) || existingProject.leadId === user.id
+        if (user.role === 'Team Lead' && !canManageAsLead) {
             return NextResponse.json({ error: 'Forbidden: You can only update projects you lead' }, { status: 403 })
         }
 
         const body = await request.json()
-        const { name, description, leadId, memberIds, color, archived } = body
+        const { name, description, memberIds, color, archived } = body
         const normalizedName = typeof name === 'string' ? name.trim() : undefined
         const normalizedDescription = typeof description === 'string' ? description.trim() : description
         const archivedValue = typeof archived === 'boolean' ? archived : undefined
+        const leadPayload = parseProjectLeadPayload(body)
+        const leadIdsProvided = leadPayload.provided
 
         if (name !== undefined && !normalizedName) {
             return NextResponse.json({ error: 'Division name is required' }, { status: 400 })
@@ -93,30 +125,27 @@ export async function PATCH(
             ? memberIds.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
             : undefined
         const uniqueMemberIds = memberIdsInput ? Array.from(new Set(memberIdsInput)) : undefined
-
-        const leadIdValue = leadId === null
-            ? null
-            : (typeof leadId === 'string' && leadId.trim().length > 0 ? leadId : undefined)
-
-        if (leadId !== undefined && leadIdValue === undefined) {
-            return NextResponse.json({ error: 'Invalid division lead' }, { status: 400 })
-        }
-
-        if (leadIdValue) {
-            const allowedLeadIds = await getWorkspaceUserIds([leadIdValue], user.workspaceId)
-            if (allowedLeadIds.length !== 1) {
-                return NextResponse.json({ error: 'Division Lead must belong to this workspace' }, { status: 400 })
-            }
+        const normalizedLeadIds = leadPayload.leadIds
+        const validLeadIds = leadIdsProvided
+            ? await getWorkspaceUserIds(normalizedLeadIds, user.workspaceId)
+            : undefined
+        if (leadIdsProvided && validLeadIds && validLeadIds.length !== normalizedLeadIds.length) {
+            return NextResponse.json({ error: 'One or more division leads are not in this workspace' }, { status: 400 })
         }
 
         const validMemberIds = uniqueMemberIds
             ? await getWorkspaceUserIds(uniqueMemberIds, user.workspaceId)
             : undefined
-
-        const normalizedMemberIds = validMemberIds ? [...validMemberIds] : undefined
-        if (normalizedMemberIds && leadIdValue && !normalizedMemberIds.includes(leadIdValue)) {
-            normalizedMemberIds.push(leadIdValue)
+        if (uniqueMemberIds && validMemberIds && validMemberIds.length !== uniqueMemberIds.length) {
+            return NextResponse.json({ error: 'One or more members are not in this workspace' }, { status: 400 })
         }
+
+        let normalizedMemberIds = validMemberIds ? [...validMemberIds] : undefined
+        if (leadIdsProvided) {
+            const baseMemberIds = normalizedMemberIds || existingProject.members.map((member) => member.userId)
+            normalizedMemberIds = mergeProjectMemberIds(baseMemberIds, validLeadIds || [])
+        }
+        const primaryLeadId = leadIdsProvided ? getPrimaryProjectLeadId(validLeadIds || []) : undefined
 
         const normalizedColor = typeof color === "string"
             ? (color.trim().startsWith("#") ? color.trim().toLowerCase() : `#${color.trim().toLowerCase()}`)
@@ -133,11 +162,26 @@ export async function PATCH(
                 data: {
                     ...(name !== undefined && { name: normalizedName }),
                     ...(description !== undefined && { description: normalizedDescription || null }),
-                    ...(leadId !== undefined && { leadId: leadIdValue }),
+                    ...(leadIdsProvided && { leadId: primaryLeadId }),
                     ...archiveUpdate,
                     ...colorUpdate
                 }
             })
+
+            if (leadIdsProvided) {
+                await tx.projectLeadAssignment.deleteMany({
+                    where: { projectId: id }
+                })
+
+                if ((validLeadIds || []).length > 0) {
+                    await tx.projectLeadAssignment.createMany({
+                        data: (validLeadIds || []).map((userId) => ({
+                            projectId: id,
+                            userId
+                        }))
+                    })
+                }
+            }
 
             if (normalizedMemberIds) {
                 // Replace members
@@ -199,7 +243,12 @@ export async function DELETE(
         // Verify project exists and belongs to user's workspace
         const existingProject = await prisma.project.findUnique({
             where: { id },
-            select: { workspaceId: true, name: true, leadId: true }
+            select: {
+                workspaceId: true,
+                name: true,
+                leadId: true,
+                leadAssignments: { select: { userId: true } }
+            }
         })
 
         if (!existingProject) {
@@ -210,7 +259,9 @@ export async function DELETE(
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        if (user.role === 'Team Lead' && existingProject.leadId !== user.id) {
+        const canDeleteAsLead = existingProject.leadAssignments.some((assignment) => assignment.userId === user.id)
+            || existingProject.leadId === user.id
+        if (user.role === 'Team Lead' && !canDeleteAsLead) {
             return NextResponse.json({ error: 'Forbidden: You can only delete projects you lead' }, { status: 403 })
         }
 
