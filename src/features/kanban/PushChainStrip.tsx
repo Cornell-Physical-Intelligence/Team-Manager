@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
-import { ChevronDown, Pencil, Plus, Lock, CheckCircle2 } from "lucide-react"
+import { ChevronDown, Pencil, Plus, Lock, Check } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 type PushType = {
@@ -435,12 +435,12 @@ export function PushChainStrip({
                                                                 className={cn(
                                                                     "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1 overflow-hidden rounded-md border px-0 md:px-2 text-xs font-medium transition-colors",
                                                                     pushIsComplete
-                                                                        ? "border-green-200/80 bg-green-50/80 text-green-700 hover:bg-green-100"
-                                                                        : "border-green-200 bg-green-50 text-green-600 hover:bg-green-100"
+                                                                        ? "border-border/60 bg-background text-muted-foreground hover:bg-muted/50"
+                                                                        : "border-border bg-background text-foreground hover:bg-muted/50"
                                                                 )}
                                                                 title={pushIsComplete ? "Mark as not complete" : "Mark this push complete"}
                                                             >
-                                                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                                                <Check className="h-3.5 w-3.5 shrink-0" />
                                                                 <span className="hidden md:inline whitespace-nowrap">
                                                                     {pushIsComplete ? "Completed" : "Mark Complete"}
                                                                 </span>
@@ -474,7 +474,7 @@ export function PushChainStrip({
                                                 !pushIsComplete ? "opacity-100" : "opacity-0 pointer-events-none"
                                             )}
                                         >
-                                            <span className="inline-flex w-full items-center justify-center rounded bg-muted/50 px-2 py-0.5 text-xs tabular-nums text-muted-foreground whitespace-nowrap">
+                                            <span className="inline-flex w-full items-center justify-center px-2 py-0.5 text-xs tabular-nums text-muted-foreground whitespace-nowrap">
                                                 {pushDateLabel}
                                             </span>
                                         </div>
