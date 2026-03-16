@@ -57,6 +57,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { GeneralChat } from "@/components/layout/GeneralChat"
 import { CreateProjectWizard } from "@/features/projects/CreateProjectWizard"
+import { subscribeWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
 
 type Project = {
     id: string
@@ -485,19 +486,18 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
     // Fetch lead candidates & all users
     const fetchUsers = React.useCallback(() => {
-        // Fetch potential leads
-        fetch('/api/users?role=leads')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setLeadCandidates(data)
-            })
-            .catch(() => { })
+        Promise.all([
+            fetch('/api/users?role=leads', { cache: 'no-store' }).then((res) => res.json()),
+            fetch('/api/users', { cache: 'no-store' }).then((res) => res.json()),
+        ])
+            .then(([leadData, userData]) => {
+                if (Array.isArray(leadData)) {
+                    setLeadCandidates(leadData)
+                }
 
-        // Fetch all users for membership
-        fetch('/api/users')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setAllUsers(data)
+                if (Array.isArray(userData)) {
+                    setAllUsers(userData)
+                }
             })
             .catch(() => { })
     }, [])
@@ -506,6 +506,13 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         fetchProjects()
         fetchUsers()
     }, [fetchProjects, fetchUsers])
+
+    React.useEffect(() => {
+        return subscribeWorkspaceMembersUpdated(() => {
+            fetchUsers()
+            fetchUserData()
+        })
+    }, [fetchUserData, fetchUsers])
 
     // When editing division changes, update the lead id state
     React.useEffect(() => {

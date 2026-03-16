@@ -8,13 +8,28 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { updateUserRole } from "@/app/actions/users"
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useToast } from "@/components/ui/use-toast"
+import { dispatchWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
 
-export function RoleSelect({ userId, currentRole, disabled }: { userId: string, currentRole: string, disabled?: boolean }) {
+export function RoleSelect({
+    userId,
+    currentRole,
+    disabled,
+    onRoleUpdated,
+}: {
+    userId: string
+    currentRole: string
+    disabled?: boolean
+    onRoleUpdated?: (newRole: string) => void
+}) {
     const [isPending, startTransition] = useTransition()
     const [role, setRole] = useState(currentRole)
     const { toast } = useToast()
+
+    useEffect(() => {
+        setRole(currentRole)
+    }, [currentRole])
 
     function handleValueChange(newRole: string) {
         if (newRole === role) return
@@ -32,6 +47,8 @@ export function RoleSelect({ userId, currentRole, disabled }: { userId: string, 
                     variant: "destructive"
                 })
             } else {
+                onRoleUpdated?.(newRole)
+                dispatchWorkspaceMembersUpdated()
                 toast({
                     title: "Role Updated",
                     description: `User role changed to ${newRole}`,

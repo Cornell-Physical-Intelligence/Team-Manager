@@ -9,8 +9,9 @@ import { RoleSelect } from "../members/RoleSelect"
 import { ProjectSelect } from "../members/ProjectSelect"
 import { MemberActions } from "../members/MemberActions"
 import { updateMemberName } from "@/app/actions/user-settings"
-import { useRouter } from "next/navigation"
 import { WorkloadSettings } from "./WorkloadSettings"
+import { dispatchWorkspaceMembersUpdated } from "@/lib/workspace-member-events"
+import { useToast } from "@/components/ui/use-toast"
 
 type Project = {
     id: string
@@ -38,15 +39,21 @@ function EditableName({
     userId,
     name,
     canEdit,
+    onNameUpdated,
 }: {
     userId: string
     name: string
     canEdit: boolean
+    onNameUpdated?: (newName: string) => void
 }) {
-    const router = useRouter()
     const [editing, setEditing] = useState(false)
     const [value, setValue] = useState(name)
     const [isPending, startTransition] = useTransition()
+    const { toast } = useToast()
+
+    useEffect(() => {
+        setValue(name)
+    }, [name])
 
     const handleSave = () => {
         const trimmed = value.trim()
@@ -55,13 +62,26 @@ function EditableName({
             setEditing(false)
             return
         }
+
+        if (trimmed === name) {
+            setEditing(false)
+            return
+        }
+
         startTransition(async () => {
             const res = await updateMemberName(userId, trimmed)
             if (res.error) {
                 setValue(name)
+                toast({
+                    title: "Error",
+                    description: res.error,
+                    variant: "destructive"
+                })
+            } else {
+                onNameUpdated?.(trimmed)
+                dispatchWorkspaceMembersUpdated()
             }
             setEditing(false)
-            router.refresh()
         })
     }
 
@@ -133,6 +153,26 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
         setVisibleMembers((prev) => prev.filter((member) => member.id !== removedUserId))
     }
 
+    const handleMemberNameUpdated = (memberId: string, nextName: string) => {
+        setVisibleMembers((prev) =>
+            prev.map((member) =>
+                member.id === memberId
+                    ? { ...member, name: nextName }
+                    : member
+            )
+        )
+    }
+
+    const handleMemberRoleUpdated = (memberId: string, nextRole: string) => {
+        setVisibleMembers((prev) =>
+            prev.map((member) =>
+                member.id === memberId
+                    ? { ...member, role: nextRole }
+                    : member
+            )
+        )
+    }
+
     const handleCopyEmail = (id: string, email: string) => {
         void navigator.clipboard.writeText(email)
         setCopiedEmailId(id)
@@ -158,10 +198,20 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                             <div key={m.id} className={`p-3 space-y-2 ${isSelf ? "bg-muted/30" : ""}`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <EditableName userId={m.id} name={m.name} canEdit={canManage && !isSelf} />
+                                        <EditableName
+                                            userId={m.id}
+                                            name={m.name}
+                                            canEdit={canManage && !isSelf}
+                                            onNameUpdated={(nextName) => handleMemberNameUpdated(m.id, nextName)}
+                                        />
                                         {isSelf && <Badge variant="outline" className="text-[10px] h-5">You</Badge>}
                                     </div>
-                                    <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
+                                    <RoleSelect
+                                        userId={m.id}
+                                        currentRole={m.role}
+                                        disabled={!canManage}
+                                        onRoleUpdated={(nextRole) => handleMemberRoleUpdated(m.id, nextRole)}
+                                    />
                                 </div>
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                                     <div className="group flex items-center gap-1 min-w-0 max-w-[140px]">
@@ -217,7 +267,12 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                     <tr key={m.id} className={isSelf ? "bg-muted/20" : ""}>
                                         <td className="px-4 py-2.5">
                                             <div className="flex items-center gap-2">
-                                                <EditableName userId={m.id} name={m.name} canEdit={canManage && !isSelf} />
+                                                <EditableName
+                                                    userId={m.id}
+                                                    name={m.name}
+                                                    canEdit={canManage && !isSelf}
+                                                    onNameUpdated={(nextName) => handleMemberNameUpdated(m.id, nextName)}
+                                                />
                                                 {isSelf && <Badge variant="secondary" className="text-[10px] h-5">You</Badge>}
                                             </div>
                                         </td>
@@ -238,7 +293,12 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
                                             </div>
                                         </td>
                                         <td className="px-4 py-2.5 text-right">
-                                            <RoleSelect userId={m.id} currentRole={m.role} disabled={!canManage} />
+                                            <RoleSelect
+                                                userId={m.id}
+                                                currentRole={m.role}
+                                                disabled={!canManage}
+                                                onRoleUpdated={(nextRole) => handleMemberRoleUpdated(m.id, nextRole)}
+                                            />
                                         </td>
                                         <td className="px-4 py-2.5 text-right">
                                             <div className="flex justify-end">
