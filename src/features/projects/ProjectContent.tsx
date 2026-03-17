@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { LayoutGrid, Calendar, Plus, Pencil } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { readLeanTaskCache, writeLeanTaskCache } from "@/lib/project-prefetch"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
@@ -109,43 +110,32 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
     const [userRole, setUserRole] = useState<string>('Member')
     const [loadingTasks, setLoadingTasks] = useState(false)
 
-    const leanCacheKey = `cupi:leanTasks:${project.id}`
-    const leanCacheTtlMs = 2 * 60 * 1000
-
     const [boardState, setBoardState] = useState(() => {
         if (!board) return board
-        if (typeof window === "undefined") return board
-        try {
-            const raw = window.sessionStorage.getItem(leanCacheKey)
-            if (!raw) return board
-            const parsed = JSON.parse(raw) as { ts?: number; tasks?: TaskType[] }
-            if (!parsed?.tasks || !Array.isArray(parsed.tasks)) return board
-            if (!parsed.ts || Date.now() - parsed.ts > leanCacheTtlMs) return board
+        const cachedTasks = readLeanTaskCache<TaskType>(project.id)
+        if (!cachedTasks) return board
 
-            const byColumn = new Map<string, TaskType[]>()
-            parsed.tasks.forEach((task) => {
-                if (!task.columnId) return
-                const list = byColumn.get(task.columnId) || []
-                list.push(task)
-                byColumn.set(task.columnId, list)
+        const byColumn = new Map<string, TaskType[]>()
+        cachedTasks.forEach((task) => {
+            if (!task.columnId) return
+            const list = byColumn.get(task.columnId) || []
+            list.push(task)
+            byColumn.set(task.columnId, list)
+        })
+        byColumn.forEach((list) =>
+            list.sort((a, b) => {
+                const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+                const bt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+                return bt - at
             })
-            byColumn.forEach((list) =>
-                list.sort((a, b) => {
-                    const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-                    const bt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-                    return bt - at
-                })
-            )
+        )
 
-            return {
-                ...board,
-                columns: board.columns.map((col) => ({
-                    ...col,
-                    tasks: byColumn.get(col.id) || []
-                }))
-            }
-        } catch {
-            return board
+        return {
+            ...board,
+            columns: board.columns.map((col) => ({
+                ...col,
+                tasks: byColumn.get(col.id) || []
+            }))
         }
     })
 
@@ -282,7 +272,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                 const tasks: TaskType[] = Array.isArray(data?.tasks) ? data.tasks : []
                 if (!cancelled) {
                     applyTasksToBoard(tasks)
-                    window.sessionStorage.setItem(leanCacheKey, JSON.stringify({ ts: Date.now(), tasks }))
+                    writeLeanTaskCache(project.id, tasks)
                 }
             } catch {
                 // ignore
@@ -314,7 +304,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
         return () => {
             cancelled = true
         }
-    }, [board, project.id, applyTasksToBoard, mergeFullTasks, leanCacheKey])
+    }, [board, project.id, applyTasksToBoard, mergeFullTasks])
 
     return (
         <div className="flex min-h-full flex-col bg-background animate-fade-in-up md:bg-transparent">

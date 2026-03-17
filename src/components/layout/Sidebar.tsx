@@ -57,6 +57,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { GeneralChat } from "@/components/layout/GeneralChat"
 import { CreateProjectWizard } from "@/features/projects/CreateProjectWizard"
+import { prefetchLeanTasks, prefetchProjectRoute } from "@/lib/project-prefetch"
 import { subscribeSidebarSync } from "@/lib/sidebar-sync"
 
 type Project = {
@@ -120,51 +121,9 @@ const PROJECT_COLOR_OPTIONS = [
     "#ec4899", // pink
 ] as const
 
-const LEAN_TASK_CACHE_TTL_MS = 2 * 60 * 1000
-const pendingLeanTaskPrefetches = new Map<string, Promise<void>>()
-
-function isLeanTaskCacheFresh(projectId: string) {
-    if (typeof window === "undefined") return false
-
-    try {
-        const raw = window.sessionStorage.getItem(`cupi:leanTasks:${projectId}`)
-        if (!raw) return false
-
-        const parsed = JSON.parse(raw) as { ts?: number }
-        return typeof parsed.ts === "number" && Date.now() - parsed.ts < LEAN_TASK_CACHE_TTL_MS
-    } catch {
-        return false
-    }
-}
-
-function prefetchLeanTasks(projectId: string) {
-    if (typeof window === "undefined" || isLeanTaskCacheFresh(projectId)) {
-        return
-    }
-
-    if (pendingLeanTaskPrefetches.has(projectId)) {
-        return
-    }
-
-    const task = (async () => {
-        try {
-            const res = await fetch(`/api/projects/${projectId}/tasks?lean=true`)
-            const data = await res.json()
-            if (!res.ok || !Array.isArray(data?.tasks)) return
-
-            window.sessionStorage.setItem(
-                `cupi:leanTasks:${projectId}`,
-                JSON.stringify({ ts: Date.now(), tasks: data.tasks })
-            )
-        } catch {
-            // ignore prefetch failures
-        } finally {
-            pendingLeanTaskPrefetches.delete(projectId)
-        }
-    })()
-
-    pendingLeanTaskPrefetches.set(projectId, task)
-}
+const STARTUP_PREFETCH_CONCURRENCY = 3
+const STARTUP_PREFETCH_DELAY_MS = 150
+const STARTUP_PREFETCH_PAUSE_MS = 75
 
 type ProjectRowProps = {
     project: Project
@@ -515,6 +474,40 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     React.useEffect(() => {
         return subscribeSidebarSync(refreshSidebarData)
     }, [refreshSidebarData])
+
+    React.useEffect(() => {
+        const orderedProjectIds = Array.from(new Set([
+            ...projects.map((project) => project.id),
+            ...archivedProjects.map((project) => project.id),
+        ]))
+
+        if (orderedProjectIds.length === 0) return
+
+        let cancelled = false
+
+        const timer = window.setTimeout(() => {
+            const warmProjects = async () => {
+                for (let index = 0; index < orderedProjectIds.length; index += STARTUP_PREFETCH_CONCURRENCY) {
+                    if (cancelled) return
+
+                    const batch = orderedProjectIds.slice(index, index + STARTUP_PREFETCH_CONCURRENCY)
+                    batch.forEach((projectId) => prefetchProjectRoute(projectId, router))
+                    await Promise.all(batch.map((projectId) => prefetchLeanTasks(projectId)))
+
+                    if (index + STARTUP_PREFETCH_CONCURRENCY < orderedProjectIds.length) {
+                        await new Promise((resolve) => window.setTimeout(resolve, STARTUP_PREFETCH_PAUSE_MS))
+                    }
+                }
+            }
+
+            void warmProjects()
+        }, STARTUP_PREFETCH_DELAY_MS)
+
+        return () => {
+            cancelled = true
+            window.clearTimeout(timer)
+        }
+    }, [archivedProjects, projects, router])
 
     // When editing division changes, update the lead id state
     React.useEffect(() => {
