@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { createNotificationsInConvex } from '@/lib/convex/notifications'
+import { api, fetchQuery } from '@/lib/convex/server'
 
 export async function POST() {
     const user = await getCurrentUser()
@@ -12,79 +13,34 @@ export async function POST() {
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
     try {
-        const overdueTasks = await prisma.task.findMany({
-            where: {
-                AND: [
-                    {
-                        OR: [
-                            { assigneeId: user.id },
-                            { assignees: { some: { userId: user.id } } }
-                        ]
-                    },
-                    {
-                        OR: [
-                            {
-                                column: {
-                                    name: { not: 'Done' },
-                                    board: { project: { workspaceId: user.workspaceId, archivedAt: null } }
-                                }
-                            },
-                            {
-                                push: {
-                                    project: { workspaceId: user.workspaceId, archivedAt: null }
-                                }
-                            }
-                        ]
-                    },
-                    {
-                        dueDate: { lt: now }
-                    }
-                ]
-            },
-            select: {
-                id: true,
-                title: true,
-                column: {
-                    select: {
-                        name: true,
-                        board: {
-                            select: {
-                                project: {
-                                    select: { id: true }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        const overdueTasks = await fetchQuery(api.tasks.getOverdueTasks, {
+            userId: user.id,
+            workspaceId: user.workspaceId,
+            now: now.getTime(),
         })
 
-        const actionableTasks = overdueTasks.filter((task) => task.column?.name !== 'Done')
-        if (actionableTasks.length === 0) {
+        if (overdueTasks.length === 0) {
             return NextResponse.json({ created: 0 })
         }
 
-        const links = actionableTasks
-            .map((task) => task.column?.board?.project?.id ? `/dashboard/projects/${task.column.board.project.id}?highlight=${task.id}` : null)
+        const links = overdueTasks
+            .map((task) => task.projectId ? `/dashboard/projects/${task.projectId}?highlight=${task.id}` : null)
             .filter((link): link is string => Boolean(link))
 
-        const existing = links.length > 0
-            ? await prisma.notification.findMany({
-                where: {
+        const existingLinks = new Set(
+            links.length > 0
+                ? await fetchQuery(api.notifications.listLinksByTypeSince, {
                     workspaceId: user.workspaceId,
                     userId: user.id,
                     type: 'task_due',
-                    link: { in: links },
-                    createdAt: { gt: cutoff }
-                },
-                select: { link: true }
-            })
-            : []
-
-        const existingLinks = new Set(existing.map((notification) => notification.link).filter((link): link is string => Boolean(link)))
-        const notificationsToCreate = actionableTasks
+                    links,
+                    since: cutoff.getTime(),
+                })
+                : []
+        )
+        const notificationsToCreate = overdueTasks
             .map((task) => {
-                const projectId = task.column?.board?.project?.id
+                const projectId = task.projectId
                 if (!projectId) return null
                 const link = `/dashboard/projects/${projectId}?highlight=${task.id}`
                 if (existingLinks.has(link)) return null
@@ -108,7 +64,7 @@ export async function POST() {
             } => Boolean(notification))
 
         if (notificationsToCreate.length > 0) {
-            await prisma.notification.createMany({ data: notificationsToCreate })
+            await createNotificationsInConvex(notificationsToCreate)
         }
 
         return NextResponse.json({ created: notificationsToCreate.length })

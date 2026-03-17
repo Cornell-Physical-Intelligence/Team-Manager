@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getWorkspaceUserIds } from '@/lib/access'
 import {
-    getPrimaryProjectLeadId,
-    mapProjectLeadUsers,
+    deleteWorkspaceProject,
+    getWorkspaceProject,
+    serializeProjectDetail,
+    updateWorkspaceProject,
+} from '@/lib/convex/projects'
+import {
     mergeProjectMemberIds,
     parseProjectLeadPayload,
 } from '@/lib/project-leads'
+
+function normalizeHexColor(value: unknown): string | null {
+    if (typeof value !== "string") return null
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const hex = trimmed.startsWith("#") ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`
+    return /^#([0-9a-f]{6}|[0-9a-f]{3})$/.test(hex) ? hex : null
+}
 
 export async function GET(
     request: Request,
@@ -20,43 +31,13 @@ export async function GET(
         }
 
         const { id } = await params
-        const project = await prisma.project.findUnique({
-            where: { id },
-            include: {
-                lead: { select: { id: true, name: true } },
-                leadAssignments: {
-                    orderBy: { createdAt: 'asc' },
-                    select: { user: { select: { id: true, name: true } } }
-                },
-                members: {
-                    select: {
-                        userId: true,
-                        user: { select: { id: true, name: true } }
-                    }
-                },
-                _count: { select: { pushes: true } }
-            }
-        })
+        const project = await getWorkspaceProject(id, user.workspaceId)
 
         if (!project) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        // Verify project belongs to user's workspace
-        if (project.workspaceId !== user.workspaceId) {
-            return NextResponse.json({ error: 'Not found' }, { status: 404 })
-        }
-
-        const leads = mapProjectLeadUsers(project.leadAssignments)
-        const leadIds = leads.map((lead) => lead.id)
-
-        return NextResponse.json({
-            ...project,
-            leadId: getPrimaryProjectLeadId(leadIds) ?? project.leadId ?? null,
-            lead: project.lead ?? leads[0] ?? null,
-            leadIds,
-            leads
-        })
+        return NextResponse.json(serializeProjectDetail(project))
     } catch (error) {
         console.error('Failed to fetch project:', error)
         return NextResponse.json({ error: 'Failed' }, { status: 500 })
@@ -73,38 +54,18 @@ export async function PATCH(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
-        // SECURITY: Only Admins and Team Leads can update divisions
         if (user.role !== 'Admin' && user.role !== 'Team Lead') {
             return NextResponse.json({ error: 'Forbidden: Only Admins and Team Leads can update divisions' }, { status: 403 })
         }
 
         const { id } = await params
-
-        // Verify project exists and belongs to user's workspace
-        const existingProject = await prisma.project.findUnique({
-            where: { id },
-            select: {
-                workspaceId: true,
-                leadId: true,
-                archivedAt: true,
-                members: { select: { userId: true } },
-                leadAssignments: {
-                    orderBy: { createdAt: 'asc' },
-                    select: { userId: true }
-                }
-            }
-        })
+        const existingProject = await getWorkspaceProject(id, user.workspaceId)
 
         if (!existingProject) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        if (existingProject.workspaceId !== user.workspaceId) {
-            return NextResponse.json({ error: 'Not found' }, { status: 404 })
-        }
-
-        const currentLeadIds = existingProject.leadAssignments.map((assignment) => assignment.userId)
-        const canManageAsLead = currentLeadIds.includes(user.id) || existingProject.leadId === user.id
+        const canManageAsLead = existingProject.leadIds.includes(user.id) || existingProject.leadId === user.id
         if (user.role === 'Team Lead' && !canManageAsLead) {
             return NextResponse.json({ error: 'Forbidden: You can only update projects you lead' }, { status: 403 })
         }
@@ -122,7 +83,7 @@ export async function PATCH(
         }
 
         const memberIdsInput = Array.isArray(memberIds)
-            ? memberIds.filter((id: unknown) => typeof id === 'string' && id.trim().length > 0)
+            ? memberIds.filter((entry: unknown) => typeof entry === 'string' && entry.trim().length > 0)
             : undefined
         const uniqueMemberIds = memberIdsInput ? Array.from(new Set(memberIdsInput)) : undefined
         const normalizedLeadIds = leadPayload.leadIds
@@ -145,70 +106,38 @@ export async function PATCH(
             const baseMemberIds = normalizedMemberIds || existingProject.members.map((member) => member.userId)
             normalizedMemberIds = mergeProjectMemberIds(baseMemberIds, validLeadIds || [])
         }
-        const primaryLeadId = leadIdsProvided ? getPrimaryProjectLeadId(validLeadIds || []) : undefined
 
-        const normalizedColor = typeof color === "string"
-            ? (color.trim().startsWith("#") ? color.trim().toLowerCase() : `#${color.trim().toLowerCase()}`)
-            : null
-        const isValidColor = normalizedColor ? /^#([0-9a-f]{6}|[0-9a-f]{3})$/.test(normalizedColor) : false
-        const colorUpdate = isValidColor ? { color: normalizedColor as string } : {}
-        const archiveUpdate = archivedValue === undefined
-            ? {}
-            : { archivedAt: archivedValue ? (existingProject.archivedAt ?? new Date()) : null }
+        const archivedAt = archivedValue === undefined
+            ? undefined
+            : archivedValue
+                ? (existingProject.archivedAt ?? Date.now())
+                : null
 
-        const project = await prisma.$transaction(async (tx) => {
-            const updatedProject = await tx.project.update({
-                where: { id },
-                data: {
-                    ...(name !== undefined && { name: normalizedName }),
-                    ...(description !== undefined && { description: normalizedDescription || null }),
-                    ...(leadIdsProvided && { leadId: primaryLeadId }),
-                    ...archiveUpdate,
-                    ...colorUpdate
-                }
-            })
-
-            if (leadIdsProvided) {
-                await tx.projectLeadAssignment.deleteMany({
-                    where: { projectId: id }
-                })
-
-                if ((validLeadIds || []).length > 0) {
-                    await tx.projectLeadAssignment.createMany({
-                        data: (validLeadIds || []).map((userId) => ({
-                            projectId: id,
-                            userId
-                        }))
-                    })
-                }
-            }
-
-            if (normalizedMemberIds) {
-                // Replace members
-                await tx.projectMember.deleteMany({
-                    where: { projectId: id }
-                })
-
-                if (normalizedMemberIds.length > 0) {
-                    await tx.projectMember.createMany({
-                        data: normalizedMemberIds.map((userId: string) => ({
-                            projectId: id,
-                            userId
-                        }))
-                    })
-                }
-            }
-            return updatedProject
+        const result = await updateWorkspaceProject({
+            projectId: id,
+            name: normalizedName,
+            description: description !== undefined ? (normalizedDescription || null) : undefined,
+            color: normalizeHexColor(color) ?? undefined,
+            archivedAt,
+            leadIds: leadIdsProvided ? (validLeadIds || []) : undefined,
+            memberIds: normalizedMemberIds,
         })
+
+        if ("error" in result) {
+            const status = result.error === 'Division not found' ? 404 : 400
+            return NextResponse.json({ error: result.error }, { status })
+        }
 
         if (archivedValue !== undefined) {
             return NextResponse.json({
                 success: true,
-                archivedAt: archivedValue ? (project.archivedAt ?? existingProject.archivedAt ?? new Date()) : null
+                archivedAt: result.project.archivedAt
+                    ? new Date(result.project.archivedAt).toISOString()
+                    : null,
             })
         }
 
-        return NextResponse.json(project)
+        return NextResponse.json(serializeProjectDetail(result.project))
     } catch (error) {
         console.error('Failed to update project:', error)
         return NextResponse.json({ error: 'Failed' }, { status: 500 })
@@ -231,121 +160,39 @@ export async function DELETE(
 
         const { id } = await params
 
-        // Parse request body for confirmation name
         let confirmName: string | undefined
         try {
             const body = await request.json()
             confirmName = body.confirmName
         } catch {
-            // Body might be empty for backwards compatibility
+            // Backwards-compatible empty body.
         }
 
-        // Verify project exists and belongs to user's workspace
-        const existingProject = await prisma.project.findUnique({
-            where: { id },
-            select: {
-                workspaceId: true,
-                name: true,
-                leadId: true,
-                leadAssignments: { select: { userId: true } }
-            }
-        })
-
+        const existingProject = await getWorkspaceProject(id, user.workspaceId)
         if (!existingProject) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 })
         }
 
-        if (existingProject.workspaceId !== user.workspaceId) {
-            return NextResponse.json({ error: 'Not found' }, { status: 404 })
-        }
-
-        const canDeleteAsLead = existingProject.leadAssignments.some((assignment) => assignment.userId === user.id)
-            || existingProject.leadId === user.id
+        const canDeleteAsLead = existingProject.leadIds.includes(user.id) || existingProject.leadId === user.id
         if (user.role === 'Team Lead' && !canDeleteAsLead) {
             return NextResponse.json({ error: 'Forbidden: You can only delete projects you lead' }, { status: 403 })
         }
 
-        // Verify confirmation name matches (trimmed comparison)
         if (confirmName !== undefined && confirmName.trim() !== existingProject.name.trim()) {
             return NextResponse.json({ error: 'Division name does not match' }, { status: 400 })
         }
 
-        // Delete in order: tasks -> columns -> boards -> pushes -> project
-        await prisma.$transaction(async (tx) => {
-            // Get all boards for this project
-            const boards = await tx.board.findMany({
-                where: { projectId: id },
-                select: { id: true }
-            })
-            const boardIds = boards.map(b => b.id)
-
-            // Get all columns for these boards
-            const columns = await tx.column.findMany({
-                where: { boardId: { in: boardIds } },
-                select: { id: true }
-            })
-            const columnIds = columns.map(c => c.id)
-
-            // Record deletions for sync consumers
-            const tasksToDelete = await tx.task.findMany({
-                where: {
-                    OR: [
-                        { columnId: { in: columnIds } },
-                        { push: { projectId: id } }
-                    ]
-                },
-                select: { id: true }
-            })
-
-            if (tasksToDelete.length > 0) {
-                await tx.taskDeletion.createMany({
-                    data: tasksToDelete.map((task) => ({
-                        taskId: task.id,
-                        projectId: id,
-                        workspaceId: user.workspaceId!,
-                        deletedBy: user.id,
-                        deletedByName: user.name || 'Unknown',
-                        deletedAt: new Date()
-                    })),
-                    skipDuplicates: true
-                })
-            }
-
-            // Delete comments on tasks in these columns
-            await tx.comment.deleteMany({
-                where: { task: { columnId: { in: columnIds } } }
-            })
-
-            // Delete tasks in these columns
-            await tx.task.deleteMany({
-                where: { columnId: { in: columnIds } }
-            })
-
-            // Delete columns
-            await tx.column.deleteMany({
-                where: { boardId: { in: boardIds } }
-            })
-
-            // Delete boards
-            await tx.board.deleteMany({
-                where: { projectId: id }
-            })
-
-            // Delete tasks in pushes
-            await tx.task.deleteMany({
-                where: { push: { projectId: id } }
-            })
-
-            // Delete pushes
-            await tx.push.deleteMany({
-                where: { projectId: id }
-            })
-
-            // Finally delete the project
-            await tx.project.delete({
-                where: { id }
-            })
+        const result = await deleteWorkspaceProject({
+            projectId: id,
+            workspaceId: user.workspaceId,
+            deletedBy: user.id,
+            deletedByName: user.name || 'Unknown',
         })
+
+        if ("error" in result) {
+            const status = result.error === 'Division not found' ? 404 : 400
+            return NextResponse.json({ error: result.error }, { status })
+        }
 
         return NextResponse.json({ success: true })
     } catch (error) {

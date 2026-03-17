@@ -1,7 +1,12 @@
-import { cookies } from 'next/headers'
-import { SESSION_COOKIE_NAME, getSession } from './session'
+import { cookies } from "next/headers"
+import {
+    SESSION_COOKIE_NAME,
+    getSession,
+    type SessionMembership,
+    type SessionWorkspace,
+} from "./session"
 
-export type CurrentUserRole = 'Admin' | 'Team Lead' | 'Member'
+export type CurrentUserRole = "Admin" | "Team Lead" | "Member"
 
 export type CurrentUser = {
     id: string
@@ -11,20 +16,24 @@ export type CurrentUser = {
     role: CurrentUserRole
     workspaceId: string | null
     workspaceName: string | undefined
-    workspace: NonNullable<Awaited<ReturnType<typeof getSession>>>['user']['workspace']
-    memberships: NonNullable<Awaited<ReturnType<typeof getSession>>>['user']['memberships']
+    workspace: SessionWorkspace
+    memberships: SessionMembership[]
     discordId: string | null
     hasOnboarded: boolean
     skills: string[]
     interests: string | null
 }
 
-function resolveCurrentUserRole(workspaceId: string | null, membershipRole: string | null, fallbackRole: string): CurrentUserRole {
+function resolveCurrentUserRole(
+    workspaceId: string | null,
+    membershipRole: string | null,
+    fallbackRole: string
+): CurrentUserRole {
     if (!workspaceId) {
-        return fallbackRole === 'Admin' || fallbackRole === 'Team Lead' ? fallbackRole : 'Member'
+        return fallbackRole === "Admin" || fallbackRole === "Team Lead" ? fallbackRole : "Member"
     }
 
-    return membershipRole === 'Admin' || membershipRole === 'Team Lead' ? membershipRole : 'Member'
+    return membershipRole === "Admin" || membershipRole === "Team Lead" ? membershipRole : "Member"
 }
 
 export async function getCurrentUser() {
@@ -37,51 +46,49 @@ export async function getCurrentUser() {
         }
 
         const session = await getSession(sessionToken.value)
-
-        if (session?.user) {
-            const dbUser = session.user
-            const workspaceId = dbUser.workspaceId
-            const membershipRole = workspaceId
-                ? dbUser.memberships?.find((membership) => membership.workspaceId === workspaceId)?.role
-                : null
-            const resolvedRole = resolveCurrentUserRole(workspaceId, membershipRole ?? null, dbUser.role)
-
-            const currentUser: CurrentUser = {
-                id: dbUser.id,
-                name: dbUser.name,
-                email: dbUser.email,
-                avatar: dbUser.avatar || null,
-                role: resolvedRole,
-                workspaceId: workspaceId || null,
-                workspaceName: dbUser.workspace?.name,
-                workspace: dbUser.workspace,
-                memberships: dbUser.memberships,
-                discordId: dbUser.discordId || null,
-                hasOnboarded: dbUser.hasOnboarded,
-                skills: dbUser.skills,
-                interests: dbUser.interests
-            }
-
-            return currentUser
+        if (!session?.user) {
+            return null
         }
 
-        // No session - return null
-        return null
+        const dbUser = session.user
+        const workspaceId = dbUser.workspaceId || null
+        const membershipRole = workspaceId
+            ? dbUser.memberships?.find((membership) => membership.workspaceId === workspaceId)?.role
+            : null
+        const resolvedRole = resolveCurrentUserRole(workspaceId, membershipRole ?? null, dbUser.role)
+
+        const currentUser: CurrentUser = {
+            id: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            avatar: dbUser.avatar || null,
+            role: resolvedRole,
+            workspaceId,
+            workspaceName: dbUser.workspace?.name,
+            workspace: dbUser.workspace,
+            memberships: dbUser.memberships,
+            discordId: dbUser.discordId || null,
+            hasOnboarded: dbUser.hasOnboarded,
+            skills: dbUser.skills,
+            interests: dbUser.interests || null,
+        }
+
+        return currentUser
     } catch (error) {
-        console.error('Failed to get current user:', error)
+        console.error("Failed to get current user:", error)
         return null
     }
 }
 
 export async function getCurrentUserRole(): Promise<string> {
     const user = await getCurrentUser()
-    return user?.role || 'Member'
+    return user?.role || "Member"
 }
 
 export async function requireAuth() {
     const user = await getCurrentUser()
     if (!user) {
-        throw new Error('Not authenticated')
+        throw new Error("Not authenticated")
     }
     return user
 }

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import {
+    getWorkloadConfigFromConvex,
+    upsertWorkloadConfigInConvex,
+} from '@/lib/convex/settings'
 import { DEFAULT_WORKLOAD_CONFIG, mergeWorkloadConfig, normalizeWorkloadConfig } from '@/lib/workload'
 import type { WorkloadConfig } from '@/lib/workload'
 
@@ -11,10 +14,7 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const record = await prisma.workloadConfig.findUnique({
-            where: { workspaceId: user.workspaceId },
-            select: { config: true }
-        })
+        const record = await getWorkloadConfigFromConvex(user.workspaceId)
 
         const config = normalizeWorkloadConfig(record?.config as Partial<WorkloadConfig> | undefined)
         return NextResponse.json({ config })
@@ -46,10 +46,7 @@ export async function PUT(request: Request) {
             return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
         }
 
-        const existing = await prisma.workloadConfig.findUnique({
-            where: { workspaceId: user.workspaceId },
-            select: { config: true }
-        })
+        const existing = await getWorkloadConfigFromConvex(user.workspaceId)
 
         const baseConfig = existing
             ? normalizeWorkloadConfig(existing.config as Partial<WorkloadConfig>)
@@ -58,11 +55,7 @@ export async function PUT(request: Request) {
         const mergedConfig = mergeWorkloadConfig(baseConfig, body)
         const normalized = normalizeWorkloadConfig(mergedConfig)
 
-        await prisma.workloadConfig.upsert({
-            where: { workspaceId: user.workspaceId },
-            create: { workspaceId: user.workspaceId, config: normalized },
-            update: { config: normalized }
-        })
+        await upsertWorkloadConfigInConvex(user.workspaceId, normalized)
 
         return NextResponse.json({ config: normalized })
     } catch (error) {

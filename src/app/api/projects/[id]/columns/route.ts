@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { getWorkspaceProjectColumns } from '@/lib/convex/projects'
 
 export async function GET(
     request: Request,
@@ -13,28 +13,11 @@ export async function GET(
         }
 
         const { id } = await params
+        const columns = await getWorkspaceProjectColumns(id, user.workspaceId)
 
-        // Verify project belongs to user's workspace
-        const project = await prisma.project.findUnique({
-            where: { id },
-            select: { workspaceId: true }
-        })
-
-        if (!project || project.workspaceId !== user.workspaceId) {
+        if (columns === null) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 })
         }
-
-        const boards = await prisma.board.findMany({
-            where: { projectId: id },
-            include: {
-                columns: {
-                    orderBy: { order: 'asc' }
-                }
-            }
-        })
-
-        // Get all columns from all boards
-        const columns = boards.flatMap(board => board.columns)
 
         return NextResponse.json(columns)
     } catch (error) {
@@ -42,4 +25,3 @@ export async function GET(
         return NextResponse.json({ error: 'Failed to fetch columns' }, { status: 500 })
     }
 }
-

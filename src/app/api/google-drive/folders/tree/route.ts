@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getWorkspaceDriveConfigFromConvex } from "@/lib/convex/settings"
 import { driveConfigTableExists, getDriveFolderCache } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
@@ -45,10 +45,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
 
-    const config = await prisma.workspaceDriveConfig.findUnique({
-        where: { workspaceId: user.workspaceId },
-        select: { folderId: true },
-    })
+    const config = await getWorkspaceDriveConfigFromConvex(user.workspaceId)
 
     const { searchParams } = new URL(request.url)
     const requestedRootId = searchParams.get("rootId")

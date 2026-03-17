@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import prisma from "@/lib/prisma"
 import { driveConfigTableExists, getDriveClientForWorkspace, refreshDriveFolderCache } from "@/lib/googleDrive"
+import { upsertWorkspaceDriveConfigInConvex } from "@/lib/convex/settings"
 
 export const runtime = "nodejs"
 
@@ -38,21 +38,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Selected item is not a folder" }, { status: 400 })
         }
 
-        await prisma.workspaceDriveConfig.upsert({
-            where: { workspaceId: user.workspaceId },
-            create: {
-                workspaceId: user.workspaceId,
-                folderId: folderResponse.data.id || folderId,
-                folderName: folderResponse.data.name || "Google Drive Folder",
-                connectedById: user.id,
-                connectedByName: user.name,
-            },
-            update: {
-                folderId: folderResponse.data.id || folderId,
-                folderName: folderResponse.data.name || "Google Drive Folder",
-                connectedById: user.id,
-                connectedByName: user.name,
-            },
+        await upsertWorkspaceDriveConfigInConvex({
+            workspaceId: user.workspaceId,
+            folderId: folderResponse.data.id || folderId,
+            folderName: folderResponse.data.name || "Google Drive Folder",
+            connectedById: user.id,
+            connectedByName: user.name,
         })
 
         void refreshDriveFolderCache(user.workspaceId)

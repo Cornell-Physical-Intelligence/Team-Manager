@@ -1,6 +1,6 @@
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from '@/lib/auth'
-import { buildWorkloadTasks, computeWorkloadStats, getWorkloadConfig } from '@/lib/workload'
+import { buildWorkloadTasks, computeWorkloadStats, normalizeWorkloadConfig } from '@/lib/workload'
+import { fetchDashboardHeatmapPageData } from "@/lib/convex/dashboard"
 import { redirect } from "next/navigation"
 import { HeatmapView } from "./HeatmapView"
 
@@ -18,89 +18,15 @@ export default async function HeatmapPage() {
         redirect('/dashboard')
     }
 
-    const dbUser = await prisma.user.findUnique({
-        where: { id: user.id }
-    })
-
-    if (!dbUser?.workspaceId) {
+    if (!user.workspaceId) {
         return <div className="p-6 text-muted-foreground">Workspace not found.</div>
     }
 
-    const [config, memberships, tasks, projects] = await Promise.all([
-        getWorkloadConfig(dbUser.workspaceId),
-        prisma.workspaceMember.findMany({
-            where: { workspaceId: dbUser.workspaceId },
-            select: {
-                userId: true,
-                name: true,
-                role: true,
-                user: { select: { name: true, avatar: true } }
-            },
-            orderBy: { name: 'asc' }
-        }),
-        prisma.task.findMany({
-            where: {
-                column: {
-                    board: {
-                        project: {
-                            workspaceId: dbUser.workspaceId,
-                            archivedAt: null
-                        }
-                    }
-                }
-            },
-            include: {
-                assignee: { select: { id: true } },
-                assignees: { select: { userId: true } },
-                column: {
-                    include: {
-                        board: {
-                            include: {
-                                project: {
-                                    select: {
-                                        id: true,
-                                        name: true,
-                                        color: true,
-                                        leadAssignments: {
-                                            orderBy: { createdAt: 'asc' },
-                                            select: { userId: true, user: { select: { name: true } } }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                push: {
-                    select: { id: true, name: true, color: true }
-                },
-                helpRequests: {
-                    where: { status: { in: ['open', 'acknowledged'] } },
-                    select: { id: true, status: true, createdAt: true }
-                },
-                checklistItems: {
-                    select: { id: true, completed: true }
-                },
-                activityLogs: {
-                    orderBy: { createdAt: 'desc' },
-                    take: 1,
-                    select: { createdAt: true, action: true }
-                }
-            }
-        }),
-        prisma.project.findMany({
-            where: { workspaceId: dbUser.workspaceId, archivedAt: null },
-            select: {
-                id: true,
-                name: true,
-                color: true,
-                leadAssignments: {
-                    orderBy: { createdAt: 'asc' },
-                    select: { userId: true, user: { select: { name: true } } }
-                }
-            }
-        })
-    ])
+    const { config: workloadConfig, memberships, tasks, projects } = await fetchDashboardHeatmapPageData({
+        workspaceId: user.workspaceId,
+    })
+
+    const config = normalizeWorkloadConfig(workloadConfig)
 
     const users = memberships.map((member) => ({
         id: member.userId,
@@ -112,7 +38,28 @@ export default async function HeatmapPage() {
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-    const workloadTasks = buildWorkloadTasks(tasks, now, config)
+    const workloadTasks = buildWorkloadTasks(
+        tasks.map((task) => ({
+            ...task,
+            dueDate: task.dueDate ? new Date(task.dueDate) : null,
+            endDate: task.endDate ? new Date(task.endDate) : null,
+            startDate: task.startDate ? new Date(task.startDate) : null,
+            createdAt: new Date(task.createdAt),
+            updatedAt: new Date(task.updatedAt),
+            submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,
+            approvedAt: task.approvedAt ? new Date(task.approvedAt) : null,
+            helpRequests: task.helpRequests.map((request) => ({
+                ...request,
+                createdAt: new Date(request.createdAt),
+            })),
+            activityLogs: task.activityLogs.map((log) => ({
+                ...log,
+                createdAt: new Date(log.createdAt),
+            })),
+        })),
+        now,
+        config
+    )
     const { userStats, overloadedUsers, idleUsers } = computeWorkloadStats(users, workloadTasks, config, now)
 
     const transformedTasks = workloadTasks.map(task => ({

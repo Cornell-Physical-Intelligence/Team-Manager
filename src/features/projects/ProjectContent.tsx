@@ -50,7 +50,7 @@ type TaskType = {
     startDate?: Date | string | null
     endDate?: Date | string | null
     dueDate?: Date | string | null
-    createdAt?: Date | string
+    createdAt?: Date | string | null
     updatedAt?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean

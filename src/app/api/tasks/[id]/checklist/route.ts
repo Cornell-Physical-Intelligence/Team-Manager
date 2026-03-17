@@ -1,8 +1,24 @@
 import { NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
-import prisma from '@/lib/prisma'
+import { api, fetchMutation, fetchQuery, createLegacyId } from '@/lib/convex/server'
 import { getCurrentUser } from '@/lib/auth'
 import { getTaskContext } from '@/lib/access'
+import {
+    appendActivityLogToConvex,
+    touchTaskInConvex,
+} from '@/lib/convex/mirror'
+
+type ChecklistItem = {
+    id: string
+    taskId: string
+    content: string
+    completed: boolean
+    completedBy?: string
+    completedAt?: number
+    order: number
+    createdBy: string
+    createdAt: number
+    updatedAt: number
+}
 
 // GET - Fetch all checklist items for a task
 export async function GET(
@@ -22,10 +38,7 @@ export async function GET(
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
-        const items = await prisma.taskChecklistItem.findMany({
-            where: { taskId: id },
-            orderBy: { order: 'asc' }
-        })
+        const items = await fetchQuery(api.tasks.getChecklistItems, { taskId: id })
         return NextResponse.json(items)
     } catch (error) {
         console.error('Failed to fetch checklist:', error)
@@ -63,34 +76,35 @@ export async function POST(
         }
 
         // Get max order
-        const maxOrder = await prisma.taskChecklistItem.aggregate({
-            where: { taskId: id },
-            _max: { order: true }
-        })
+        const maxOrder = await fetchQuery(api.tasks.getMaxChecklistOrder, { taskId: id })
 
-        const item = await prisma.taskChecklistItem.create({
-            data: {
-                taskId: id,
-                content: content.trim(),
-                order: (maxOrder._max.order ?? -1) + 1,
-                createdBy: user.id
-            }
-        })
+        const itemId = createLegacyId('checklist_item')
+        const now = Date.now()
+        const item: ChecklistItem = {
+            id: itemId,
+            taskId: id,
+            content: content.trim(),
+            order: maxOrder + 1,
+            completed: false,
+            createdBy: user.id,
+            createdAt: now,
+            updatedAt: now,
+        }
+
+        await fetchMutation(api.mirror.upsertTaskChecklistItem, { item })
 
         // Log activity
-        await prisma.activityLog.create({
-            data: {
-                taskId: id,
-                taskTitle: taskContext.title || 'Untitled Task',
-                action: 'updated',
-                field: 'checklist',
-                oldValue: null,
-                newValue: content.trim(),
-                changedBy: user.id,
-                changedByName: user.name || 'User',
-                details: `Added checklist item: "${content.trim()}"`
-            }
+        await appendActivityLogToConvex({
+            taskId: id,
+            taskTitle: taskContext.title || 'Untitled Task',
+            action: 'updated',
+            field: 'checklist',
+            newValue: content.trim(),
+            changedBy: user.id,
+            changedByName: user.name || 'User',
+            details: `Added checklist item: "${content.trim()}"`,
         })
+        await touchTaskInConvex(id, now)
 
         return NextResponse.json(item, { status: 201 })
     } catch (error) {
@@ -126,14 +140,19 @@ export async function PATCH(
 
         // Handle reordering
         if (reorder && Array.isArray(reorder)) {
+            const allItems = await fetchQuery(api.tasks.getChecklistItems, { taskId: id }) as ChecklistItem[]
+            const itemMap = new Map(allItems.map((item) => [item.id, item]))
+
             await Promise.all(
-                reorder.map((itemId: string, index: number) =>
-                    prisma.taskChecklistItem.updateMany({
-                        where: { id: itemId, taskId: id },
-                        data: { order: index }
+                reorder.map((reorderedItemId: string, index: number) => {
+                    const existing = itemMap.get(reorderedItemId)
+                    if (!existing || existing.taskId !== id) return Promise.resolve()
+                    return fetchMutation(api.mirror.upsertTaskChecklistItem, {
+                        item: { ...existing, order: index },
                     })
-                )
+                })
             )
+            await touchTaskInConvex(id, Date.now())
             return NextResponse.json({ success: true })
         }
 
@@ -142,49 +161,47 @@ export async function PATCH(
         }
 
         // Verify item exists and belongs to task
-        const item = await prisma.taskChecklistItem.findUnique({
-            where: { id: itemId }
-        })
+        const item = await fetchQuery(api.tasks.getChecklistItem, { itemId }) as ChecklistItem | null
 
         if (!item || item.taskId !== id) {
             return NextResponse.json({ error: 'Checklist item not found' }, { status: 404 })
         }
 
-        const updateData: Prisma.TaskChecklistItemUpdateInput = {}
+        const now = Date.now()
+        const updatedItem: ChecklistItem = {
+            ...item,
+            updatedAt: now,
+        }
 
         if (typeof completed === 'boolean') {
-            updateData.completed = completed
-            updateData.completedBy = completed ? user.id : null
-            updateData.completedAt = completed ? new Date() : null
+            updatedItem.completed = completed
+            updatedItem.completedBy = completed ? user.id : undefined
+            updatedItem.completedAt = completed ? now : undefined
         }
 
         if (typeof content === 'string') {
-            updateData.content = content.trim()
+            updatedItem.content = content.trim()
         }
 
-        const updated = await prisma.taskChecklistItem.update({
-            where: { id: itemId },
-            data: updateData
-        })
+        await fetchMutation(api.mirror.upsertTaskChecklistItem, { item: updatedItem })
 
         // Log activity for completion toggle
         if (typeof completed === 'boolean' && taskContext.title) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: taskContext.title || 'Untitled Task',
-                    action: 'updated',
-                    field: 'checklist',
-                    oldValue: completed ? 'incomplete' : 'complete',
-                    newValue: completed ? 'complete' : 'incomplete',
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: `${completed ? 'Completed' : 'Uncompleted'} checklist item: "${item.content}"`
-                }
+            await appendActivityLogToConvex({
+                taskId: id,
+                taskTitle: taskContext.title || 'Untitled Task',
+                action: 'updated',
+                field: 'checklist',
+                oldValue: completed ? 'incomplete' : 'complete',
+                newValue: completed ? 'complete' : 'incomplete',
+                changedBy: user.id,
+                changedByName: user.name || 'User',
+                details: `${completed ? 'Completed' : 'Uncompleted'} checklist item: "${item.content}"`,
             })
         }
+        await touchTaskInConvex(id, now)
 
-        return NextResponse.json(updated)
+        return NextResponse.json(updatedItem)
     } catch (error) {
         console.error('Failed to update checklist item:', error)
         return NextResponse.json({ error: 'Failed to update checklist item' }, { status: 500 })
@@ -221,34 +238,28 @@ export async function DELETE(
         }
 
         // Verify item exists and belongs to task
-        const item = await prisma.taskChecklistItem.findUnique({
-            where: { id: itemId }
-        })
+        const item = await fetchQuery(api.tasks.getChecklistItem, { itemId }) as ChecklistItem | null
 
         if (!item || item.taskId !== id) {
             return NextResponse.json({ error: 'Checklist item not found' }, { status: 404 })
         }
 
-        await prisma.taskChecklistItem.delete({
-            where: { id: itemId }
-        })
+        await fetchMutation(api.mirror.deleteTaskChecklistItem, { itemId })
 
         // Log activity
         if (taskContext.title) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: taskContext.title,
-                    action: 'updated',
-                    field: 'checklist',
-                    oldValue: item.content,
-                    newValue: null,
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: `Removed checklist item: "${item.content}"`
-                }
+            await appendActivityLogToConvex({
+                taskId: id,
+                taskTitle: taskContext.title,
+                action: 'updated',
+                field: 'checklist',
+                oldValue: item.content,
+                changedBy: user.id,
+                changedByName: user.name || 'User',
+                details: `Removed checklist item: "${item.content}"`,
             })
         }
+        await touchTaskInConvex(id, Date.now())
 
         return NextResponse.json({ success: true })
     } catch (error) {

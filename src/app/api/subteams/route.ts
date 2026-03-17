@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from "@/lib/auth"
+import { api, fetchQuery } from "@/lib/convex/server"
 
 export async function GET() {
     try {
@@ -10,9 +10,7 @@ export async function GET() {
             return NextResponse.json([])
         }
 
-        const subteams = await prisma.subteam.findMany({
-            where: { workspaceId: user.workspaceId }
-        })
+        const subteams = await fetchQuery(api.settings.getSubteams, { workspaceId: user.workspaceId })
         return NextResponse.json(subteams)
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch subteams' }, { status: 500 })

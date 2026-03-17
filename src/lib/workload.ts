@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import { getWorkloadConfigFromConvex } from '@/lib/convex/settings'
 
 export type WorkloadStatus = 'struggling' | 'on-track' | 'available'
 
@@ -353,10 +353,7 @@ export const normalizeWorkloadConfig = (config?: Partial<WorkloadConfig> | null)
 }
 
 export async function getWorkloadConfig(workspaceId: string): Promise<WorkloadConfig> {
-    const record = await prisma.workloadConfig.findUnique({
-        where: { workspaceId },
-        select: { config: true }
-    })
+    const record = await getWorkloadConfigFromConvex(workspaceId)
 
     return normalizeWorkloadConfig(record?.config as Partial<WorkloadConfig> | undefined)
 }

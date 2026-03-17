@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { Readable } from "stream"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { getTaskContext } from "@/lib/access"
 import { buildAttachmentContentDisposition } from "@/lib/attachments"
 import { getDriveClientForWorkspace } from "@/lib/googleDrive"
+import { api, fetchQuery } from "@/lib/convex/server"
 
 export const runtime = "nodejs"
 
@@ -18,18 +18,7 @@ export async function GET(
     }
 
     const { attachmentId } = await params
-    const attachment = await prisma.taskAttachment.findUnique({
-        where: { id: attachmentId },
-        select: {
-            id: true,
-            taskId: true,
-            name: true,
-            type: true,
-            url: true,
-            storageProvider: true,
-            externalId: true,
-        },
-    })
+    const attachment = await fetchQuery(api.tasks.getAttachment, { attachmentId })
 
     if (!attachment) {
         return NextResponse.json({ error: "Attachment not found" }, { status: 404 })

@@ -1,21 +1,23 @@
 import { google } from "googleapis"
-import prisma from "@/lib/prisma"
 import { appUrl } from "@/lib/appUrl"
-import { getErrorCode } from "@/lib/errors"
+import {
+    getWorkspaceDriveConfigFromConvex,
+    upsertWorkspaceDriveConfigInConvex,
+} from "@/lib/convex/settings"
 import { decryptGoogleToken, encryptGoogleToken } from "@/lib/googleDriveTokens"
 
 type DriveConfig = {
     workspaceId: string
     accessToken: string | null
     refreshToken: string | null
-    tokenExpiry: Date | null
+    tokenExpiry: number | null
 }
 
 type StoredDriveConfig = {
     workspaceId: string
-    accessToken: string | null
-    refreshToken: string | null
-    tokenExpiry: Date | null
+    accessToken?: string | null
+    refreshToken?: string | null
+    tokenExpiry?: number | null
 }
 
 export type DriveFolderNode = {
@@ -48,7 +50,7 @@ function decodeDriveConfig(config: StoredDriveConfig): DriveConfig {
         workspaceId: config.workspaceId,
         accessToken: decryptGoogleToken(config.accessToken),
         refreshToken: decryptGoogleToken(config.refreshToken),
-        tokenExpiry: config.tokenExpiry,
+        tokenExpiry: config.tokenExpiry ?? null,
     }
 }
 
@@ -57,20 +59,18 @@ async function refreshAccessToken(config: DriveConfig) {
     oauthClient.setCredentials({
         refresh_token: config.refreshToken || undefined,
         access_token: config.accessToken || undefined,
-        expiry_date: config.tokenExpiry?.getTime(),
+        expiry_date: config.tokenExpiry ?? undefined,
     })
 
     const accessTokenResponse = await oauthClient.getAccessToken()
     const accessToken = accessTokenResponse?.token || oauthClient.credentials.access_token
     const expiryDate = oauthClient.credentials.expiry_date
 
-    if (accessToken && (accessToken !== config.accessToken || (expiryDate && expiryDate !== config.tokenExpiry?.getTime()))) {
-        await prisma.workspaceDriveConfig.update({
-            where: { workspaceId: config.workspaceId },
-            data: {
-                accessToken: encryptGoogleToken(accessToken),
-                tokenExpiry: expiryDate ? new Date(expiryDate) : null,
-            },
+    if (accessToken && (accessToken !== config.accessToken || (expiryDate && expiryDate !== config.tokenExpiry))) {
+        await upsertWorkspaceDriveConfigInConvex({
+            workspaceId: config.workspaceId,
+            accessToken: encryptGoogleToken(accessToken),
+            tokenExpiry: expiryDate ?? null,
         })
     }
 
@@ -78,15 +78,7 @@ async function refreshAccessToken(config: DriveConfig) {
 }
 
 export async function getDriveClientForWorkspace(workspaceId: string) {
-    const config = await prisma.workspaceDriveConfig.findUnique({
-        where: { workspaceId },
-        select: {
-            workspaceId: true,
-            accessToken: true,
-            refreshToken: true,
-            tokenExpiry: true,
-        },
-    })
+    const config = await getWorkspaceDriveConfigFromConvex(workspaceId)
 
     if (!config?.refreshToken) {
         throw new Error("Google Drive not connected")
@@ -105,20 +97,7 @@ export function getGoogleDriveScopes() {
 }
 
 export async function driveConfigTableExists() {
-    try {
-        const rows = await prisma.$queryRaw<{ exists: boolean }[]>`
-            SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                  AND table_name = 'WorkspaceDriveConfig'
-            ) as "exists"
-        `
-        return rows?.[0]?.exists === true
-    } catch (error) {
-        console.error("Drive config table check failed:", error)
-        return false
-    }
+    return true
 }
 
 async function listAllFolders(drive: ReturnType<typeof google.drive>) {
@@ -171,65 +150,26 @@ export async function refreshDriveFolderCache(workspaceId: string) {
     const drive = await getDriveClientForWorkspace(workspaceId)
     const folders = await listAllFolders(drive)
 
-    try {
-        await prisma.workspaceDriveConfig.update({
-            where: { workspaceId },
-            data: {
-                folderTree: folders,
-                folderTreeUpdatedAt: new Date(),
-            },
-        })
-    } catch (error: unknown) {
-        if (getErrorCode(error) === "P2022") {
-            return folders
-        }
-        throw error
-    }
+    await upsertWorkspaceDriveConfigInConvex({
+        workspaceId,
+        folderTree: folders,
+        folderTreeUpdatedAt: Date.now(),
+    })
 
     return folders
 }
 
 export async function getDriveFolderCache(workspaceId: string) {
-    let config: { folderTree: unknown; folderTreeUpdatedAt: Date | null } | null = null
-
-    try {
-        config = await prisma.workspaceDriveConfig.findUnique({
-            where: { workspaceId },
-            select: {
-                folderTree: true,
-                folderTreeUpdatedAt: true,
-            },
-        })
-    } catch (error: unknown) {
-        if (getErrorCode(error) === "P2022") {
-            try {
-                const drive = await getDriveClientForWorkspace(workspaceId)
-                return await listAllFolders(drive)
-            } catch (innerError) {
-                console.error("Drive folder cache fallback failed:", innerError)
-                return []
-            }
-        }
-        throw error
-    }
+    const config = await getWorkspaceDriveConfigFromConvex(workspaceId)
 
     const now = Date.now()
-    const updatedAt = config?.folderTreeUpdatedAt?.getTime() || 0
+    const updatedAt = config?.folderTreeUpdatedAt || 0
     const isStale = !updatedAt || now - updatedAt > FOLDER_CACHE_TTL_MINUTES * 60 * 1000
 
     if (!config?.folderTree || isStale) {
         try {
             return await refreshDriveFolderCache(workspaceId)
         } catch (error: unknown) {
-            if (getErrorCode(error) === "P2022") {
-                try {
-                    const drive = await getDriveClientForWorkspace(workspaceId)
-                    return await listAllFolders(drive)
-                } catch (innerError) {
-                    console.error("Drive folder cache fallback failed:", innerError)
-                    return []
-                }
-            }
             console.error("Drive folder cache refresh failed:", error)
             if (Array.isArray(config?.folderTree)) {
                 return config.folderTree as DriveFolderNode[]

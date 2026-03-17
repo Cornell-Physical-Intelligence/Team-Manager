@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { put, del } from '@vercel/blob'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getTaskContext } from '@/lib/access'
+import {
+    appendActivityLogToConvex,
+    deleteTaskAttachmentFromConvex,
+    touchTaskInConvex,
+    upsertTaskAttachmentToConvex,
+} from '@/lib/convex/mirror'
 import { driveConfigTableExists, getDriveClientForWorkspace, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
 import { buildAttachmentAccessUrl, buildAttachmentStoragePath, isAllowedAttachmentType, MAX_ATTACHMENT_SIZE } from '@/lib/attachments'
 import { getErrorMessage } from '@/lib/errors'
 import { Readable } from 'stream'
+import { api, createLegacyId, fetchQuery } from '@/lib/convex/server'
 
 export async function GET(
     request: Request,
@@ -25,10 +31,7 @@ export async function GET(
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
-        const attachments = await prisma.taskAttachment.findMany({
-            where: { taskId: id },
-            orderBy: [{ order: 'asc' }, { createdAt: 'desc' }]
-        })
+        const attachments = await fetchQuery(api.tasks.getAttachments, { taskId: id })
         return NextResponse.json(
             attachments.map((attachment) => ({
                 ...attachment,
@@ -77,17 +80,15 @@ export async function POST(
             return NextResponse.json({ error: 'File type not allowed' }, { status: 400 })
         }
 
-        const task = await prisma.task.findUnique({
-            where: { id },
-            select: { attachmentFolderId: true }
-        })
+        // Get task's attachmentFolderId from Convex
+        const task = await fetchQuery(api.tasks.getTaskById, { taskId: id })
 
         let driveConfig: { refreshToken: string | null; folderId: string | null } | null = null
         if (await driveConfigTableExists()) {
-            driveConfig = await prisma.workspaceDriveConfig.findUnique({
-                where: { workspaceId: user.workspaceId },
-                select: { refreshToken: true, folderId: true }
-            })
+            const cfg = await fetchQuery(api.settings.getWorkspaceDriveConfig, { workspaceId: user.workspaceId })
+            if (cfg) {
+                driveConfig = { refreshToken: cfg.refreshToken ?? null, folderId: cfg.folderId ?? null }
+            }
         }
 
         const hasDrive = !!driveConfig?.refreshToken && !!driveConfig.folderId
@@ -143,41 +144,43 @@ export async function POST(
             externalId = null
         }
 
-        // Get max order for this task
-        const maxOrder = await prisma.taskAttachment.aggregate({
-            where: { taskId: id },
-            _max: { order: true }
-        })
+        // Get max order for this task from Convex
+        const existingAttachments = await fetchQuery(api.tasks.getAttachments, { taskId: id })
+        const maxOrder = existingAttachments.length > 0
+            ? Math.max(...existingAttachments.map((a) => a.order))
+            : -1
 
-        // Store in database
-        const attachment = await prisma.taskAttachment.create({
-            data: {
-                taskId: id,
-                name: file.name,
-                size: file.size,
-                type: file.type || 'application/octet-stream',
-                url: attachmentUrl,
-                storageProvider,
-                externalId,
-                uploadedBy: user.name || 'User',
-                order: (maxOrder._max.order ?? -1) + 1
-            }
-        })
+        // Create attachment in Convex
+        const attachmentId = createLegacyId('attachment')
+        const now = Date.now()
+        const attachment = {
+            id: attachmentId,
+            taskId: id,
+            name: file.name,
+            size: file.size,
+            type: file.type || 'application/octet-stream',
+            url: attachmentUrl,
+            storageProvider,
+            externalId: externalId || undefined,
+            uploadedBy: user.name || 'User',
+            order: maxOrder + 1,
+            createdAt: now,
+        }
+        await upsertTaskAttachmentToConvex(attachment)
 
         // Log activity for attachment being added
-        await prisma.activityLog.create({
-            data: {
-                taskId: id,
-                taskTitle: taskContext.title || 'Untitled Task',
-                action: 'updated',
-                field: 'attachment',
-                oldValue: 'None',
-                newValue: file.name,
-                changedBy: user.id,
-                changedByName: user.name || 'User',
-                details: `Added media file: ${file.name}`
-            }
+        await appendActivityLogToConvex({
+            taskId: id,
+            taskTitle: taskContext.title || 'Untitled Task',
+            action: 'updated',
+            field: 'attachment',
+            oldValue: 'None',
+            newValue: file.name,
+            changedBy: user.id,
+            changedByName: user.name || 'User',
+            details: `Added media file: ${file.name}`,
         })
+        await touchTaskInConvex(id, now)
 
         return NextResponse.json({
             ...attachment,
@@ -223,10 +226,8 @@ export async function DELETE(
             return NextResponse.json({ error: 'Attachment ID is required' }, { status: 400 })
         }
 
-        // Verify attachment exists and belongs to task
-        const attachment = await prisma.taskAttachment.findUnique({
-            where: { id: attachmentId }
-        })
+        // Verify attachment exists and belongs to task via Convex
+        const attachment = await fetchQuery(api.tasks.getAttachment, { attachmentId })
 
         if (!attachment || attachment.taskId !== id) {
             return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
@@ -251,28 +252,23 @@ export async function DELETE(
             }
         }
 
-        // Get task info before deleting
-        // Delete from database
-        await prisma.taskAttachment.delete({
-            where: { id: attachmentId }
-        })
+        await deleteTaskAttachmentFromConvex(attachmentId)
 
         // Log activity for attachment being deleted
         if (taskContext.title) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: taskContext.title,
-                    action: 'updated',
-                    field: 'attachment',
-                    oldValue: attachment.name,
-                    newValue: 'None',
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: `Deleted media file: ${attachment.name}`
-                }
+            await appendActivityLogToConvex({
+                taskId: id,
+                taskTitle: taskContext.title,
+                action: 'updated',
+                field: 'attachment',
+                oldValue: attachment.name,
+                newValue: 'None',
+                changedBy: user.id,
+                changedByName: user.name || 'User',
+                details: `Deleted media file: ${attachment.name}`,
             })
         }
+        await touchTaskInConvex(id, Date.now())
 
         return NextResponse.json({ success: true }, { status: 200 })
     } catch (error) {
@@ -309,45 +305,37 @@ export async function PATCH(
             return NextResponse.json({ error: 'attachmentIds array is required' }, { status: 400 })
         }
 
-        // Get task info
-        // Get attachment names for logging
-        const attachments = await prisma.taskAttachment.findMany({
-            where: { id: { in: attachmentIds }, taskId: id },
-            select: { name: true },
-            orderBy: { order: 'asc' }
-        })
+        // Fetch all attachments for the task from Convex
+        const existingAttachments = await fetchQuery(api.tasks.getAttachments, { taskId: id })
+        const attachmentMap = new Map(existingAttachments.map((a) => [a.id, a]))
 
-        // Update order for all attachments
+        // Filter to only attachments in the reorder list that belong to this task
+        const toReorder = attachmentIds
+            .map((aId: string) => attachmentMap.get(aId))
+            .filter((a): a is NonNullable<typeof a> => a != null && a.taskId === id)
+
+        // Update order for all attachments in Convex
         await Promise.all(
-            attachmentIds.map((attachmentId: string, index: number) =>
-                prisma.taskAttachment.updateMany({
-                    where: {
-                        id: attachmentId,
-                        taskId: id
-                    },
-                    data: {
-                        order: index
-                    }
-                })
+            toReorder.map((attachment, index) =>
+                upsertTaskAttachmentToConvex({ ...attachment, order: index })
             )
         )
 
         // Log activity for attachment reordering
-        if (taskContext.title && attachments.length > 0) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: taskContext.title,
-                    action: 'updated',
-                    field: 'attachment',
-                    oldValue: 'Previous order',
-                    newValue: 'Reordered',
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: `Reordered media files: ${attachments.map(a => a.name).join(', ')}`
-                }
+        if (taskContext.title && toReorder.length > 0) {
+            await appendActivityLogToConvex({
+                taskId: id,
+                taskTitle: taskContext.title,
+                action: 'updated',
+                field: 'attachment',
+                oldValue: 'Previous order',
+                newValue: 'Reordered',
+                changedBy: user.id,
+                changedByName: user.name || 'User',
+                details: `Reordered media files: ${toReorder.map(a => a.name).join(', ')}`,
             })
         }
+        await touchTaskInConvex(id, Date.now())
 
         return NextResponse.json({ success: true }, { status: 200 })
     } catch (error) {

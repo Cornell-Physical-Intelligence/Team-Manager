@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
+import { api, fetchQuery } from "@/lib/convex/server"
 
 export async function GET(
     request: NextRequest,
@@ -12,26 +12,18 @@ export async function GET(
         return NextResponse.redirect(new URL("/", request.url))
     }
 
-    const task = await prisma.task.findUnique({
-        where: { id: taskId },
-        select: {
-            id: true,
-            column: {
-                select: {
-                    board: {
-                        select: {
-                            projectId: true,
-                            project: { select: { workspaceId: true } }
-                        }
-                    }
-                }
-            }
-        }
+    // getMeta returns null if task doesn't exist or workspaceId doesn't match
+    const taskMeta = await fetchQuery(api.tasks.getMeta, {
+        taskId,
+        workspaceId: user.workspaceId,
     })
 
-    const projectId = task?.column?.board?.projectId
-    const taskWorkspaceId = task?.column?.board?.project?.workspaceId
-    if (!projectId || !taskWorkspaceId || taskWorkspaceId !== user.workspaceId) {
+    if (!taskMeta) {
+        return NextResponse.redirect(new URL("/dashboard", request.url))
+    }
+
+    const projectId = taskMeta.projectId
+    if (!projectId) {
         return NextResponse.redirect(new URL("/dashboard", request.url))
     }
 

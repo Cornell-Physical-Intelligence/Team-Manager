@@ -1,17 +1,23 @@
 import { redirect } from 'next/navigation'
-import prisma from "@/lib/prisma"
+import { getCurrentUser } from "@/lib/auth"
+import { fetchDashboardProjectsTarget } from "@/lib/convex/dashboard"
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectsPage() {
-    // Get the first active project and redirect to it
-    const project = await prisma.project.findFirst({
-        where: { archivedAt: null },
-        orderBy: { createdAt: 'desc' }
+    const user = await getCurrentUser()
+    if (!user?.workspaceId || !user.id) {
+        redirect("/")
+    }
+
+    const projectId = await fetchDashboardProjectsTarget({
+        userId: user.id,
+        workspaceId: user.workspaceId,
+        role: user.role,
     })
 
-    if (project) {
-        redirect(`/dashboard/projects/${project.id}`)
+    if (projectId) {
+        redirect(`/dashboard/projects/${projectId}`)
     }
 
     // If no active projects, show a message

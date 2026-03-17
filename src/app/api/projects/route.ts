@@ -1,39 +1,14 @@
 import { NextResponse } from 'next/server'
-// Force rebuild
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getWorkspaceUserIds } from '@/lib/access'
-import { getErrorCode, getErrorMessage } from '@/lib/errors'
 import {
-    getPrimaryProjectLeadId,
-    mapProjectLeadUsers,
-    mergeProjectMemberIds,
-    parseProjectLeadPayload,
-} from '@/lib/project-leads'
-
-const PROJECT_COLORS = [
-    "#ef4444", // red
-    "#f97316", // orange
-    "#f59e0b", // amber
-    "#22c55e", // green
-    "#14b8a6", // teal
-    "#06b6d4", // cyan
-    "#3b82f6", // blue
-    "#6366f1", // indigo
-    "#8b5cf6", // violet
-    "#ec4899", // pink
-]
-
-const PUSH_COLORS = [
-    "#3b82f6", // blue
-    "#22c55e", // green
-    "#f59e0b", // amber
-    "#8b5cf6", // violet
-    "#ec4899", // pink
-    "#06b6d4", // cyan
-    "#f97316", // orange
-    "#84cc16", // lime
-]
+    createWorkspaceProject,
+    listWorkspaceProjects,
+    serializeProjectDetail,
+    serializeProjectListItem,
+    type ProjectPushInput,
+} from '@/lib/convex/projects'
+import { mergeProjectMemberIds, parseProjectLeadPayload } from '@/lib/project-leads'
 
 function normalizeHexColor(value: unknown): string | null {
     if (typeof value !== "string") return null
@@ -43,81 +18,64 @@ function normalizeHexColor(value: unknown): string | null {
     return /^#([0-9a-f]{6}|[0-9a-f]{3})$/.test(hex) ? hex : null
 }
 
+function normalizePushes(value: unknown): ProjectPushInput[] {
+    if (!Array.isArray(value)) return []
+
+    return value.flatMap((push) => {
+        if (!push || typeof push !== "object") return []
+
+        const record = push as Record<string, unknown>
+        const name = typeof record.name === "string" ? record.name.trim() : ""
+        const startDate = typeof record.startDate === "string"
+            ? Date.parse(record.startDate)
+            : typeof record.startDate === "number"
+                ? record.startDate
+                : Number.NaN
+
+        if (!name || !Number.isFinite(startDate)) {
+            return []
+        }
+
+        const endDate = typeof record.endDate === "string"
+            ? Date.parse(record.endDate)
+            : typeof record.endDate === "number"
+                ? record.endDate
+                : Number.NaN
+
+        return [{
+            tempId: typeof record.tempId === "string" && record.tempId.trim().length > 0
+                ? record.tempId.trim()
+                : undefined,
+            name,
+            startDate,
+            endDate: Number.isFinite(endDate) ? endDate : undefined,
+            color: normalizeHexColor(record.color) ?? undefined,
+            dependsOn: typeof record.dependsOn === "string" && record.dependsOn.trim().length > 0
+                ? record.dependsOn.trim()
+                : undefined,
+        }]
+    })
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url)
         const includeLead = searchParams.get('includeLead') === 'true'
         const includeArchived = searchParams.get('includeArchived') === 'true'
         const user = await getCurrentUser()
+
         if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
 
-        const projects = await prisma.project.findMany({
-            where: {
-                workspaceId: user.workspaceId,
-                ...(includeArchived ? {} : { archivedAt: null })
-            },
-            orderBy: { createdAt: 'desc' },
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                color: true,
-                archivedAt: true,
-                createdAt: true,
-                leadId: includeLead,
-                lead: includeLead ? { select: { id: true, name: true } } : false,
-                leadAssignments: includeLead
-                    ? {
-                        orderBy: { createdAt: 'asc' },
-                        select: { user: { select: { id: true, name: true } } }
-                    }
-                    : false,
-                members: { select: { userId: true, user: { select: { name: true } } } }
-            }
+        const projects = await listWorkspaceProjects({
+            workspaceId: user.workspaceId,
+            userId: user.id,
+            includeArchived,
+            includeLead,
         })
 
-        const userOrders = await prisma.projectUserOrder.findMany({
-            where: { userId: user.id, projectId: { in: projects.map(p => p.id) } },
-            select: { projectId: true, order: true },
-        })
-        const orderMap = new Map(userOrders.map(o => [o.projectId, o.order]))
-
-        const sorted = [...projects].sort((a, b) => {
-            const aOrder = orderMap.get(a.id)
-            const bOrder = orderMap.get(b.id)
-            const aHas = aOrder !== undefined
-            const bHas = bOrder !== undefined
-            if (aHas && bHas) return aOrder! - bOrder!
-            if (aHas) return -1
-            if (bHas) return 1
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        })
-
-        if (!includeLead) {
-            return NextResponse.json(sorted)
-        }
-
-        const serialized = sorted.map((project) => {
-            const { leadAssignments, ...rest } = project
-            const leads = mapProjectLeadUsers(
-                leadAssignments as unknown as Array<{ user: { id: string; name: string } }>
-            )
-            const leadIds = leads.map((lead) => lead.id)
-            const primaryLeadId = getPrimaryProjectLeadId(leadIds) ?? rest.leadId ?? null
-            const primaryLead = rest.lead ?? leads[0] ?? null
-
-            return {
-                ...rest,
-                leadId: primaryLeadId,
-                lead: primaryLead,
-                leadIds,
-                leads
-            }
-        })
-
-        return NextResponse.json(serialized)
+        return NextResponse.json(projects.map(serializeProjectListItem))
     } catch (error) {
         console.error('Failed to fetch projects:', error)
         return NextResponse.json([], { status: 500 })
@@ -162,112 +120,25 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'One or more members are not in this workspace' }, { status: 400 })
         }
 
-        const memberIdsToPersist = mergeProjectMemberIds(validMemberIds, validLeadIds)
-        const primaryLeadId = getPrimaryProjectLeadId(validLeadIds)
-
-        // Create division with default board and columns
-        const project = await prisma.$transaction(async (tx) => {
-            const normalizedColor = normalizeHexColor(color)
-            const generatedColor = normalizedColor
-                ? normalizedColor
-                : PROJECT_COLORS[
-                (await tx.project.count({ where: { workspaceId: user.workspaceId } })) % PROJECT_COLORS.length
-                ]
-
-            const p = await tx.project.create({
-                data: {
-                    name,
-                    description: description || null,
-                    color: generatedColor,
-                    leadId: primaryLeadId,
-                    workspaceId: user.workspaceId
-                }
-            })
-
-            if (validLeadIds.length > 0) {
-                await tx.projectLeadAssignment.createMany({
-                    data: validLeadIds.map((userId) => ({
-                        projectId: p.id,
-                        userId
-                    }))
-                })
-            }
-
-            if (memberIdsToPersist.length > 0) {
-                await tx.projectMember.createMany({
-                    data: memberIdsToPersist.map((userId) => ({
-                        projectId: p.id,
-                        userId
-                    }))
-                })
-            }
-
-            await tx.board.create({
-                data: {
-                    name: 'Kanban Board',
-                    projectId: p.id,
-                    columns: {
-                        create: [
-                            { name: 'To Do', order: 0 },
-                            { name: 'In Progress', order: 1 },
-                            { name: 'Review', order: 2 },
-                            { name: 'Done', order: 3 },
-                        ]
-                    }
-                }
-            })
-
-            // Create pushes if provided
-            if (pushes && Array.isArray(pushes) && pushes.length > 0) {
-                // First pass: create all pushes and build tempId -> realId mapping
-                const tempIdToRealId = new Map<string, string>()
-
-                for (let i = 0; i < pushes.length; i++) {
-                    const push = pushes[i]
-                    if (push.name && push.startDate) {
-                        const createdPush = await tx.push.create({
-                            data: {
-                                name: push.name,
-                                projectId: p.id,
-                                startDate: new Date(push.startDate),
-                                endDate: push.endDate ? new Date(push.endDate) : null,
-                                color: push.color || PUSH_COLORS[i % PUSH_COLORS.length],
-                                status: 'Active'
-                            }
-                        })
-                        if (push.tempId) {
-                            tempIdToRealId.set(push.tempId, createdPush.id)
-                        }
-                    }
-                }
-
-                // Second pass: update dependencies
-                for (const push of pushes) {
-                    if (push.dependsOn && push.tempId) {
-                        const realId = tempIdToRealId.get(push.tempId)
-                        const dependsOnRealId = tempIdToRealId.get(push.dependsOn)
-                        if (realId && dependsOnRealId) {
-                            await tx.push.update({
-                                where: { id: realId },
-                                data: { dependsOnId: dependsOnRealId }
-                            })
-                        }
-                    }
-                }
-            }
-
-            return p
+        const result = await createWorkspaceProject({
+            workspaceId: user.workspaceId,
+            name: name.trim(),
+            description: typeof description === "string" && description.trim().length > 0
+                ? description.trim()
+                : undefined,
+            color: normalizeHexColor(color) ?? undefined,
+            leadIds: validLeadIds,
+            memberIds: mergeProjectMemberIds(validMemberIds, validLeadIds),
+            pushes: normalizePushes(pushes),
         })
 
-        return NextResponse.json(project, { status: 201 })
-    } catch (error: unknown) {
-        console.error('[API] Failed to create division:', error)
-        const code = getErrorCode(error)
-        if (code) console.error('[API] Error Code:', code)
+        if ("error" in result) {
+            return NextResponse.json({ error: result.error }, { status: 400 })
+        }
 
-        return NextResponse.json({
-            error: getErrorMessage(error, 'Failed to create division'),
-            details: code || undefined
-        }, { status: 500 })
+        return NextResponse.json(serializeProjectDetail(result.project), { status: 201 })
+    } catch (error) {
+        console.error('[API] Failed to create division:', error)
+        return NextResponse.json({ error: 'Failed to create division' }, { status: 500 })
     }
 }

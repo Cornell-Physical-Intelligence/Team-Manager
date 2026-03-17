@@ -1,0 +1,239 @@
+import { v } from "convex/values"
+import { mutation, query } from "./_generated/server"
+import { createLegacyId, now, stripDoc } from "./lib"
+
+function isBroadcastNotification(notification: { userId?: string }) {
+    return notification.userId === undefined
+}
+
+export const getUnreadCount = query({
+    args: {
+        workspaceId: v.string(),
+        userId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const [notifications, reads] = await Promise.all([
+            ctx.db
+                .query("notifications")
+                .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+                .collect(),
+            ctx.db
+                .query("notificationReads")
+                .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+                .collect(),
+        ])
+
+        const readIds = new Set(reads.map((read) => read.notificationId))
+
+        let unreadCount = 0
+
+        for (const notification of notifications) {
+            if (notification.userId === args.userId && !notification.read) {
+                unreadCount += 1
+                continue
+            }
+
+            if (isBroadcastNotification(notification) && !readIds.has(notification.id)) {
+                unreadCount += 1
+            }
+        }
+
+        return unreadCount
+    },
+})
+
+export const listForUser = query({
+    args: {
+        workspaceId: v.string(),
+        userId: v.string(),
+        since: v.optional(v.number()),
+        limit: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+        const limit = Math.min(Math.max(args.limit ?? 20, 1), 200)
+
+        const [notifications, reads] = await Promise.all([
+            ctx.db
+                .query("notifications")
+                .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+                .collect(),
+            ctx.db
+                .query("notificationReads")
+                .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+                .collect(),
+        ])
+
+        const readIds = new Set(reads.map((read) => read.notificationId))
+
+        return notifications
+            .filter((notification) => {
+                const targetedToUser =
+                    notification.userId === args.userId || isBroadcastNotification(notification)
+
+                if (!targetedToUser) return false
+                if (args.since !== undefined && notification.createdAt <= args.since) return false
+
+                return true
+            })
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .slice(0, limit)
+            .map((notification) => ({
+                ...stripDoc(notification),
+                read: isBroadcastNotification(notification)
+                    ? readIds.has(notification.id)
+                    : notification.read,
+            }))
+    },
+})
+
+export const markAllRead = mutation({
+    args: {
+        workspaceId: v.string(),
+        userId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const [notifications, reads] = await Promise.all([
+            ctx.db
+                .query("notifications")
+                .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+                .collect(),
+            ctx.db
+                .query("notificationReads")
+                .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+                .collect(),
+        ])
+
+        const readIds = new Set(reads.map((read) => read.notificationId))
+
+        await Promise.all(
+            notifications.map(async (notification) => {
+                if (notification.userId === args.userId && !notification.read) {
+                    await ctx.db.patch(notification._id, { read: true })
+                    return
+                }
+
+                if (isBroadcastNotification(notification) && !readIds.has(notification.id)) {
+                    const existingRead = await ctx.db
+                        .query("notificationReads")
+                        .withIndex("by_notificationId_userId", (q) =>
+                            q.eq("notificationId", notification.id).eq("userId", args.userId)
+                        )
+                        .unique()
+
+                    if (!existingRead) {
+                        await ctx.db.insert("notificationReads", {
+                            id: createLegacyId("notification_read"),
+                            notificationId: notification.id,
+                            userId: args.userId,
+                            readAt: now(),
+                        })
+                    }
+                }
+            })
+        )
+
+        return { success: true }
+    },
+})
+
+export const markRead = mutation({
+    args: {
+        workspaceId: v.string(),
+        userId: v.string(),
+        notificationId: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const notification = await ctx.db
+            .query("notifications")
+            .withIndex("by_legacy_id", (q) => q.eq("id", args.notificationId))
+            .unique()
+
+        if (!notification || notification.workspaceId !== args.workspaceId) {
+            return { error: "Notification not found" as const }
+        }
+
+        if (notification.userId !== undefined && notification.userId !== args.userId) {
+            return { error: "Notification not found" as const }
+        }
+
+        if (isBroadcastNotification(notification)) {
+            const existingRead = await ctx.db
+                .query("notificationReads")
+                .withIndex("by_notificationId_userId", (q) =>
+                    q.eq("notificationId", notification.id).eq("userId", args.userId)
+                )
+                .unique()
+
+            if (!existingRead) {
+                await ctx.db.insert("notificationReads", {
+                    id: createLegacyId("notification_read"),
+                    notificationId: notification.id,
+                    userId: args.userId,
+                    readAt: now(),
+                })
+            }
+        } else if (!notification.read) {
+            await ctx.db.patch(notification._id, { read: true })
+        }
+
+        return { success: true }
+    },
+})
+
+export const createMany = mutation({
+    args: {
+        notifications: v.array(v.object({
+            id: v.string(),
+            workspaceId: v.string(),
+            userId: v.optional(v.string()),
+            type: v.string(),
+            title: v.string(),
+            message: v.string(),
+            link: v.optional(v.string()),
+            read: v.boolean(),
+            createdAt: v.number(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        for (const notification of args.notifications) {
+            const existing = await ctx.db
+                .query("notifications")
+                .withIndex("by_legacy_id", (q) => q.eq("id", notification.id))
+                .unique()
+
+            if (existing) {
+                await ctx.db.patch(existing._id, notification)
+            } else {
+                await ctx.db.insert("notifications", notification)
+            }
+        }
+
+        return { success: true, created: args.notifications.length }
+    },
+})
+
+export const listLinksByTypeSince = query({
+    args: {
+        workspaceId: v.string(),
+        userId: v.string(),
+        type: v.string(),
+        links: v.array(v.string()),
+        since: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const notifications = await ctx.db
+            .query("notifications")
+            .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+            .collect()
+
+        return notifications
+            .filter((notification) =>
+                notification.userId === args.userId &&
+                notification.type === args.type &&
+                notification.createdAt > args.since &&
+                notification.link !== undefined &&
+                args.links.includes(notification.link)
+            )
+            .map((notification) => notification.link as string)
+    },
+})

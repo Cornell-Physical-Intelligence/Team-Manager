@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from "@/lib/auth"
+import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
 
 export async function GET() {
     try {
@@ -51,27 +51,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
         }
 
-        const targetUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { workspaceId: true, role: true, name: true }
+        const managedUser = await fetchQuery(api.admin.getManagedUser, {
+            workspaceId: currentUser.workspaceId,
+            userId,
         })
 
-        if (!targetUser) {
+        if (!managedUser) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
 
         const workspaceId = currentUser.workspaceId
-
-        const membership = await prisma.workspaceMember.findUnique({
-            where: { userId_workspaceId: { userId, workspaceId } },
-            select: { id: true, role: true }
-        })
-
-        const isMember = Boolean(membership) || targetUser.workspaceId === workspaceId
-        if (!isMember) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 })
-        }
-
+        const targetUser = managedUser.user
+        const membership = managedUser.membership
         const targetRole = membership?.role ?? (targetUser.workspaceId === workspaceId ? targetUser.role : null)
 
         if (targetRole === 'Admin' && currentUser.role !== 'Admin') {
@@ -83,12 +74,7 @@ export async function POST(request: Request) {
         }
 
         if (currentUser.id === userId && role !== 'Admin') {
-            const adminCount = await prisma.workspaceMember.count({
-                where: {
-                    role: 'Admin',
-                    workspaceId
-                }
-            })
+            const adminCount = await fetchQuery(api.admin.countWorkspaceAdmins, { workspaceId })
 
             if (adminCount <= 1) {
                 return NextResponse.json({
@@ -98,26 +84,16 @@ export async function POST(request: Request) {
             }
         }
 
-        await prisma.$transaction(async (tx) => {
-            if (membership) {
-                await tx.workspaceMember.update({
-                    where: { userId_workspaceId: { userId, workspaceId } },
-                    data: { role }
-                })
-            } else if (targetUser.workspaceId === workspaceId) {
-                await tx.workspaceMember.create({
-                    data: {
-                        userId,
-                        workspaceId,
-                        role,
-                        name: targetUser.name || 'User'
-                    }
-                })
-            } else {
-                throw new Error('User not found')
-            }
-
+        const result = await fetchMutation(api.admin.setWorkspaceMemberRole, {
+            workspaceId,
+            userId,
+            role,
+            fallbackName: targetUser.name || 'User',
         })
+
+        if ('error' in result) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 })
+        }
 
         return NextResponse.json({ success: true })
     } catch (error) {

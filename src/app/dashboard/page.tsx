@@ -1,6 +1,5 @@
-import prisma from "@/lib/prisma"
-import type { Prisma } from '@prisma/client'
 import { getCurrentUser } from '@/lib/auth'
+import { fetchDashboardPageData } from "@/lib/convex/dashboard"
 import { AlertCircle, Users, CheckCircle2, Circle, Loader2, Clock, Layout, ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -11,8 +10,6 @@ import { TaskRow, ApprovalRow } from "./TaskRow"
 import { DashboardHeatmapLoader } from "./DashboardHeatmapLoader"
 import { ProjectActivityTracker } from "./ProjectActivityTracker"
 import { DriveUploadWidget } from "./DriveUploadWidget"
-import { driveConfigTableExists } from "@/lib/googleDrive"
-import { getErrorCode } from "@/lib/errors"
 
 export const dynamic = 'force-dynamic'
 
@@ -23,13 +20,7 @@ export default async function DashboardPage() {
         return <div className="p-6 text-muted-foreground">Please complete your profile setup.</div>
     }
 
-    const dbUser = await prisma.user.findUnique({
-        where: { id: user.id }
-    })
-
-    if (!dbUser) return <div className="p-6 text-muted-foreground">User not found. Please log in again.</div>
-    const workspaceId = dbUser.workspaceId
-    if (!workspaceId) {
+    if (!user.workspaceId) {
         redirect('/workspaces')
     }
 
@@ -37,216 +28,11 @@ export default async function DashboardPage() {
     const isTeamLead = user.role === 'Team Lead'
     const isLeadership = isAdmin || isTeamLead
 
-    // Parallel data fetching
-    const fetchMyTasks = async () => {
-        const andFilters: Prisma.TaskWhereInput[] = [
-            {
-                OR: [
-                    { assigneeId: dbUser.id },
-                    { assignees: { some: { userId: dbUser.id } } }
-                ]
-            },
-            {
-                OR: [
-                    { column: { board: { project: { workspaceId, archivedAt: null } } } },
-                    { push: { project: { workspaceId, archivedAt: null } } }
-                ]
-            }
-        ]
-
-        if (user.role === 'Member') {
-            const memberProjects = await prisma.projectMember.findMany({
-                where: { userId: dbUser.id, project: { archivedAt: null } },
-                select: { projectId: true }
-            })
-            const projectIds = memberProjects.map(pm => pm.projectId)
-            if (projectIds.length > 0) {
-                andFilters.push({
-                    OR: [
-                        { column: { board: { projectId: { in: projectIds } } } },
-                        { push: { projectId: { in: projectIds } } }
-                    ]
-                })
-            } else {
-                return []
-            }
-        }
-
-        return prisma.task.findMany({
-            where: { AND: andFilters },
-            include: {
-                assignee: { select: { id: true, name: true } },
-                assignees: { include: { user: { select: { id: true, name: true } } } },
-                column: {
-                    include: {
-                        board: { include: { project: { select: { id: true, name: true, color: true } } } }
-                    }
-                },
-                push: { select: { id: true } },
-                _count: { select: { comments: true, attachments: true } }
-            },
-            orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
-            take: 50
-        })
-    }
-
-    const fetchPendingApproval = async () => {
-        if (!isLeadership) return []
-
-        const where = isAdmin
-            ? { column: { name: 'Review', board: { project: { workspaceId, archivedAt: null } } } }
-            : {
-                column: {
-                    name: 'Review',
-                    board: {
-                        project: {
-                            archivedAt: null,
-                            leadAssignments: { some: { userId: dbUser.id } }
-                        }
-                    }
-                }
-            }
-
-        return prisma.task.findMany({
-            where,
-            include: {
-                assignee: { select: { id: true, name: true } },
-                assignees: { include: { user: { select: { id: true, name: true } } } },
-                column: {
-                    include: {
-                        board: {
-                            include: {
-                                project: { select: { id: true, name: true, color: true } },
-                                columns: { select: { id: true, name: true } }
-                            }
-                        }
-                    }
-                },
-                push: { select: { id: true } },
-                _count: { select: { comments: true, attachments: true } }
-            },
-            orderBy: { updatedAt: 'desc' },
-            take: 20
-        })
-    }
-
-    const fetchTeamStats = async () => {
-        if (!isLeadership) return null
-
-        const [memberships, tasks] = await Promise.all([
-            prisma.workspaceMember.findMany({
-                where: { workspaceId },
-                select: {
-                    userId: true,
-                    name: true,
-                    user: { select: { name: true, avatar: true } }
-                }
-            }),
-            prisma.task.findMany({
-                where: { column: { board: { project: { workspaceId, archivedAt: null } } } },
-                select: {
-                    id: true,
-                    title: true,
-                    assigneeId: true,
-                    assignees: { select: { userId: true } },
-                    dueDate: true,
-                    endDate: true,
-                    column: {
-                        select: {
-                            name: true,
-                            board: { select: { project: { select: { id: true, name: true } } } }
-                        }
-                    }
-                }
-            })
-        ])
-
-        const users = memberships.map((member) => ({
-            id: member.userId,
-            name: member.name || member.user.name,
-            avatar: member.user.avatar
-        }))
-
-        const stats = users.map(u => {
-            const userTasks = tasks.filter(t =>
-                t.assigneeId === u.id || t.assignees.some(a => a.userId === u.id)
-            )
-            return {
-                id: u.id,
-                name: u.name,
-                avatar: u.avatar,
-                done: userTasks.filter(t => t.column?.name === 'Done').length,
-                inProgress: userTasks.filter(t => t.column?.name === 'In Progress').length,
-                review: userTasks.filter(t => t.column?.name === 'Review').length,
-                todo: userTasks.filter(t => t.column?.name === 'To Do').length,
-                total: userTasks.length,
-                tasks: userTasks.map(t => ({
-                    id: t.id,
-                    title: t.title,
-                    columnName: t.column?.name || 'Unknown',
-                    projectId: t.column?.board?.project?.id || '',
-                    projectName: t.column?.board?.project?.name || '',
-                    dueDate: (t.dueDate || t.endDate)?.toISOString() || null
-                }))
-            }
-        }).sort((a, b) => (b.inProgress + b.todo + b.review) - (a.inProgress + a.todo + a.review))
-
-        return { users: stats, totalTasks: tasks.length }
-    }
-
-    const fetchRecentActivity = async () => {
-        if (!isLeadership) return []
-
-        return prisma.activityLog.findMany({
-            where: { task: { column: { board: { project: { workspaceId, archivedAt: null } } } } },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-            select: {
-                id: true,
-                action: true,
-                field: true,
-                oldValue: true,
-                newValue: true,
-                taskTitle: true,
-                changedByName: true,
-                createdAt: true,
-                task: { select: { id: true, column: { select: { board: { select: { project: { select: { id: true } } } } } } } }
-            }
-        })
-    }
-
-    const fetchDriveConfig = async () => {
-        if (!isLeadership) return null
-
-        const hasTable = await driveConfigTableExists()
-        if (!hasTable) return null
-
-        try {
-            return await prisma.workspaceDriveConfig.findUnique({
-                where: { workspaceId },
-                select: {
-                    refreshToken: true,
-                    folderId: true,
-                    folderName: true,
-                    connectedByName: true
-                }
-            })
-        } catch (error: unknown) {
-            const code = getErrorCode(error)
-            if (code === "P2021" || code === "P2022") {
-                return null
-            }
-            throw error
-        }
-    }
-
-    const [myTasks, pendingApproval, teamStats, recentActivity, driveConfig] = await Promise.all([
-        fetchMyTasks(),
-        fetchPendingApproval(),
-        fetchTeamStats(),
-        fetchRecentActivity(),
-        fetchDriveConfig()
-    ])
+    const { myTasks, pendingApproval, teamStats, recentActivity, driveConfig } = await fetchDashboardPageData({
+        userId: user.id,
+        workspaceId: user.workspaceId,
+        role: user.role,
+    })
 
     // Process tasks
     const pendingTasks = myTasks.filter(t => t.column?.name !== 'Done' && t.column?.name !== 'Review')
@@ -261,7 +47,7 @@ export default async function DashboardPage() {
     const reviewTasks = pendingTasks.filter(t => t.column?.name === 'Review')
 
     // Helper to calculate due text
-    const getDueText = (dueDate: Date | null): { text: string; isOverdue: boolean } => {
+    const getDueText = (dueDate: string | null): { text: string; isOverdue: boolean } => {
         if (!dueDate) return { text: '', isOverdue: false }
         const now = new Date().getTime()
         const endTime = new Date(dueDate).getTime()
@@ -277,7 +63,7 @@ export default async function DashboardPage() {
         return { text, isOverdue }
     }
 
-    const driveConnected = !!driveConfig?.refreshToken
+    const driveConnected = !!driveConfig?.connected
     const driveHasFolder = !!driveConfig?.folderId
     const showDriveSetup = isAdmin && (!driveConnected || !driveHasFolder)
 
@@ -363,12 +149,12 @@ export default async function DashboardPage() {
                                                         pushId: task.push?.id || null,
                                                         dueText,
                                                         isOverdue,
-                                                        commentsCount: task._count.comments,
-                                                        attachmentsCount: task._count.attachments,
+                                                        commentsCount: task.commentsCount,
+                                                        attachmentsCount: task.attachmentsCount,
                                                         progress: task.progress,
                                                         enableProgress: task.enableProgress,
-                                                        startDate: task.startDate?.toISOString() || null,
-                                                        endDate: task.endDate?.toISOString() || null
+                                                        startDate: task.startDate || null,
+                                                        endDate: task.endDate || null
                                                     }}
                                                 />
                                             )
@@ -412,13 +198,13 @@ export default async function DashboardPage() {
                                                             projectColor,
                                                             pushId: task.push?.id || null,
                                                             assignedTo,
-                                                            submittedAt: task.submittedAt?.toISOString() || null,
-                                                            commentsCount: task._count.comments,
-                                                            attachmentsCount: task._count.attachments,
+                                                            submittedAt: task.submittedAt || null,
+                                                            commentsCount: task.commentsCount,
+                                                            attachmentsCount: task.attachmentsCount,
                                                             progress: task.progress,
                                                             enableProgress: task.enableProgress,
-                                                            startDate: task.startDate?.toISOString() || null,
-                                                            endDate: task.endDate?.toISOString() || null,
+                                                            startDate: task.startDate || null,
+                                                            endDate: task.endDate || null,
                                                             doneColumnId: doneColumn?.id || '',
                                                             inProgressColumnId: inProgressColumn?.id || ''
                                                         }}
@@ -476,7 +262,7 @@ export default async function DashboardPage() {
                             <DriveUploadWidget
                                 className="flex-1"
                                 initialConfig={{
-                                    connected: !!driveConfig?.refreshToken,
+                                    connected: !!driveConfig?.connected,
                                     folderId: driveConfig?.folderId || null,
                                     folderName: driveConfig?.folderName || null,
                                     connectedByName: driveConfig?.connectedByName || null

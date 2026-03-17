@@ -1,13 +1,19 @@
 'use server'
 
-import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { sendDiscordNotification } from '@/lib/discord'
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
 import { driveConfigTableExists, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
 import { differenceInCalendarDays } from 'date-fns'
-import type { Prisma } from '@prisma/client'
+import {
+    createTaskInConvex,
+    updateTaskStatusInConvex,
+    updateTaskDetailsInConvex,
+    deleteTaskInConvex,
+    updateTaskProgressInConvex,
+} from '@/lib/convex/kanban'
+import { api, fetchQuery } from '@/lib/convex/server'
 
 function parseDateOnlyStart(dateStr: string) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
@@ -62,23 +68,12 @@ type CreateTaskInput = {
 
 async function getWorkspaceDriveConfig(workspaceId: string) {
     if (!(await driveConfigTableExists())) return null
-    try {
-        return await prisma.workspaceDriveConfig.findUnique({
-            where: { workspaceId },
-            select: {
-                refreshToken: true,
-                folderId: true,
-                folderName: true
-            }
-        })
-    } catch (error: unknown) {
-        const code = typeof error === "object" && error !== null && "code" in error
-            ? (error as { code?: string }).code
-            : undefined
-        if (code === "P2021" || code === "P2022") return null
-        throw error
-    }
+    return fetchQuery(api.settings.getWorkspaceDriveConfig, { workspaceId })
 }
+
+// ─────────────────────────────────────────────────────────────
+// createTask
+// ─────────────────────────────────────────────────────────────
 
 export async function createTask(input: CreateTaskInput) {
 
@@ -99,35 +94,6 @@ export async function createTask(input: CreateTaskInput) {
             return { error: 'Project not found' }
         }
 
-        let targetColumnId = columnId
-
-        // If no columnId provided, find the first column
-        if (!targetColumnId) {
-            const board = await prisma.board.findFirst({
-                where: { projectId },
-                include: { columns: { orderBy: { order: 'asc' } } }
-            })
-
-            if (board && board.columns.length > 0) {
-                targetColumnId = board.columns[0].id
-            }
-        }
-
-        if (!targetColumnId) {
-            return { error: 'No column found for this project' }
-        }
-
-
-        // Verify column exists and belongs to the project
-        const column = await prisma.column.findUnique({
-            where: { id: targetColumnId },
-            include: { board: true }
-        })
-
-        if (!column || column.board.projectId !== projectId) {
-            return { error: 'Column not found' }
-        }
-
         const userIdsToCheck = [
             ...(assigneeId ? [assigneeId] : []),
             ...(input.assigneeIds || [])
@@ -137,17 +103,6 @@ export async function createTask(input: CreateTaskInput) {
             const validUserIds = await getWorkspaceUserIds(userIdsToCheck, user.workspaceId)
             if (validUserIds.length !== Array.from(new Set(userIdsToCheck)).length) {
                 return { error: 'One or more assignees are not in this workspace' }
-            }
-        }
-
-        if (pushId) {
-            const push = await prisma.push.findUnique({
-                where: { id: pushId },
-                select: { projectId: true, project: { select: { workspaceId: true } } }
-            })
-
-            if (!push || push.project.workspaceId !== user.workspaceId || push.projectId !== projectId) {
-                return { error: 'Push not found' }
             }
         }
 
@@ -169,117 +124,50 @@ export async function createTask(input: CreateTaskInput) {
             attachmentFolderName = null
         }
 
-        const taskData: Prisma.TaskCreateInput = {
+        const startDateMs = startDate ? parseDateInput(startDate, "startOfDay").getTime() : null
+        const endDateMs = endDate ? parseDateInput(endDate, "endOfDay").getTime() : null
+
+        const result = await createTaskInConvex({
             title: title.trim(),
-            description: description?.trim() || null,
-            column: { connect: { id: targetColumnId } },
+            projectId,
+            workspaceId: user.workspaceId,
+            columnId: columnId ?? null,
+            startDate: startDateMs,
+            endDate: endDateMs,
+            description: description?.trim() || undefined,
+            assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
+            assigneeIds: input.assigneeIds,
             requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : true,
             enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
             progress: input.progress || 0,
-            startDate: startDate ? parseDateInput(startDate, "startOfDay") : null,
-            endDate: endDate ? parseDateInput(endDate, "endOfDay") : null,
-            push: pushId ? { connect: { id: pushId } } : undefined,
+            pushId: pushId,
             attachmentFolderId,
-            attachmentFolderName
-        }
-
-        // Only connect assignee if provided
-        if (assigneeId && assigneeId !== "") {
-            taskData.assignee = { connect: { id: assigneeId } }
-        }
-
-        const task = await prisma.task.create({
-            data: taskData,
-            include: {
-                assignee: { select: { id: true, name: true, discordId: true } },
-                assignees: { include: { user: { select: { id: true, name: true } } } },
-                push: { select: { id: true, name: true, color: true, status: true } },
-                attachments: { select: { id: true, createdAt: true } },
-                comments: { select: { createdAt: true } },
-                activityLogs: { select: { changedByName: true, createdAt: true } }
-            }
+            attachmentFolderName,
+            createdBy: user.id,
+            createdByName: user.name || 'Unknown',
         })
 
-        // Create TaskAssignee entries if assigneeIds provided
-        if (input.assigneeIds && input.assigneeIds.length > 0) {
-            const uniqueAssigneeIds = Array.from(new Set(input.assigneeIds)).filter((id) => id.trim().length > 0)
-            if (uniqueAssigneeIds.length > 0) {
-                await prisma.taskAssignee.createMany({
-                    data: uniqueAssigneeIds.map(userId => ({
-                        taskId: task.id,
-                        userId: userId
-                    }))
-                })
-            }
-
-            // Re-fetch to get the assignees relation populated correctly
-            const updatedTask = await prisma.task.findUnique({
-                where: { id: task.id },
-                include: {
-                    assignee: { select: { id: true, name: true, discordId: true } },
-                    assignees: { include: { user: { select: { id: true, name: true } } } },
-                    push: { select: { id: true, name: true, color: true, status: true } },
-                    attachments: { select: { id: true, createdAt: true } },
-                    comments: { select: { createdAt: true } },
-                    activityLogs: { select: { changedByName: true, createdAt: true } }
-                }
-            })
-            if (updatedTask) Object.assign(task, updatedTask)
+        if (!result || 'error' in result) {
+            return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to create task' }
         }
 
-
-        // Create activity log for task creation
-        if (user && user.id && user.id !== 'pending') {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: task.id,
-                    taskTitle: task.title,
-                    action: 'created',
-                    field: null,
-                    oldValue: null,
-                    newValue: null,
-                    changedBy: user.id,
-                    changedByName: user.name || 'Unknown',
-                    details: `Task "${task.title}" was created`
-                }
-            })
-        }
+        const taskResult = result as { success: true; task: { id: string; columnId: string; assigneeIds: string[] }; projectName: string; workspaceDiscordChannelId: string | null }
 
         // Discord: ping only when someone is assigned
-        const assignedIds = Array.from(new Set([
-            ...(assigneeId && assigneeId !== "" ? [assigneeId] : []),
-            ...(input.assigneeIds || []),
-        ]))
+        const assignedIds = taskResult.task.assigneeIds
+        const webhookUrl = taskResult.workspaceDiscordChannelId ?? null
+        if (assignedIds.length > 0 && webhookUrl) {
+            const assignedUsers = await fetchQuery(api.auth.getUserDiscordIds, { userIds: assignedIds })
 
-        if (assignedIds.length > 0) {
-            // Optimized: Fetch project with workspace in single query, parallelize with user fetch
-            const [project, assignedUsers] = await Promise.all([
-                prisma.project.findUnique({
-                    where: { id: projectId },
-                    select: {
-                        id: true,
-                        name: true,
-                        workspace: { select: { discordChannelId: true } }
-                    }
-                }),
-                prisma.user.findMany({
-                    where: { id: { in: assignedIds }, discordId: { not: null } },
-                    select: { discordId: true }
-                })
-            ])
-
-            const webhookUrl = project?.workspace?.discordChannelId || null
-
-            if (project && webhookUrl && assignedUsers.length > 0) {
-                const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
-
+            if (assignedUsers.length > 0) {
+                const mentions = assignedUsers.map((u) => `<@${u.discordId}>`).join(" ")
                 if (mentions) {
                     const dueDate = endDate ? parseDateInput(endDate, "endOfDay") : null
                     await sendDiscordNotification(
                         "",
                         [{
                             title: "📌 Task Assignment",
-                            description: `${mentions}, you have been assigned **${task.title}** in project **${project.name}**\n${formatDueLine(dueDate)}`,
+                            description: `${mentions}, you have been assigned **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`,
                             color: 0x5865F2,
                             timestamp: new Date().toISOString(),
                         }],
@@ -290,212 +178,104 @@ export async function createTask(input: CreateTaskInput) {
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`)
-        return { success: true, task }
+        return {
+            success: true,
+            task: {
+                id: taskResult.task.id,
+                title: title.trim(),
+                columnId: taskResult.task.columnId,
+                assigneeId: assigneeId || null,
+                assignees: (taskResult.task.assigneeIds || []).map((userId: string) => ({ user: { id: userId, name: '' } })),
+                description: input.description?.trim() || null,
+                startDate: startDate ?? null,
+                endDate: endDate ?? null,
+                requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : true,
+                enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
+            },
+        }
     } catch (error) {
         console.error("Create task error:", error)
-        // Return the actual error message for debugging
         const errorMessage = error instanceof Error ? error.message : 'Unknown error'
         return { error: `Failed to create task: ${errorMessage}` }
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// updateTaskStatus
+// ─────────────────────────────────────────────────────────────
+
 export async function updateTaskStatus(taskId: string, columnId: string, projectId: string) {
     try {
         const user = await getCurrentUser()
         if (!user) {
-            return { error: 'Unauthorized' }
+            return { error: 'Unauthorized', success: false as const, task: null }
         }
 
         if (!user.workspaceId) {
-            return { error: 'Unauthorized: No workspace' }
+            return { error: 'Unauthorized: No workspace', success: false as const, task: null }
         }
 
-        const [targetColumn, task] = await Promise.all([
-            prisma.column.findUnique({
-                where: { id: columnId },
-                include: { board: true }
-            }),
-            prisma.task.findUnique({
-                where: { id: taskId },
-                select: {
-                    id: true,
-                    title: true,
-                    requireAttachment: true,
-                    submittedAt: true,
-                    column: {
-                        select: {
-                            id: true,
-                            name: true,
-                            board: {
-                                select: {
-                                    projectId: true,
-                                    project: { select: { workspaceId: true } }
-                                }
-                            }
-                        }
-                    },
-                    attachments: { select: { id: true } }
-                }
-            })
-        ])
+        const result = await updateTaskStatusInConvex(
+            taskId,
+            columnId,
+            user.workspaceId,
+            user.role,
+            user.id,
+            user.name || 'Unknown'
+        )
 
-        if (!task || !task.column?.board?.projectId) {
-            return { error: 'Task not found' }
+        if (!result) {
+            return { error: 'Failed to update task status', success: false as const, task: null }
         }
 
-        if (task.column.board.project.workspaceId !== user.workspaceId) {
-            return { error: 'Task not found' }
+        if ('error' in result) {
+            const r = result as { error: string; message?: string }
+            return { error: r.error, message: r.message, success: false as const, task: null }
         }
 
-        if (!targetColumn || targetColumn.board.projectId !== task.column.board.projectId) {
-            return { error: 'Target column not found' }
+        const r = result as {
+            success: true
+            sourceColumnName: string
+            targetColumnName: string
+            projectId: string
+            taskTitle: string
+            workspaceDiscordChannelId: string | null
+            leadDiscordIds: string[]
+            push: { id: string; status: string } | null
         }
 
-        if (task.column.board.projectId !== projectId) {
-            return { error: 'Invalid project' }
-        }
+        revalidatePath(`/dashboard/projects/${r.projectId}`)
 
-        const sourceColumnName = task.column?.name || ''
-        const targetColumnName = targetColumn.name
-
-        const canOverrideAttachmentRequirement = user.role === 'Admin' || user.role === 'Team Lead'
-
-        // SERVER-SIDE: Members must attach a file before moving to Review/Done.
-        if (!canOverrideAttachmentRequirement && (targetColumnName === 'Review' || targetColumnName === 'Done') && task.requireAttachment) {
-            const hasAttachments = task.attachments && task.attachments.length > 0
-            if (!hasAttachments) {
-                return {
-                    error: 'ATTACHMENT_REQUIRED',
-                    message: 'This task requires a file upload before it can be submitted for review or completion.'
-                }
-            }
-        }
-
-        // SECURITY: Members cannot move tasks TO Done
-        if (user.role === 'Member') {
-            if (targetColumnName === 'Done') {
-                return { error: 'Unauthorized: Only Admins and Team Leads can move tasks to Done' }
-            }
-            // Members cannot move tasks OUT of Review or Done
-            if (sourceColumnName === 'Review' || sourceColumnName === 'Done') {
-                return { error: 'Unauthorized: Only Admins and Team Leads can move tasks from Review or Done' }
-            }
-        }
-
-        // Build update data with timestamps for Review/Done
-        const updateData: Prisma.TaskUncheckedUpdateInput = { columnId }
-
-        // Set submittedAt when moving to Review (only if not already set)
-        if (targetColumnName === 'Review' && !task.submittedAt) {
-            updateData.submittedAt = new Date()
-        }
-
-        // Set approvedAt when moving to Done
-        if (targetColumnName === 'Done') {
-            updateData.approvedAt = new Date()
-        }
-
-        // Clear approvedAt if moving out of Done (task was rejected/moved back)
-        if (sourceColumnName === 'Done' && targetColumnName !== 'Done') {
-            updateData.approvedAt = null
-        }
-
-        let updatedTask = await prisma.task.update({
-            where: { id: taskId },
-            data: updateData,
-            include: {
-                assignee: { select: { id: true, name: true, discordId: true } },
-                assignees: { include: { user: { select: { id: true, name: true } } } },
-                push: { select: { id: true, name: true, color: true, status: true } },
-                attachments: { select: { id: true, createdAt: true } },
-                comments: { select: { createdAt: true } },
-                activityLogs: { select: { changedByName: true, createdAt: true } },
-                column: {
-                    include: {
-                        board: {
-                            include: {
-                                project: { select: { name: true, workspaceId: true } }
-                            }
-                        }
-                    }
-                }
-            }
-        })
-
-        // If a completed push has tasks moved out of Done, reopen it (manual completion required again)
-        if (updatedTask.push?.id && updatedTask.push.status === 'Completed' && targetColumnName !== 'Done') {
-            await prisma.push.update({
-                where: { id: updatedTask.push.id },
-                data: { status: 'Active' }
-            })
-            updatedTask = {
-                ...updatedTask,
-                push: { ...updatedTask.push, status: 'Active' }
-            }
-        }
-
-        // Create activity log for status change
-        await prisma.activityLog.create({
-            data: {
-                taskId,
-                taskTitle: task.title,
-                action: 'moved',
-                field: 'status',
-                oldValue: sourceColumnName,
-                newValue: targetColumnName,
-                changedBy: user.id,
-                changedByName: user.name || 'Unknown',
-                details: `Moved from "${sourceColumnName}" to "${targetColumnName}"`
-            }
-        })
-
-        // Revalidate the project path to update the UI
-        revalidatePath(`/dashboard/projects/${task.column.board.projectId}`)
-
-        // Discord: only ping when task is moved into Review (ping the project lead)
-        if (targetColumnName === 'Review') {
-            const project = await prisma.project.findUnique({
-                where: { id: task.column.board.projectId },
-                select: {
-                    name: true,
-                    workspaceId: true,
-                    leadAssignments: {
-                        orderBy: { createdAt: 'asc' },
-                        select: { user: { select: { name: true, discordId: true } } }
-                    },
-                    workspace: { select: { discordChannelId: true } }
-                }
-            })
-
-            const leadMentions = Array.from(
-                new Set(
-                    (project?.leadAssignments || [])
-                        .map((assignment) => assignment.user.discordId)
-                        .filter((discordId): discordId is string => Boolean(discordId))
-                )
+        // Discord: ping when task moved into Review
+        if (r.targetColumnName === 'Review' && r.workspaceDiscordChannelId && r.leadDiscordIds && r.leadDiscordIds.length > 0) {
+            const uniqueLeadDiscordIds = Array.from(new Set(r.leadDiscordIds))
+            await sendDiscordNotification(
+                "",
+                [{
+                    title: "🔍 Needs Review",
+                    description: `${uniqueLeadDiscordIds.map((id) => `<@${id}>`).join(' ')}, **${r.taskTitle}** needs review`,
+                    color: 0xFEE75C,
+                    timestamp: new Date().toISOString(),
+                }],
+                r.workspaceDiscordChannelId
             )
-
-            if (project?.workspaceId && leadMentions.length > 0 && project.workspace?.discordChannelId) {
-                await sendDiscordNotification(
-                    "",
-                    [{
-                        title: "🔍 Needs Review",
-                        description: `${leadMentions.map((discordId) => `<@${discordId}>`).join(' ')}, **${updatedTask.title}** needs review`,
-                        color: 0xFEE75C,
-                        timestamp: new Date().toISOString(),
-                    }],
-                    project.workspace.discordChannelId
-                )
-            }
         }
 
-        return { success: true, task: updatedTask }
+        return {
+            success: true as const,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            task: { id: taskId, title: r.taskTitle, columnId } as any,
+        }
     } catch (e) {
         console.error("Update task error:", e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
-        return { error: `Failed to move task: ${errorMessage}` }
+        return { error: `Failed to move task: ${errorMessage}`, success: false as const, task: null }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// updateTaskDetails
+// ─────────────────────────────────────────────────────────────
 
 export async function updateTaskDetails(taskId: string, input: Partial<CreateTaskInput>) {
     try {
@@ -507,91 +287,6 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
         if (!user.workspaceId) {
             return { error: 'Unauthorized: No workspace' }
         }
-
-        const [task, newAssignee] = await Promise.all([
-            prisma.task.findUnique({
-                where: { id: taskId },
-                include: {
-                    assignees: { select: { userId: true } },
-                    column: {
-                        include: {
-                            board: {
-                                include: {
-                                    project: {
-                                        select: {
-                                            id: true,
-                                            name: true,
-                                            workspaceId: true,
-                                            workspace: { select: { discordChannelId: true } }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    assignee: { select: { name: true } }
-                }
-            }),
-            input.assigneeId !== undefined && input.assigneeId !== "" ? prisma.user.findUnique({
-                where: { id: input.assigneeId },
-                select: { name: true, discordId: true }
-            }) : Promise.resolve(null)
-        ])
-
-        if (!task) {
-            return { error: 'Task not found' }
-        }
-
-        if (task.column?.board?.project?.workspaceId !== user.workspaceId) {
-            return { error: 'Task not found' }
-        }
-
-        const project = task.column?.board?.project
-        const workspaceId = project?.workspaceId
-        const webhookUrl = project?.workspace?.discordChannelId
-
-        // Members cannot edit tasks in Review or Done
-        if (user.role === 'Member') {
-            const columnName = task.column?.name || ''
-            if (columnName === 'Review' || columnName === 'Done') {
-                return { error: 'Unauthorized: Cannot edit tasks in Review or Done' }
-            }
-        }
-
-        // Track all changes
-        const changes: Array<{ field: string; oldValue: string; newValue: string }> = []
-        const activityLogs: Array<{ action: string; field: string; oldValue: string; newValue: string; changedBy: string; changedByName: string }> = []
-
-        // Title changes (rename)
-        const nextTitle = input.title !== undefined ? input.title.trim() : undefined
-        if (nextTitle !== undefined && nextTitle.length === 0) {
-            return { error: 'Title is required' }
-        }
-        const titleChanged = nextTitle !== undefined && nextTitle !== task.title
-        if (titleChanged) {
-            changes.push({
-                field: 'Title',
-                oldValue: task.title,
-                newValue: nextTitle!
-            })
-            activityLogs.push({
-                action: 'updated',
-                field: 'title',
-                oldValue: task.title,
-                newValue: nextTitle!,
-                changedBy: user.id,
-                changedByName: user.name || 'Unknown'
-            })
-        }
-
-        const oldAssignedIds = new Set<string>([
-            ...(task.assigneeId ? [task.assigneeId] : []),
-            ...task.assignees.map((a) => a.userId),
-        ])
-
-        // Get old assignee name for comparison
-        const oldAssigneeName = task.assignee?.name || 'Unassigned'
-        let newAssigneeName = oldAssigneeName
 
         const assigneeIdsToCheck = [
             ...(input.assigneeId !== undefined && input.assigneeId !== "" ? [input.assigneeId] : []),
@@ -606,80 +301,7 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
-        if (input.assigneeId !== undefined && input.assigneeId !== task.assigneeId) {
-            newAssigneeName = newAssignee?.name || 'Unassigned'
-
-            changes.push({
-                field: 'Assignee',
-                oldValue: oldAssigneeName,
-                newValue: newAssigneeName
-            })
-            activityLogs.push({
-                action: 'updated',
-                field: 'assignee',
-                oldValue: oldAssigneeName,
-                newValue: newAssigneeName,
-                changedBy: user.id,
-                changedByName: user.name || 'Unknown'
-            })
-        }
-
-        if (input.description !== undefined && input.description !== task.description) {
-            changes.push({
-                field: 'Description',
-                oldValue: task.description || 'None',
-                newValue: input.description || 'None'
-            })
-            activityLogs.push({
-                action: 'updated',
-                field: 'description',
-                oldValue: task.description || '',
-                newValue: input.description || '',
-                changedBy: user.id,
-                changedByName: user.name || 'Unknown'
-            })
-        }
-
-        if (input.startDate !== undefined) {
-            const oldStartDate = task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : 'None'
-            const newStartDate = input.startDate ? new Date(input.startDate).toISOString().split('T')[0] : 'None'
-            if (oldStartDate !== newStartDate) {
-                changes.push({
-                    field: 'Start Date',
-                    oldValue: oldStartDate,
-                    newValue: newStartDate
-                })
-                activityLogs.push({
-                    action: 'updated',
-                    field: 'startDate',
-                    oldValue: oldStartDate,
-                    newValue: newStartDate,
-                    changedBy: user.id,
-                    changedByName: user.name || 'Unknown'
-                })
-            }
-        }
-
-        if (input.endDate !== undefined) {
-            const oldEndDate = task.endDate ? new Date(task.endDate).toISOString().split('T')[0] : 'None'
-            const newEndDate = input.endDate ? new Date(input.endDate).toISOString().split('T')[0] : 'None'
-            if (oldEndDate !== newEndDate) {
-                changes.push({
-                    field: 'Due Date',
-                    oldValue: oldEndDate,
-                    newValue: newEndDate
-                })
-                activityLogs.push({
-                    action: 'updated',
-                    field: 'endDate',
-                    oldValue: oldEndDate,
-                    newValue: newEndDate,
-                    changedBy: user.id,
-                    changedByName: user.name || 'Unknown'
-                })
-            }
-        }
-
+        // Resolve attachment folder details
         let nextAttachmentFolderId: string | null | undefined = undefined
         let nextAttachmentFolderName: string | null | undefined = undefined
         if (input.attachmentFolderId !== undefined) {
@@ -708,129 +330,105 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
-        const nextAssignedIds = new Set<string>([...oldAssignedIds])
-        if (input.assigneeIds !== undefined) {
-            nextAssignedIds.clear()
-            for (const id of input.assigneeIds) nextAssignedIds.add(id)
-        }
-        if (input.assigneeId !== undefined) {
-            if (task.assigneeId) nextAssignedIds.delete(task.assigneeId)
-            if (input.assigneeId && input.assigneeId !== "") nextAssignedIds.add(input.assigneeId)
-        }
+        // Convert date strings to milliseconds for Convex
+        const startDateMs = input.startDate !== undefined
+            ? (input.startDate ? parseDateInput(input.startDate, "startOfDay").getTime() : null)
+            : undefined
+        const endDateMs = input.endDate !== undefined
+            ? (input.endDate ? parseDateInput(input.endDate, "endOfDay").getTime() : null)
+            : undefined
 
-        const newlyAssignedIds = Array.from(nextAssignedIds).filter((id) => !oldAssignedIds.has(id))
-
-        // Update task
-        await prisma.task.update({
-            where: { id: taskId },
-            data: {
-                title: titleChanged ? nextTitle : undefined,
+        const result = await updateTaskDetailsInConvex(
+            taskId,
+            user.workspaceId,
+            user.role,
+            user.id,
+            user.name || 'Unknown',
+            {
+                title: input.title,
                 description: input.description !== undefined ? (input.description || null) : undefined,
                 assigneeId: input.assigneeId !== undefined ? (input.assigneeId && input.assigneeId !== "" ? input.assigneeId : null) : undefined,
-                startDate: input.startDate !== undefined ? (input.startDate ? parseDateInput(input.startDate, "startOfDay") : null) : undefined,
-                endDate: input.endDate !== undefined ? (input.endDate ? parseDateInput(input.endDate, "endOfDay") : null) : undefined,
-                requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : undefined,
-                enableProgress: input.enableProgress !== undefined ? input.enableProgress : undefined,
-                progress: input.progress !== undefined ? input.progress : undefined,
-                attachmentFolderId: nextAttachmentFolderId !== undefined ? nextAttachmentFolderId : undefined,
-                attachmentFolderName: nextAttachmentFolderName !== undefined ? nextAttachmentFolderName : undefined
+                assigneeIds: input.assigneeIds,
+                startDate: startDateMs,
+                endDate: endDateMs,
+                requireAttachment: input.requireAttachment,
+                enableProgress: input.enableProgress,
+                progress: input.progress,
+                attachmentFolderId: nextAttachmentFolderId,
+                attachmentFolderName: nextAttachmentFolderName,
             }
-        })
+        )
 
-        // Update TaskAssignee entries if assigneeIds provided
-        if (input.assigneeIds !== undefined) {
-            const uniqueAssigneeIds = Array.from(new Set(input.assigneeIds)).filter((id) => id.trim().length > 0)
-            // Delete existing assignees
-            await prisma.taskAssignee.deleteMany({
-                where: { taskId: taskId }
-            })
-            // Create new assignees
-            if (uniqueAssigneeIds.length > 0) {
-                await prisma.taskAssignee.createMany({
-                    data: uniqueAssigneeIds.map(userId => ({
-                        taskId: taskId,
-                        userId: userId
-                    }))
-                })
-            }
+        if (!result || 'error' in result) {
+            return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to update task' }
         }
 
-        // Discord: only ping when someone is newly assigned
-        if (newlyAssignedIds.length > 0) {
-            const projectName = project?.name || 'Unknown Project'
-            const projectId = project?.id
+        const r = result as {
+            success: true
+            task: Record<string, unknown> | null
+            newlyAssignedIds: string[]
+            discordWebhookUrl: string | null
+            projectName: string | null
+            taskTitle: string
+            projectId: string
+        }
 
-            if (workspaceId && projectId && webhookUrl) {
-                const assignedUsers = await prisma.user.findMany({
-                    where: { id: { in: newlyAssignedIds }, discordId: { not: null } },
-                    select: { discordId: true }
-                })
-                const mentions = assignedUsers.map((u) => (u.discordId ? `<@${u.discordId}>` : "")).filter(Boolean).join(" ")
+        // Discord: ping newly assigned users
+        if (r.newlyAssignedIds && r.newlyAssignedIds.length > 0 && r.discordWebhookUrl && r.projectName) {
+            const assignedUsers = await fetchQuery(api.auth.getUserDiscordIds, { userIds: r.newlyAssignedIds })
+            const mentions = assignedUsers.map((u) => `<@${u.discordId}>`).join(" ")
 
-                if (mentions) {
-                    const dueDate =
-                        input.endDate !== undefined
-                            ? (input.endDate ? parseDateInput(input.endDate, "endOfDay") : null)
-                            : (task.endDate ?? null)
-                    await sendDiscordNotification(
-                        "",
-                        [{
-                            title: "📌 Task Assignment",
-                            description: `${mentions}, you have been assigned **${task.title}** in project **${projectName}**\n${formatDueLine(dueDate)}`,
-                            color: 0x5865F2,
-                            timestamp: new Date().toISOString(),
-                        }],
-                        webhookUrl
-                    )
-                }
+            if (mentions) {
+                const dueDate =
+                    input.endDate !== undefined
+                        ? (input.endDate ? parseDateInput(input.endDate, "endOfDay") : null)
+                        : null
+                await sendDiscordNotification(
+                    "",
+                    [{
+                        title: "📌 Task Assignment",
+                        description: `${mentions}, you have been assigned **${r.taskTitle}** in project **${r.projectName}**\n${formatDueLine(dueDate)}`,
+                        color: 0x5865F2,
+                        timestamp: new Date().toISOString(),
+                    }],
+                    r.discordWebhookUrl
+                )
             }
         }
 
-        // Create activity logs
-        if (activityLogs.length > 0) {
-            // Use the updated title if it changed during this update.
-            const taskTitle = titleChanged ? nextTitle! : task.title
-
-            await prisma.activityLog.createMany({
-                data: activityLogs.map(log => ({
-                    taskId,
-                    taskTitle,
-                    action: log.action,
-                    field: log.field,
-                    oldValue: log.oldValue,
-                    newValue: log.newValue,
-                    changedBy: log.changedBy,
-                    changedByName: log.changedByName
-                }))
-            })
-
-            // Discord notifications intentionally limited to assignment/review/chat mention pings.
+        if (r.projectId) {
+            revalidatePath(`/dashboard/projects/${r.projectId}`)
         }
 
-        // Fetch completely updated task for UI update
-        const updatedTask = await prisma.task.findUnique({
-            where: { id: taskId },
-            include: {
-                assignee: { select: { id: true, name: true, discordId: true } },
-                assignees: { include: { user: { select: { id: true, name: true } } } },
-                push: { select: { id: true, name: true, color: true, status: true } },
-                attachments: { select: { id: true, createdAt: true } },
-                comments: { select: { createdAt: true } },
-                activityLogs: { select: { changedByName: true, createdAt: true } }
+        // Convert number timestamps to ISO strings for client compatibility
+        const rawTask = r.task
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const serializedTask: any = rawTask
+            ? {
+                ...rawTask,
+                id: rawTask.id as string,
+                title: rawTask.title as string,
+                columnId: (rawTask.columnId as string | null | undefined) ?? null,
+                startDate: typeof rawTask.startDate === 'number' ? new Date(rawTask.startDate as number).toISOString() : ((rawTask.startDate as string | null) ?? null),
+                endDate: typeof rawTask.endDate === 'number' ? new Date(rawTask.endDate as number).toISOString() : ((rawTask.endDate as string | null) ?? null),
+                submittedAt: typeof rawTask.submittedAt === 'number' ? new Date(rawTask.submittedAt as number).toISOString() : ((rawTask.submittedAt as string | null) ?? null),
+                approvedAt: typeof rawTask.approvedAt === 'number' ? new Date(rawTask.approvedAt as number).toISOString() : ((rawTask.approvedAt as string | null) ?? null),
+                createdAt: typeof rawTask.createdAt === 'number' ? new Date(rawTask.createdAt as number).toISOString() : (rawTask.createdAt as string | null) ?? null,
+                updatedAt: typeof rawTask.updatedAt === 'number' ? new Date(rawTask.updatedAt as number).toISOString() : (rawTask.updatedAt as string | null) ?? null,
             }
-        })
+            : null
 
-        if (task?.column?.board?.projectId) {
-            revalidatePath(`/dashboard/projects/${task.column.board.projectId}`)
-        }
-
-        return { success: true, task: updatedTask }
+        return { success: true, task: serializedTask }
     } catch (e) {
         console.error("Update details error:", e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
         return { error: `Failed to update task: ${errorMessage}` }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// deleteTask
+// ─────────────────────────────────────────────────────────────
 
 export async function deleteTask(taskId: string, projectId: string) {
     try {
@@ -843,77 +441,20 @@ export async function deleteTask(taskId: string, projectId: string) {
             return { error: 'Unauthorized: No workspace' }
         }
 
-        const task = await prisma.task.findUnique({
-            where: { id: taskId },
-            include: {
-                column: {
-                    include: {
-                        board: { include: { project: { select: { workspaceId: true } } } }
-                    }
-                }
-            }
-        })
+        const result = await deleteTaskInConvex(
+            taskId,
+            projectId,
+            user.workspaceId,
+            user.role,
+            user.id,
+            user.name || 'Unknown'
+        )
 
-        if (!task) {
-            return { error: 'Task not found' }
+        if (!result || 'error' in result) {
+            return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to delete task' }
         }
 
-        if (task.column?.board?.project?.workspaceId !== user.workspaceId) {
-            return { error: 'Task not found' }
-        }
-
-        const taskProjectId = task.column?.board?.projectId
-        if (taskProjectId && taskProjectId !== projectId) {
-            return { error: 'Invalid project' }
-        }
-
-        // Members cannot delete tasks in Review or Done
-        if (user.role === 'Member') {
-            const columnName = task.column?.name || ''
-            if (columnName === 'Review' || columnName === 'Done') {
-                return { error: 'Unauthorized: Cannot delete tasks in Review or Done' }
-            }
-        }
-
-        await prisma.$transaction(async (tx) => {
-            if (taskProjectId) {
-                await tx.taskDeletion.upsert({
-                    where: { taskId },
-                    create: {
-                        taskId,
-                        projectId: taskProjectId,
-                        workspaceId: user.workspaceId!,
-                        deletedBy: user.id,
-                        deletedByName: user.name || 'Unknown',
-                        deletedAt: new Date()
-                    },
-                    update: {
-                        projectId: taskProjectId,
-                        workspaceId: user.workspaceId!,
-                        deletedBy: user.id,
-                        deletedByName: user.name || 'Unknown',
-                        deletedAt: new Date()
-                    }
-                })
-            }
-
-            // Create activity log before deletion (store task title since task will be deleted)
-            await tx.activityLog.create({
-                data: {
-                    taskId: taskId,
-                    taskTitle: task.title,
-                    action: 'deleted',
-                    field: null,
-                    oldValue: task.title,
-                    newValue: null,
-                    changedBy: user.id,
-                    changedByName: user.name || 'Unknown',
-                    details: `Task "${task.title}" was deleted`
-                }
-            })
-
-            await tx.task.delete({ where: { id: taskId } })
-        })
+        const { projectId: taskProjectId } = result as { success: true; projectId: string }
         if (taskProjectId) {
             revalidatePath(`/dashboard/projects/${taskProjectId}`)
         }
@@ -924,6 +465,10 @@ export async function deleteTask(taskId: string, projectId: string) {
         return { error: `Failed to delete task: ${errorMessage}` }
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// acceptReviewTask / denyReviewTask
+// ─────────────────────────────────────────────────────────────
 
 export async function acceptReviewTask(taskId: string, columnId: string, projectId: string) {
     // Accept means move to Done
@@ -943,6 +488,10 @@ export async function denyReviewTask(taskId: string, columnId: string, projectId
     return result
 }
 
+// ─────────────────────────────────────────────────────────────
+// updateTaskProgress
+// ─────────────────────────────────────────────────────────────
+
 export async function updateTaskProgress(taskId: string, progress: number, projectId: string, forceMoveToReview: boolean = false) {
     try {
         const user = await getCurrentUser()
@@ -954,57 +503,20 @@ export async function updateTaskProgress(taskId: string, progress: number, proje
             return { error: 'Unauthorized: No workspace' }
         }
 
-        const task = await prisma.task.findUnique({
-            where: { id: taskId },
-            include: {
-                assignees: true,
-                column: { include: { board: { include: { project: { select: { workspaceId: true } } } } } }
-            }
-        })
+        const result = await updateTaskProgressInConvex(
+            taskId,
+            progress,
+            user.workspaceId,
+            user.role,
+            user.id,
+            forceMoveToReview
+        )
 
-        if (!task) {
-            return { error: 'Task not found' }
+        if (!result || 'error' in result) {
+            return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to update progress' }
         }
 
-        if (task.column?.board?.project?.workspaceId !== user.workspaceId) {
-            return { error: 'Task not found' }
-        }
-
-        // Verify assignment (only assignees can update progress)
-        const isAssignee = task.assigneeId === user.id || task.assignees.some(a => a.userId === user.id)
-        if (!isAssignee && user.role !== 'Admin') { // Admins can override
-            return { error: 'Only assignees can update progress' }
-        }
-
-        if (forceMoveToReview && isAssignee && progress === 100) {
-            // Find "Review" column for this project
-            const column = await prisma.column.findUnique({
-                where: { id: task.columnId || undefined },
-                include: { board: { include: { columns: true } } }
-            })
-
-            if (column && column.board) {
-                const reviewColumn = column.board.columns.find(c => c.name === 'Review')
-                if (reviewColumn && reviewColumn.id !== task.columnId) {
-                    await prisma.task.update({
-                        where: { id: taskId },
-                        data: {
-                            progress,
-                            columnId: reviewColumn.id,
-                            submittedAt: new Date() // Track when submitted for review
-                        }
-                    })
-                    return { success: true, movedToReview: true }
-                }
-            }
-        }
-
-        await prisma.task.update({
-            where: { id: taskId },
-            data: { progress }
-        })
-
-        return { success: true }
+        return result as { success: true; movedToReview?: boolean }
     } catch (e) {
         console.error("Update progress error:", e)
         return { error: 'Failed to update progress' }

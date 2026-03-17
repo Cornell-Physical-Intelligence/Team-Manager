@@ -1,9 +1,7 @@
 import { getCurrentUser } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import prisma from "@/lib/prisma"
-import { driveConfigTableExists } from "@/lib/googleDrive"
 import { appUrl } from "@/lib/appUrl"
-import { getErrorCode } from "@/lib/errors"
+import { getSettingsPageDataFromConvex } from "@/lib/convex/settings"
 import { headers } from "next/headers"
 import { SettingsShell } from "./SettingsShell"
 import { GeneralTab } from "./GeneralTab"
@@ -12,27 +10,6 @@ import { IntegrationsTab } from "./IntegrationsTab"
 import { DangerTab } from "./DangerTab"
 
 export const dynamic = "force-dynamic"
-
-async function fetchDriveConfig(workspaceId: string) {
-    const hasTable = await driveConfigTableExists()
-    if (!hasTable) return null
-
-    try {
-        return await prisma.workspaceDriveConfig.findUnique({
-            where: { workspaceId },
-            select: {
-                refreshToken: true,
-                folderId: true,
-                folderName: true,
-                connectedByName: true,
-            },
-        })
-    } catch (error: unknown) {
-        const code = getErrorCode(error)
-        if (code === "P2021" || code === "P2022") return null
-        throw error
-    }
-}
 
 export default async function SettingsPage() {
     const user = await getCurrentUser()
@@ -48,58 +25,14 @@ export default async function SettingsPage() {
     const proto = forwardedProto || (host?.includes("localhost") ? "http" : "https")
 
     // Fetch data in parallel
-    const [workspace, usersRaw, allProjects, driveConfig] = await Promise.all([
-        user.workspaceId
-            ? prisma.workspace.findUnique({
-                  where: { id: user.workspaceId },
-                  select: {
-                      id: true,
-                      name: true,
-                      inviteCode: true,
-                      discordChannelId: true,
-                  },
-              })
-            : null,
-        prisma.user.findMany({
-            where: {
-                memberships: {
-                    some: { workspaceId: user.workspaceId || "non-existent-id" },
-                },
-            },
-            include: {
-                memberships: {
-                    where: { workspaceId: user.workspaceId || "non-existent-id" },
-                    select: { role: true, name: true },
-                },
-                projectMemberships: {
-                    where: {
-                        project: { archivedAt: null },
-                    },
-                    include: {
-                        project: { select: { id: true, name: true } },
-                    },
-                },
-            },
-            orderBy: { name: "asc" },
-        }),
-        prisma.project.findMany({
-            where: { workspaceId: user.workspaceId || "non-existent-id", archivedAt: null },
-            select: { id: true, name: true, color: true },
-            orderBy: { createdAt: "desc" },
-        }),
-        user.workspaceId ? fetchDriveConfig(user.workspaceId) : null,
-    ])
+    const settingsData = user.workspaceId
+        ? await getSettingsPageDataFromConvex(user.workspaceId)
+        : null
 
-    const members = usersRaw.map((member) => {
-        const membership = member.memberships[0]
-        return {
-            id: member.id,
-            name: membership?.name || member.name,
-            email: member.email,
-            role: membership?.role || "Member",
-            projectMemberships: member.projectMemberships,
-        }
-    })
+    const workspace = settingsData?.workspace ?? null
+    const members = settingsData?.members ?? []
+    const allProjects = settingsData?.projects ?? []
+    const driveConfig = settingsData?.driveConfig ?? null
 
     // Determine which tabs to show
     const visibleTabs = ["general", "members"]

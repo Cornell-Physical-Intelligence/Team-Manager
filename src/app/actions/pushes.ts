@@ -1,21 +1,15 @@
 'use server'
 
-import type { Prisma } from '@prisma/client'
-import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getTaskContext } from '@/lib/access'
-
-const PUSH_COLORS = [
-    "#3b82f6", // blue
-    "#22c55e", // green
-    "#f59e0b", // amber
-    "#8b5cf6", // violet
-    "#ec4899", // pink
-    "#06b6d4", // cyan
-    "#f97316", // orange
-    "#84cc16", // lime
-]
+import {
+    createPush as convexCreatePush,
+    updatePush as convexUpdatePush,
+    deletePush as convexDeletePush,
+    assignTaskToPush as convexAssignTaskToPush,
+    listPushes as convexListPushes,
+} from '@/lib/convex/pushes'
 
 export async function createPush(formData: FormData) {
     try {
@@ -38,61 +32,45 @@ export async function createPush(formData: FormData) {
         const startDate = formData.get('startDate') as string
         const endDate = formData.get('endDate') as string
         const dependsOnId = formData.get('dependsOnId') as string | null
+        const color = formData.get('color') as string | null
 
         if (!name?.trim()) return { error: 'Push name is required' }
         if (!projectId) return { error: 'Project ID is required' }
         if (!startDate) return { error: 'Start date is required' }
-        // End date is optional now
 
         const projectContext = await getProjectContext(projectId)
         if (!projectContext || projectContext.workspaceId !== user.workspaceId) {
             return { error: 'Project not found' }
         }
 
-        if (dependsOnId) {
-            const dependency = await prisma.push.findUnique({
-                where: { id: dependsOnId },
-                select: { projectId: true, project: { select: { workspaceId: true } } }
-            })
-
-            if (!dependency || dependency.project.workspaceId !== user.workspaceId || dependency.projectId !== projectId) {
-                return { error: 'Invalid dependency push' }
-            }
-        }
-
         const start = new Date(startDate)
-        let end: Date | null = null
+        let endMs: number | undefined
 
         if (endDate) {
-            end = new Date(endDate)
+            const end = new Date(endDate)
             if (end < start) {
                 return { error: 'End date must be after or equal to start date' }
             }
+            endMs = end.getTime()
         }
 
-        const color = formData.get('color') as string | null
-
-        // Get count of existing pushes to assign fallback color
-        const existingCount = await prisma.push.count({
-            where: { projectId }
+        const result = await convexCreatePush({
+            projectId,
+            name: name.trim(),
+            startDate: start.getTime(),
+            endDate: endMs,
+            color: color ?? undefined,
+            dependsOnId: dependsOnId ?? undefined,
         })
 
-        const pushData: Prisma.PushUncheckedCreateInput = {
-            name: name.trim(),
-            projectId,
-            startDate: start,
-            endDate: end,
-            color: color || PUSH_COLORS[existingCount % PUSH_COLORS.length],
-            status: 'Active',
-            dependsOnId: dependsOnId || null
+        if ('error' in result) {
+            return { error: result.error }
         }
-
-        const push = await prisma.push.create({ data: pushData })
 
         revalidatePath('/dashboard')
         revalidatePath(`/dashboard/projects/${projectId}`)
 
-        return { success: true, push }
+        return { success: true, push: result.push }
     } catch (error) {
         console.error('[createPush] Error:', error)
         return { error: 'Failed to create push' }
@@ -122,50 +100,36 @@ export async function updatePush(input: {
     }
 
     try {
-        const push = await prisma.push.findUnique({
-            where: { id: input.id },
-            select: { projectId: true, project: { select: { workspaceId: true } } }
-        })
-
-        if (!push || push.project.workspaceId !== user.workspaceId) {
-            return { error: 'Push not found' }
+        const convexInput: Parameters<typeof convexUpdatePush>[0] = {
+            pushId: input.id,
+            workspaceId: user.workspaceId,
         }
 
-        const updateData: Prisma.PushUncheckedUpdateInput = {}
-        if (input.name) updateData.name = input.name
-        if (input.startDate) updateData.startDate = new Date(input.startDate)
+        if (input.name) convexInput.name = input.name
+        if (input.startDate) convexInput.startDate = new Date(input.startDate).getTime()
 
         // Handle endDate explicitly if passed (can be null)
         if (input.endDate !== undefined) {
-            updateData.endDate = input.endDate ? new Date(input.endDate) : null
+            convexInput.endDate = input.endDate ? new Date(input.endDate).getTime() : null
         }
 
-        if (input.status) updateData.status = input.status
-        if (input.color) updateData.color = input.color
+        if (input.status) convexInput.status = input.status
+        if (input.color) convexInput.color = input.color
 
         // Handle dependsOnId explicitly if passed (can be null)
         if (input.dependsOnId !== undefined) {
-            if (input.dependsOnId) {
-                const dependency = await prisma.push.findUnique({
-                    where: { id: input.dependsOnId },
-                    select: { projectId: true, project: { select: { workspaceId: true } } }
-                })
-
-                if (!dependency || dependency.project.workspaceId !== user.workspaceId || dependency.projectId !== push.projectId) {
-                    return { error: 'Invalid dependency push' }
-                }
-            }
-
-            updateData.dependsOnId = input.dependsOnId || null
+            convexInput.dependsOnId = input.dependsOnId ?? null
         }
 
-        await prisma.push.update({
-            where: { id: input.id },
-            data: updateData
-        })
+        const result = await convexUpdatePush(convexInput)
+
+        if ('error' in result) {
+            return { error: result.error }
+        }
 
         revalidatePath('/dashboard')
-        revalidatePath(`/dashboard/projects/${push.projectId}`)
+        revalidatePath('/dashboard/projects', 'layout')
+
         return { success: true }
     } catch (error) {
         console.error('Failed to update push:', error)
@@ -188,27 +152,15 @@ export async function deletePush(pushId: string, projectId: string) {
             return { error: 'Unauthorized: Only Admins and Team Leads can delete pushes' }
         }
 
-        const push = await prisma.push.findUnique({
-            where: { id: pushId },
-            select: { projectId: true, project: { select: { workspaceId: true } } }
+        const result = await convexDeletePush({
+            pushId,
+            projectId,
+            workspaceId: user.workspaceId,
         })
 
-        if (!push || push.projectId !== projectId || push.project.workspaceId !== user.workspaceId) {
-            return { error: 'Push not found' }
+        if ('error' in result) {
+            return { error: result.error }
         }
-
-        // Use transaction to ensure atomic operation
-        await prisma.$transaction(async (tx) => {
-            // Remove push association from tasks before deleting
-            await tx.task.updateMany({
-                where: { pushId },
-                data: { pushId: null }
-            })
-
-            await tx.push.delete({
-                where: { id: pushId }
-            })
-        })
 
         revalidatePath('/dashboard')
         revalidatePath(`/dashboard/projects/${projectId}`)
@@ -231,45 +183,23 @@ export async function assignTaskToPush(taskId: string, pushId: string | null) {
     }
 
     try {
-        const task = await prisma.task.findUnique({
-            where: { id: taskId },
-            include: { column: { include: { board: true } } }
-        })
-
-        if (!task) {
-            return { error: 'Task not found' }
-        }
-
         const taskContext = await getTaskContext(taskId)
         if (!taskContext || taskContext.workspaceId !== user.workspaceId) {
             return { error: 'Task not found' }
         }
 
-        if (pushId) {
-            const push = await prisma.push.findUnique({
-                where: { id: pushId },
-                select: { projectId: true, project: { select: { workspaceId: true } } }
-            })
-
-            if (!push || push.project.workspaceId !== user.workspaceId) {
-                return { error: 'Push not found' }
-            }
-
-            if (taskContext.projectId && push.projectId !== taskContext.projectId) {
-                return { error: 'Push does not belong to this task project' }
-            }
-        }
-
-        await prisma.task.update({
-            where: { id: taskId },
-            data: { pushId }
+        const result = await convexAssignTaskToPush({
+            taskId,
+            pushId,
+            workspaceId: user.workspaceId,
         })
 
-        // Completion is now manual; do not auto-update push status.
+        if ('error' in result) {
+            return { error: result.error }
+        }
 
-        const projectId = task.column?.board?.projectId
-        if (projectId) {
-            revalidatePath(`/dashboard/projects/${projectId}`)
+        if (taskContext.projectId) {
+            revalidatePath(`/dashboard/projects/${taskContext.projectId}`)
         }
 
         return { success: true }
@@ -296,25 +226,12 @@ export async function getPushes(projectId: string) {
             return []
         }
 
-        const pushes = await prisma.push.findMany({
-            where: { projectId },
-            include: {
-                tasks: {
-                    select: {
-                        id: true,
-                        column: { select: { name: true } }
-                    }
-                }
-            },
-            orderBy: { startDate: 'asc' }
+        const pushes = await convexListPushes({
+            projectId,
+            workspaceId: user.workspaceId,
         })
 
-        return pushes.map((push) => ({
-            ...push,
-            dependsOnId: push.dependsOnId,
-            taskCount: push.tasks.length,
-            completedCount: push.tasks.filter((task) => task.column?.name === 'Done').length
-        }))
+        return pushes
     } catch (error) {
         console.error('Failed to get pushes:', error)
         return []

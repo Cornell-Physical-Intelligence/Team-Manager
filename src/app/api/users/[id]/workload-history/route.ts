@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { getUserWorkloadHistoryFromConvex } from '@/lib/convex/settings'
 
 export async function GET(
     request: Request,
@@ -14,65 +14,10 @@ export async function GET(
 
         const { id: targetUserId } = await params
 
-        // Verify target user belongs to same workspace
-        const membership = await prisma.workspaceMember.findUnique({
-            where: { userId_workspaceId: { userId: targetUserId, workspaceId: user.workspaceId } },
-            select: { userId: true }
-        })
-
-        if (!membership) {
+        const history = await getUserWorkloadHistoryFromConvex(user.workspaceId, targetUserId)
+        if (!history) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 })
         }
-
-        // Get tasks assigned to this user with submittedAt and approvedAt timestamps
-        const tasks = await prisma.task.findMany({
-            where: {
-                OR: [
-                    { assigneeId: targetUserId },
-                    { assignees: { some: { userId: targetUserId } } }
-                ],
-                AND: [
-                    {
-                        OR: [
-                            { column: { board: { project: { workspaceId: user.workspaceId, archivedAt: null } } } },
-                            { push: { project: { workspaceId: user.workspaceId, archivedAt: null } } }
-                        ]
-                    }
-                ]
-            },
-            select: {
-                id: true,
-                submittedAt: true,
-                approvedAt: true
-            }
-        })
-
-        // Aggregate by date
-        const dateMap = new Map<string, { submitted: number, approved: number }>()
-
-        tasks.forEach(task => {
-            if (task.submittedAt) {
-                const dateKey = task.submittedAt.toISOString().split('T')[0]
-                const existing = dateMap.get(dateKey) || { submitted: 0, approved: 0 }
-                existing.submitted++
-                dateMap.set(dateKey, existing)
-            }
-            if (task.approvedAt) {
-                const dateKey = task.approvedAt.toISOString().split('T')[0]
-                const existing = dateMap.get(dateKey) || { submitted: 0, approved: 0 }
-                existing.approved++
-                dateMap.set(dateKey, existing)
-            }
-        })
-
-        // Convert to sorted array
-        const history = Array.from(dateMap.entries())
-            .map(([date, counts]) => ({
-                date,
-                submitted: counts.submitted,
-                approved: counts.approved
-            }))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
         return NextResponse.json({ history })
     } catch (error) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import prisma from '@/lib/prisma'
+import { api, createLegacyId, fetchMutation } from '@/lib/convex/server'
 import { createSession, SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from '@/lib/session'
 
 export async function GET(request: Request) {
@@ -14,27 +14,10 @@ export async function GET(request: Request) {
     try {
         const cookieStore = await cookies()
 
-        // Find or create demo admin user
-        let demoUser = await prisma.user.findFirst({
-            where: { email: 'demo@cupi.admin' }
+        const demoUser = await fetchMutation(api.auth.getOrCreateDemoUser, {
+            userId: createLegacyId("user"),
+            now: Date.now(),
         })
-
-        if (!demoUser) {
-            demoUser = await prisma.user.create({
-                data: {
-                    name: 'Demo Admin',
-                    email: 'demo@cupi.admin',
-                    role: 'Admin',
-                    avatar: null
-                }
-            })
-        } else {
-            // Always ensure demo user is Admin
-            demoUser = await prisma.user.update({
-                where: { id: demoUser.id },
-                data: { role: 'Admin' }
-            })
-        }
 
         const session = await createSession(demoUser.id)
 

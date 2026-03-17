@@ -1,26 +1,22 @@
 'use server'
 
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
 
 export async function deleteWorkspace(workspaceId: string, confirmName: string) {
     const user = await getCurrentUser()
     if (!user) return { error: "Not authenticated" }
 
     try {
-        const workspace = await prisma.workspace.findUnique({
-            where: { id: workspaceId }
+        const workspace = await fetchQuery(api.admin.getWorkspace, {
+            workspaceId,
         })
 
         if (!workspace) return { error: "Workspace not found" }
 
         // Security checks
         if (workspace.ownerId !== user.id) {
-            // Check if user is Admin in this workspace via Membership
-            const membership = await prisma.workspaceMember.findUnique({
-                where: { userId_workspaceId: { userId: user.id, workspaceId } }
-            })
+            const membership = user.memberships.find((entry) => entry.workspaceId === workspaceId)
 
             if (!membership || membership.role !== 'Admin') {
                 return { error: "You do not have permission to delete this workspace (Owner or Admin required)" }
@@ -33,9 +29,12 @@ export async function deleteWorkspace(workspaceId: string, confirmName: string) 
             return { error: "Workspace name confirmation incorrect" }
         }
 
-        await prisma.workspace.delete({
-            where: { id: workspaceId }
+        const result = await fetchMutation(api.admin.deleteWorkspace, {
+            workspaceId,
         })
+        if ('error' in result) {
+            return { error: "Workspace not found" }
+        }
 
         return { success: true }
 

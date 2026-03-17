@@ -1,8 +1,8 @@
 "use server"
 
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { joinWorkspaceByCode } from "@/lib/workspaceInvites"
+import { api, fetchMutation } from "@/lib/convex/server"
 import { getErrorMessage } from "@/lib/errors"
 import { createWorkspaceForUser } from "@/lib/workspaces"
 
@@ -52,17 +52,13 @@ export async function switchWorkspace(workspaceId: string) {
     const user = await getCurrentUser()
     if (!user) throw new Error("Not authenticated")
 
-    const membership = await prisma.workspaceMember.findUnique({
-        where: { userId_workspaceId: { userId: user.id, workspaceId } }
+    const result = await fetchMutation(api.workspaces.switchWorkspace, {
+        userId: user.id,
+        workspaceId,
+        now: Date.now(),
     })
 
-    if (!membership) throw new Error("Not a member of this workspace")
+    if (result.error) throw new Error(result.error)
 
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            workspaceId
-        }
-    })
     return { success: true }
 }

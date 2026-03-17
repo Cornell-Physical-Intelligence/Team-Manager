@@ -1,5 +1,5 @@
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
+import { fetchDashboardMembersPageData } from "@/lib/convex/dashboard"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,7 +9,6 @@ import { MemberActions } from "./MemberActions"
 import { MemberTaskList } from "./MemberTaskList"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CheckCircle2, Clock, Circle, TrendingUp, AlertCircle, Activity } from "lucide-react"
-import { getErrorCode } from "@/lib/errors"
 
 export const dynamic = 'force-dynamic'
 
@@ -25,86 +24,15 @@ export default async function MembersPage() {
     const workspaceId = currentUser.workspaceId
     const canChangeRoles = currentUser.role === 'Admin' || currentUser.role === 'Team Lead'
 
-    // Fetch workspace members and profile data
-    const usersRaw = await prisma.user.findMany({
-        where: {
-            memberships: {
-                some: {
-                    workspaceId
-                }
-            }
-        },
-        include: {
-            memberships: {
-                where: {
-                    workspaceId
-                },
-                select: { role: true, name: true }
-            },
-            projectMemberships: {
-                where: {
-                    project: { workspaceId, archivedAt: null }
-                },
-                include: {
-                    project: { select: { id: true, name: true, color: true } }
-                }
-            }
-        },
-        orderBy: { name: 'asc' }
-    })
-
-    const users = usersRaw.map((user) => {
-        const membership = user.memberships[0]
-        return {
-            ...user,
-            name: membership?.name || user.name,
-            role: membership?.role || 'Member'
-        }
-    })
+    const {
+        users,
+        workspaceTasks,
+        activityLogs,
+        allProjects,
+    } = await fetchDashboardMembersPageData({ workspaceId })
 
     const userIds = users.map(u => u.id)
     const userIdSet = new Set(userIds)
-
-    // Fetch workspace tasks once and distribute to users by assignment.
-    const workspaceTasks = await prisma.task.findMany({
-        where: {
-            OR: [
-                { column: { board: { project: { workspaceId, archivedAt: null } } } },
-                { push: { project: { workspaceId, archivedAt: null } } }
-            ]
-        },
-        select: {
-            id: true,
-            title: true,
-            description: true,
-            dueDate: true,
-            endDate: true,
-            startDate: true,
-            updatedAt: true,
-            progress: true,
-            enableProgress: true,
-            assigneeId: true,
-            assignees: { select: { userId: true } },
-            column: {
-                select: {
-                    name: true,
-                    board: {
-                        select: {
-                            project: { select: { id: true, name: true, color: true } }
-                        }
-                    }
-                }
-            },
-            push: { select: { name: true, color: true } }
-        },
-        orderBy: { updatedAt: 'desc' }
-    }).catch((error: unknown) => {
-        if (getErrorCode(error) === 'P2021') {
-            console.warn('[MembersPage] Task query failed due to missing table. Returning empty task list.')
-            return []
-        }
-        throw error
-    })
 
     const tasksByUser = new Map<string, typeof workspaceTasks>()
     for (const task of workspaceTasks) {
@@ -120,46 +48,11 @@ export default async function MembersPage() {
         }
     }
 
-    // Fetch activity logs separately by user ID
-    const activityLogs = await prisma.activityLog.findMany({
-        where: {
-            changedBy: { in: userIds },
-            OR: [
-                { task: { column: { board: { project: { workspaceId, archivedAt: null } } } } },
-                { task: { push: { project: { workspaceId, archivedAt: null } } } },
-                { task: null }
-            ]
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 100, // Get recent logs
-        select: {
-            id: true,
-            action: true,
-            field: true,
-            taskTitle: true,
-            createdAt: true,
-            details: true,
-            changedBy: true
-        }
-    }).catch((error: unknown) => {
-        if (getErrorCode(error) === 'P2021') {
-            console.warn('[MembersPage] Activity log query failed due to missing table. Returning empty activity list.')
-            return []
-        }
-        throw error
-    })
-
     // Group activity logs by user
     const activityByUser = userIds.reduce((acc, id) => {
         acc[id] = activityLogs.filter(log => log.changedBy === id).slice(0, 10)
         return acc
     }, {} as Record<string, typeof activityLogs>)
-
-    const allProjects = await prisma.project.findMany({
-        where: { workspaceId, archivedAt: null },
-        select: { id: true, name: true, color: true },
-        orderBy: { createdAt: 'desc' }
-    })
 
     // Process user stats
     const userStats = users.map(user => {

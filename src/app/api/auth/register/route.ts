@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { api, fetchMutation } from '@/lib/convex/server'
 
 export async function POST(request: Request) {
     try {
@@ -16,14 +16,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Name is required' }, { status: 400 })
         }
 
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                name: name.trim(),
-                skills: skills || [],
-                interests: interests || null,
-                hasOnboarded: true
-            }
+        await fetchMutation(api.auth.updateOnboardingProfile, {
+            userId: user.id,
+            name: name.trim(),
+            skills: skills || [],
+            interests: interests || undefined,
+            hasOnboarded: true,
+            updatedAt: Date.now(),
         })
 
         return NextResponse.json({ success: true, userId: user.id })

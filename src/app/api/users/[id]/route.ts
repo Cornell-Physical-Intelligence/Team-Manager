@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
+import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
 
 export async function PATCH(
     request: Request,
@@ -43,24 +43,16 @@ export async function PATCH(
             return NextResponse.json({ error: "Invalid name" }, { status: 400 })
         }
 
-        const targetUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { role: true, workspaceId: true, name: true }
+        const managedUser = await fetchQuery(api.admin.getManagedUser, {
+            workspaceId,
+            userId,
         })
 
-        if (!targetUser) {
+        if (!managedUser) {
             return NextResponse.json({ error: "User not found" }, { status: 404 })
         }
-
-        const targetMembership = await prisma.workspaceMember.findUnique({
-            where: { userId_workspaceId: { userId, workspaceId } },
-            select: { role: true, name: true }
-        })
-
-        const isMember = Boolean(targetMembership) || targetUser.workspaceId === workspaceId
-        if (!isMember) {
-            return NextResponse.json({ error: "User not found" }, { status: 404 })
-        }
+        const targetUser = managedUser.user
+        const targetMembership = managedUser.membership
 
         if (nextRole !== undefined) {
             const validRoles = ["Admin", "Team Lead", "Member"]
@@ -79,9 +71,7 @@ export async function PATCH(
             }
 
             if (currentUser.id === userId && nextRole !== "Admin") {
-                const adminCount = await prisma.workspaceMember.count({
-                    where: { role: "Admin", workspaceId }
-                })
+                const adminCount = await fetchQuery(api.admin.countWorkspaceAdmins, { workspaceId })
 
                 if (adminCount <= 1) {
                     return NextResponse.json({
@@ -93,69 +83,48 @@ export async function PATCH(
         }
 
         if (nextProjectIds !== undefined) {
-            const workspaceProjects = await prisma.project.findMany({
-                where: {
-                    workspaceId,
-                    archivedAt: null,
-                    id: { in: nextProjectIds }
-                },
-                select: { id: true }
+            const validProjectIds = await fetchQuery(api.admin.validateActiveProjectIds, {
+                workspaceId,
+                projectIds: nextProjectIds,
             })
 
-            if (workspaceProjects.length !== nextProjectIds.length) {
+            if (validProjectIds.length !== nextProjectIds.length) {
                 return NextResponse.json({ error: "One or more projects are not in this workspace" }, { status: 400 })
             }
         }
 
-        await prisma.$transaction(async (tx) => {
-            if (nextRole !== undefined) {
-                const membership = await tx.workspaceMember.findUnique({
-                    where: { userId_workspaceId: { userId, workspaceId } },
-                    select: { id: true }
-                })
+        if (nextRole !== undefined) {
+            const roleResult = await fetchMutation(api.admin.setWorkspaceMemberRole, {
+                workspaceId,
+                userId,
+                role: nextRole,
+                fallbackName: targetUser.name || "User",
+            })
 
-                if (membership) {
-                    await tx.workspaceMember.update({
-                        where: { userId_workspaceId: { userId, workspaceId } },
-                        data: { role: nextRole }
-                    })
-                } else if (targetUser.workspaceId === workspaceId) {
-                    await tx.workspaceMember.create({
-                        data: {
-                            userId,
-                            workspaceId,
-                            role: nextRole,
-                            name: targetUser.name || "User"
-                        }
-                    })
-                }
+            if ('error' in roleResult) {
+                return NextResponse.json({ error: "User not found" }, { status: 404 })
             }
+        }
 
-            if (nextName !== undefined) {
-                await tx.workspaceMember.updateMany({
-                    where: { userId, workspaceId },
-                    data: { name: nextName }
-                })
+        if (nextName !== undefined) {
+            const nameResult = await fetchMutation(api.admin.updateWorkspaceMemberName, {
+                workspaceId,
+                userId,
+                name: nextName,
+            })
+
+            if ('error' in nameResult) {
+                return NextResponse.json({ error: "User not found" }, { status: 404 })
             }
+        }
 
-            if (nextProjectIds !== undefined) {
-                await tx.projectMember.deleteMany({
-                    where: {
-                        userId,
-                        project: { workspaceId, archivedAt: null }
-                    }
-                })
-
-                if (nextProjectIds.length > 0) {
-                    await tx.projectMember.createMany({
-                        data: nextProjectIds.map((projectId) => ({
-                            userId,
-                            projectId
-                        }))
-                    })
-                }
-            }
-        })
+        if (nextProjectIds !== undefined) {
+            await fetchMutation(api.admin.replaceUserProjectMemberships, {
+                workspaceId,
+                userId,
+                projectIds: nextProjectIds,
+            })
+        }
 
         revalidatePath("/dashboard")
         revalidatePath("/dashboard/settings")
@@ -168,7 +137,7 @@ export async function PATCH(
                 id: userId,
                 name: nextName ?? targetMembership?.name ?? targetUser.name,
                 role: nextRole ?? targetMembership?.role ?? targetUser.role,
-                projectIds: nextProjectIds,
+                projectIds: nextProjectIds ?? managedUser.activeProjectIds,
             },
         })
     } catch (error) {

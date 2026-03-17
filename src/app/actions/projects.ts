@@ -1,12 +1,15 @@
 'use server'
 
-import type { Prisma } from '@prisma/client'
-import prisma from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-
 import { getCurrentUser } from '@/lib/auth'
-import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
-import { getPrimaryProjectLeadId, mergeProjectMemberIds } from '@/lib/project-leads'
+import { getWorkspaceUserIds } from '@/lib/access'
+import {
+    createWorkspaceProject,
+    getWorkspaceProject,
+    serializeProjectDetail,
+    updateWorkspaceProject,
+} from '@/lib/convex/projects'
+import { mergeProjectMemberIds } from '@/lib/project-leads'
 
 export async function createProject(formData: FormData) {
     try {
@@ -19,7 +22,6 @@ export async function createProject(formData: FormData) {
             return { error: 'Unauthorized: No workspace' }
         }
 
-        // RBAC Check
         if (user.role !== 'Admin') {
             console.error('[createProject] Unauthorized user:', user.role)
             return { error: 'Unauthorized: Only Admins can create divisions' }
@@ -31,7 +33,7 @@ export async function createProject(formData: FormData) {
             new Set(
                 [
                     ...formData.getAll('leadIds'),
-                    formData.get('leadId')
+                    formData.get('leadId'),
                 ]
                     .filter((value): value is string => typeof value === 'string')
                     .map((value) => value.trim())
@@ -47,54 +49,20 @@ export async function createProject(formData: FormData) {
             return { error: 'One or more division leads are not in this workspace' }
         }
 
-        const primaryLeadId = getPrimaryProjectLeadId(allowedLeadIds)
-        const memberIdsToPersist = mergeProjectMemberIds([], allowedLeadIds)
-
-        // Use interactive transaction to ensure all parts are created or none
-        const project = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-            const p = await tx.project.create({
-                data: {
-                    name,
-                    description: description || null,
-                    leadId: primaryLeadId,
-                    workspaceId: user.workspaceId
-                }
-            })
-
-            await tx.projectLeadAssignment.createMany({
-                data: allowedLeadIds.map((userId) => ({
-                    projectId: p.id,
-                    userId
-                }))
-            })
-
-            await tx.projectMember.createMany({
-                data: memberIdsToPersist.map((userId) => ({
-                    projectId: p.id,
-                    userId
-                }))
-            })
-
-            await tx.board.create({
-                data: {
-                    name: 'Kanban Board',
-                    projectId: p.id,
-                    columns: {
-                        create: [
-                            { name: 'To Do', order: 0 },
-                            { name: 'In Progress', order: 1 },
-                            { name: 'Review', order: 2 },
-                            { name: 'Done', order: 3 },
-                        ]
-                    }
-                }
-            })
-
-            return p
+        const result = await createWorkspaceProject({
+            workspaceId: user.workspaceId,
+            name: name.trim(),
+            description: description?.trim() || undefined,
+            leadIds: allowedLeadIds,
+            memberIds: mergeProjectMemberIds([], allowedLeadIds),
         })
 
+        if ('error' in result) {
+            return { error: result.error }
+        }
+
         revalidatePath('/dashboard/projects')
-        return { success: true, project }
+        return { success: true, project: serializeProjectDetail(result.project) }
     } catch (error) {
         console.error('[createProject] Error:', error)
         return { error: 'Failed to create division' }
@@ -112,7 +80,6 @@ export async function updateProjectLead(projectId: string, leadInput: string | s
             return { error: 'Unauthorized: No workspace' }
         }
 
-        // Only Admin can change division lead
         if (user.role !== 'Admin') {
             return { error: 'Unauthorized' }
         }
@@ -131,55 +98,25 @@ export async function updateProjectLead(projectId: string, leadInput: string | s
             return { error: 'One or more division leads are not in this workspace' }
         }
 
-        const projectContext = await getProjectContext(projectId)
-        if (!projectContext || projectContext.workspaceId !== user.workspaceId) {
+        const project = await getWorkspaceProject(projectId, user.workspaceId)
+        if (!project) {
             return { error: 'Division not found' }
         }
 
-        const primaryLeadId = getPrimaryProjectLeadId(allowedLeadIds)
+        const memberIdsToPersist = mergeProjectMemberIds(
+            project.members.map((member) => member.userId),
+            allowedLeadIds
+        )
 
-        await prisma.$transaction(async (tx) => {
-            const existingMemberIds = await tx.projectMember.findMany({
-                where: { projectId },
-                select: { userId: true }
-            })
-
-            await tx.project.update({
-                where: { id: projectId },
-                data: { leadId: primaryLeadId }
-            })
-
-            await tx.projectLeadAssignment.deleteMany({
-                where: { projectId }
-            })
-
-            if (allowedLeadIds.length > 0) {
-                await tx.projectLeadAssignment.createMany({
-                    data: allowedLeadIds.map((userId) => ({
-                        projectId,
-                        userId
-                    }))
-                })
-            }
-
-            const memberIdsToPersist = mergeProjectMemberIds(
-                existingMemberIds.map((member) => member.userId),
-                allowedLeadIds
-            )
-
-            await tx.projectMember.deleteMany({
-                where: { projectId }
-            })
-
-            if (memberIdsToPersist.length > 0) {
-                await tx.projectMember.createMany({
-                    data: memberIdsToPersist.map((userId) => ({
-                        projectId,
-                        userId
-                    }))
-                })
-            }
+        const result = await updateWorkspaceProject({
+            projectId,
+            leadIds: allowedLeadIds,
+            memberIds: memberIdsToPersist,
         })
+
+        if ('error' in result) {
+            return { error: result.error }
+        }
 
         revalidatePath('/dashboard/projects')
         revalidatePath(`/dashboard/projects/${projectId}`)

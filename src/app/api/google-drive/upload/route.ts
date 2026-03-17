@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getWorkspaceDriveConfigFromConvex } from "@/lib/convex/settings"
 import { driveConfigTableExists, getDriveClientForWorkspace, getDriveFolderCache, isFolderWithinRoot, refreshDriveFolderCache } from "@/lib/googleDrive"
 import { Readable } from "stream"
 import type { ReadableStream } from "stream/web"
@@ -23,10 +23,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Drive config not initialized" }, { status: 503 })
     }
 
-    const config = await prisma.workspaceDriveConfig.findUnique({
-        where: { workspaceId },
-        select: { folderId: true, refreshToken: true },
-    })
+    const config = await getWorkspaceDriveConfigFromConvex(workspaceId)
 
     if (!config?.refreshToken) {
         return NextResponse.json({ error: "Google Drive is not connected" }, { status: 400 })

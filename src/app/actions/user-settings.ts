@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
+import { api, fetchMutation } from "@/lib/convex/server"
 
 export async function updateDisplayName(newName: string) {
     const user = await getCurrentUser()
@@ -22,16 +22,14 @@ export async function updateDisplayName(newName: string) {
     }
 
     try {
-        await prisma.user.update({
-            where: { id: user.id },
-            data: { name: newName.trim() }
+        const result = await fetchMutation(api.admin.updateUserDisplayName, {
+            userId: user.id,
+            name: newName.trim(),
+            updatedAt: Date.now(),
         })
-
-        // Keep workspace-scoped names in sync with the user's display name.
-        await prisma.workspaceMember.updateMany({
-            where: { userId: user.id },
-            data: { name: newName.trim() }
-        })
+        if ('error' in result) {
+            return { error: "Failed to update name" }
+        }
 
         revalidatePath('/dashboard')
         revalidatePath('/dashboard/settings')
@@ -57,9 +55,9 @@ export async function updateDiscordChannel(channelId: string) {
     const trimmed = channelId.trim()
     if (!trimmed) {
         try {
-            await prisma.workspace.update({
-                where: { id: user.workspaceId },
-                data: { discordChannelId: null }
+            await fetchMutation(api.admin.updateWorkspaceDiscordChannel, {
+                workspaceId: user.workspaceId,
+                updatedAt: Date.now(),
             })
             return { success: true }
         } catch (error) {
@@ -82,9 +80,10 @@ export async function updateDiscordChannel(channelId: string) {
     }
 
     try {
-        await prisma.workspace.update({
-            where: { id: user.workspaceId },
-            data: { discordChannelId: webhookUrl }
+        await fetchMutation(api.admin.updateWorkspaceDiscordChannel, {
+            workspaceId: user.workspaceId,
+            discordChannelId: webhookUrl,
+            updatedAt: Date.now(),
         })
 
         return { success: true }
@@ -99,80 +98,14 @@ export async function deleteAccount() {
     if (!user) return { error: "Not authenticated" }
 
     try {
-        const ownedWorkspaces = await prisma.workspace.findMany({
-            where: { ownerId: user.id },
-            select: {
-                id: true,
-                name: true,
-                members: {
-                    where: { userId: { not: user.id } },
-                    select: { userId: true, role: true, joinedAt: true },
-                    orderBy: { joinedAt: 'asc' }
-                }
-            }
+        const result = await fetchMutation(api.admin.deleteUserAccount, {
+            userId: user.id,
+            updatedAt: Date.now(),
         })
 
-        const ownershipTransfers = ownedWorkspaces.map((workspace) => {
-            const replacement =
-                workspace.members.find((member) => member.role === 'Admin') ||
-                workspace.members.find((member) => member.role === 'Team Lead') ||
-                workspace.members[0]
-
-            return {
-                workspaceId: workspace.id,
-                workspaceName: workspace.name,
-                replacement,
-            }
-        })
-
-        const blockedWorkspace = ownershipTransfers.find((entry) => !entry.replacement)
-        if (blockedWorkspace) {
-            return {
-                error: `Delete or transfer workspace \"${blockedWorkspace.workspaceName}\" before deleting your account.`
-            }
+        if ('error' in result) {
+            return { error: result.error }
         }
-
-        await prisma.$transaction(async (tx) => {
-            await tx.activityLog.updateMany({
-                where: { changedBy: user.id },
-                data: { changedByName: "Deleted User" }
-            })
-
-            await tx.comment.updateMany({
-                where: { authorId: user.id },
-                data: { authorName: "Deleted User" }
-            })
-
-            await tx.generalChatMessage.updateMany({
-                where: { authorId: user.id },
-                data: { authorName: "Deleted User" }
-            })
-
-            for (const transfer of ownershipTransfers) {
-                if (!transfer.replacement) continue
-
-                await tx.workspace.update({
-                    where: { id: transfer.workspaceId },
-                    data: { ownerId: transfer.replacement.userId }
-                })
-
-                if (transfer.replacement.role !== 'Admin') {
-                    await tx.workspaceMember.update({
-                        where: {
-                            userId_workspaceId: {
-                                userId: transfer.replacement.userId,
-                                workspaceId: transfer.workspaceId,
-                            }
-                        },
-                        data: { role: 'Admin' }
-                    })
-                }
-            }
-
-            await tx.user.delete({
-                where: { id: user.id }
-            })
-        })
 
         const cookieStore = await cookies()
         cookieStore.getAll().forEach((cookie) => {
@@ -195,10 +128,14 @@ export async function updateMemberName(targetUserId: string, newName: string) {
     if (!trimmed || trimmed.length > 50) return { error: "Invalid name" }
 
     try {
-        await prisma.workspaceMember.updateMany({
-            where: { userId: targetUserId, workspaceId: user.workspaceId },
-            data: { name: trimmed }
+        const result = await fetchMutation(api.admin.updateWorkspaceMemberName, {
+            workspaceId: user.workspaceId,
+            userId: targetUserId,
+            name: trimmed,
         })
+        if ('error' in result) {
+            return { error: "Failed to update name" }
+        }
 
         revalidatePath('/dashboard/settings')
         revalidatePath('/dashboard/members')
@@ -216,13 +153,15 @@ export async function updateUserDeepDetails(skills: string[], interests: string)
     if (!user) return { error: "Not authenticated" }
 
     try {
-        await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                skills: skills,
-                interests: interests.trim()
-            }
+        const result = await fetchMutation(api.admin.updateUserProfileDetails, {
+            userId: user.id,
+            skills,
+            interests: interests.trim(),
+            updatedAt: Date.now(),
         })
+        if ('error' in result) {
+            return { error: "Failed to update profile details" }
+        }
 
         revalidatePath('/workspaces')
 

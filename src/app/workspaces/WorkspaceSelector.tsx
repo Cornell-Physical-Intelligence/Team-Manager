@@ -275,17 +275,17 @@ export function WorkspaceSelector({ user }: { user: CurrentUser }) {
                                     )}
                                 </div>
 
-                                <CardTitle className="text-xl font-bold text-card-foreground mb-1">{m.workspace.name}</CardTitle>
+                                <CardTitle className="text-xl font-bold text-card-foreground mb-1">{m.workspace?.name || "Workspace"}</CardTitle>
                                 <p className="text-sm text-muted-foreground mb-6 font-medium">{m.role}</p>
 
                                 <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground/70 border-t border-border pt-4">
                                     <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
                                         <Users className="w-3.5 h-3.5" />
-                                        {m.workspace._count?.members || 1} Members
+                                        {m.workspace?._count?.members || 1} Members
                                     </span>
                                     <span className="flex items-center gap-1.5 hover:text-muted-foreground transition-colors">
                                         <FolderKanban className="w-3.5 h-3.5" />
-                                        {m.workspace._count?.projects || 0} Divisions
+                                        {m.workspace?._count?.projects || 0} Divisions
                                     </span>
                                 </div>
                             </CardContent>

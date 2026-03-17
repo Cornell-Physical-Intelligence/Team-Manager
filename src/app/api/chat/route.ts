@@ -1,12 +1,11 @@
 
 import { NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
-import prisma from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth'
+import { getConvexCurrentUser } from '@/lib/convex/current-user'
+import { api, fetchMutation, fetchQuery } from '@/lib/convex/server'
 
 export async function GET(request: Request) {
     try {
-        const user = await getCurrentUser()
+        const user = await getConvexCurrentUser()
         if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
@@ -16,33 +15,19 @@ export async function GET(request: Request) {
         const limit = Math.min(Math.max(1, rawLimit), 200) // Clamp between 1 and 200
         const since = searchParams.get('since') // ISO timestamp for incremental updates
 
-        const where: Prisma.GeneralChatMessageWhereInput = {
-            workspaceId: user.workspaceId
-        }
-
-        // If 'since' is provided, only fetch messages newer than that timestamp
-        if (since) {
-            where.createdAt = { gt: new Date(since) }
-        }
-
-        const messages = await prisma.generalChatMessage.findMany({
-            where,
-            take: limit,
-            orderBy: {
-                createdAt: 'desc'
-            },
-            include: {
-                author: {
-                    select: {
-                        id: true,
-                        name: true,
-                        avatar: true
-                    }
-                }
-            }
+        const messages = await fetchQuery(api.chat.listMessages, {
+            workspaceId: user.workspaceId,
+            limit,
+            since: since ? new Date(since).getTime() : undefined,
         })
 
-        return NextResponse.json(messages.reverse())
+        return NextResponse.json(
+            messages.map((message) => ({
+                ...message,
+                authorAvatar: message.authorAvatar ?? null,
+                createdAt: new Date(message.createdAt).toISOString(),
+            }))
+        )
     } catch (error) {
         console.error('Failed to fetch chat messages:', error)
         return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 })
@@ -51,7 +36,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const user = await getCurrentUser()
+        const user = await getConvexCurrentUser()
         if (!user || !user.workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
         }
@@ -63,25 +48,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Content is required' }, { status: 400 })
         }
 
-        const message = await prisma.generalChatMessage.create({
-            data: {
-                content,
-                type: type || 'text',
-                authorId: user.id,
-                authorName: user.name || 'User',
-                authorAvatar: user.avatar,
-                workspaceId: user.workspaceId
-            },
-            include: {
-                author: {
-                    select: {
-                        id: true,
-                        name: true,
-                        avatar: true
-                    }
-                }
-            }
+        const created = await fetchMutation(api.chat.createMessage, {
+            content,
+            type: type || 'text',
+            authorId: user.id,
+            authorName: user.name || 'User',
+            authorAvatar: user.avatar || undefined,
+            workspaceId: user.workspaceId,
         })
+
+        const message = {
+            ...created.message,
+            authorAvatar: created.message.authorAvatar ?? null,
+            createdAt: new Date(created.message.createdAt).toISOString(),
+        }
 
         // -- Discord Integration Start --
         try {
@@ -91,26 +71,12 @@ export async function POST(request: Request) {
             // Import dynamically to avoid circular deps if any (though static import is fine usually)
             const { sendDiscordNotification } = await import('@/lib/discord')
 
-            // 1. Fetch workspace (for webhook) and members (for mentions)
-            const workspace = await prisma.workspace.findUnique({
-                where: { id: user.workspaceId },
-                select: { discordChannelId: true }
-            })
-
-            const workspaceMembers = await prisma.user.findMany({
-                where: {
-                    memberships: { some: { workspaceId: user.workspaceId } },
-                    discordId: { not: null }
-                },
-                select: { name: true, discordId: true }
-            })
-
             // 2. Resolve mentions
             let discordContent = content
             let hasMentions = false
 
             // Sort by name length desc to avoid partial matches (e.g. matching "Rob" inside "Robert")
-            const sortedMembers = workspaceMembers.sort((a, b) => b.name.length - a.name.length)
+            const sortedMembers = [...created.mentionableMembers].sort((a, b) => b.name.length - a.name.length)
 
             for (const member of sortedMembers) {
                 if (!member.discordId) continue
@@ -134,7 +100,7 @@ export async function POST(request: Request) {
             const finalMessage = discordContent
 
             // Only send if it has mentions (User asked: "only bring chats to the discrod if they at somehting")
-            if (hasMentions && workspace?.discordChannelId) {
+            if (hasMentions && created.discordChannelId) {
                 await sendDiscordNotification(
                     "",
                     [{
@@ -143,7 +109,7 @@ export async function POST(request: Request) {
                         color: 0x5865F2,
                         timestamp: new Date().toISOString(),
                     }],
-                    workspace.discordChannelId
+                    created.discordChannelId
                 )
             }
 

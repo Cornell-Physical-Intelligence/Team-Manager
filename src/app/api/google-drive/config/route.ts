@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { driveConfigTableExists } from "@/lib/googleDrive"
+import { getWorkspaceDriveConfigFromConvex } from "@/lib/convex/settings"
 
 export const runtime = "nodejs"
 
@@ -16,14 +16,7 @@ export async function GET() {
     }
 
     try {
-        const config = await prisma.workspaceDriveConfig.findUnique({
-            where: { workspaceId: user.workspaceId },
-            select: {
-                refreshToken: true,
-                folderId: true,
-                folderName: true
-            }
-        })
+        const config = await getWorkspaceDriveConfigFromConvex(user.workspaceId)
 
         return NextResponse.json({
             connected: !!config?.refreshToken,

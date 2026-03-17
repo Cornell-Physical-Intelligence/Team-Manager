@@ -1,9 +1,9 @@
 'use server'
 
-import prisma from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { getCurrentUser } from '@/lib/auth'
 import { isUserInWorkspace } from '@/lib/access'
+import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
 
 export async function updateUserRole(userId: string, newRole: string) {
     const currentUser = await getCurrentUser()
@@ -26,25 +26,16 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     const workspaceId = currentUser.workspaceId
 
-    const targetUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true, workspaceId: true, name: true }
+    const managedUser = await fetchQuery(api.admin.getManagedUser, {
+        workspaceId,
+        userId,
     })
 
-    if (!targetUser) {
+    if (!managedUser) {
         return { error: 'User not found' }
     }
-
-    const targetMembership = await prisma.workspaceMember.findUnique({
-        where: { userId_workspaceId: { userId, workspaceId } },
-        select: { role: true }
-    })
-
-    const isMember = Boolean(targetMembership) || targetUser.workspaceId === workspaceId
-    if (!isMember) {
-        return { error: 'User not found' }
-    }
-
+    const targetUser = managedUser.user
+    const targetMembership = managedUser.membership
     const targetRole = targetMembership?.role ?? (targetUser.workspaceId === workspaceId ? targetUser.role : null)
 
     // PROTECT ADMINS: Only Admins can change role of other Admins
@@ -60,12 +51,7 @@ export async function updateUserRole(userId: string, newRole: string) {
     // Check if admin is trying to demote themselves
     if (currentUser.id === userId && newRole !== 'Admin') {
         // Count how many admins exist in the workspace
-        const adminCount = await prisma.workspaceMember.count({
-            where: {
-                role: 'Admin',
-                workspaceId
-            }
-        })
+        const adminCount = await fetchQuery(api.admin.countWorkspaceAdmins, { workspaceId })
 
         // If this is the only admin, prevent self-demotion
         if (adminCount <= 1) {
@@ -77,31 +63,15 @@ export async function updateUserRole(userId: string, newRole: string) {
     }
 
     try {
-        await prisma.$transaction(async (tx) => {
-            const membership = await tx.workspaceMember.findUnique({
-                where: { userId_workspaceId: { userId, workspaceId } },
-                select: { id: true }
-            })
-
-            if (membership) {
-                await tx.workspaceMember.update({
-                    where: { userId_workspaceId: { userId, workspaceId } },
-                    data: { role: newRole }
-                })
-            } else if (targetUser.workspaceId === workspaceId) {
-                await tx.workspaceMember.create({
-                    data: {
-                        userId,
-                        workspaceId,
-                        role: newRole,
-                        name: targetUser.name || 'User'
-                    }
-                })
-            } else {
-                throw new Error('User not found')
-            }
-
+        const result = await fetchMutation(api.admin.setWorkspaceMemberRole, {
+            workspaceId,
+            userId,
+            role: newRole,
+            fallbackName: targetUser.name || 'User',
         })
+        if ('error' in result) {
+            return { error: 'User not found' }
+        }
         revalidatePath('/dashboard/members')
         revalidatePath('/dashboard/projects')
         return { success: true }
@@ -132,9 +102,9 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
     }
 
     const uniqueProjectIds = Array.from(new Set(projectIds))
-    const workspaceProjects = await prisma.project.findMany({
-        where: { workspaceId: currentUser.workspaceId, archivedAt: null, id: { in: uniqueProjectIds } },
-        select: { id: true }
+    const workspaceProjects = await fetchQuery(api.admin.validateActiveProjectIds, {
+        workspaceId: currentUser.workspaceId,
+        projectIds: uniqueProjectIds,
     })
 
     if (workspaceProjects.length !== uniqueProjectIds.length) {
@@ -142,25 +112,10 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
     }
 
     try {
-        // Use transaction to ensure atomic operation
-        await prisma.$transaction(async (tx) => {
-            // Delete existing project memberships for this workspace only
-                await tx.projectMember.deleteMany({
-                    where: {
-                        userId,
-                        project: { workspaceId: currentUser.workspaceId, archivedAt: null }
-                    }
-                })
-
-            // Create new project memberships
-            if (uniqueProjectIds.length > 0) {
-                await tx.projectMember.createMany({
-                    data: uniqueProjectIds.map(projectId => ({
-                        userId,
-                        projectId
-                    }))
-                })
-            }
+        await fetchMutation(api.admin.replaceUserProjectMemberships, {
+            workspaceId: currentUser.workspaceId,
+            userId,
+            projectIds: uniqueProjectIds,
         })
 
         revalidatePath('/dashboard/members')
@@ -186,23 +141,15 @@ export async function removeUserFromWorkspace(userId: string) {
         return { error: 'Unauthorized: Only Admins and Team Leads can remove members' }
     }
 
-    const targetUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { workspaceId: true }
+    const membershipData = await fetchQuery(api.admin.getManagedUser, {
+        workspaceId: currentUser.workspaceId,
+        userId,
     })
 
-    if (!targetUser) {
+    if (!membershipData?.membership) {
         return { error: 'User not found' }
     }
-
-    const membership = await prisma.workspaceMember.findUnique({
-        where: { userId_workspaceId: { userId, workspaceId: currentUser.workspaceId } },
-        select: { id: true, role: true }
-    })
-
-    if (!membership) {
-        return { error: 'User not found' }
-    }
+    const membership = membershipData.membership
 
     // PROTECT ADMINS: Only Admins can remove other Admins
     if (membership.role === 'Admin' && currentUser.role !== 'Admin') {
@@ -213,11 +160,8 @@ export async function removeUserFromWorkspace(userId: string) {
     if (currentUser.id === userId) {
         // Count how many admins exist in the workspace
         if (currentUser.role === 'Admin') {
-            const adminCount = await prisma.workspaceMember.count({
-                where: {
-                    role: 'Admin',
-                    workspaceId: currentUser.workspaceId
-                }
+            const adminCount = await fetchQuery(api.admin.countWorkspaceAdmins, {
+                workspaceId: currentUser.workspaceId,
             })
 
             // If this is the only admin, prevent leaving/removal
@@ -231,97 +175,10 @@ export async function removeUserFromWorkspace(userId: string) {
     }
 
     try {
-        // Use transaction to ensure atomic operation
-        if (currentUser.workspaceId) {
-            await prisma.$transaction(async (tx) => {
-                console.log(`[Users] User ${currentUser.id} is removing user ${userId} from workspace ${currentUser.workspaceId}`)
-
-                // Remove from WorkspaceMember
-                await tx.workspaceMember.delete({
-                    where: {
-                        userId_workspaceId: {
-                            userId: userId,
-                            workspaceId: currentUser.workspaceId!
-                        }
-                    }
-                })
-
-                // Remove project memberships in this workspace
-                await tx.projectMember.deleteMany({
-                    where: {
-                        userId,
-                        project: { workspaceId: currentUser.workspaceId!, archivedAt: null }
-                    }
-                })
-
-                const projectsWithPrimaryLead = await tx.project.findMany({
-                    where: {
-                        workspaceId: currentUser.workspaceId!,
-                        leadId: userId
-                    },
-                    select: { id: true }
-                })
-
-                await tx.projectLeadAssignment.deleteMany({
-                    where: {
-                        userId,
-                        project: { workspaceId: currentUser.workspaceId! }
-                    }
-                })
-
-                for (const project of projectsWithPrimaryLead) {
-                    const nextLead = await tx.projectLeadAssignment.findFirst({
-                        where: { projectId: project.id },
-                        orderBy: { createdAt: 'asc' },
-                        select: { userId: true }
-                    })
-
-                    await tx.project.update({
-                        where: { id: project.id },
-                        data: {
-                            leadId: nextLead?.userId || null
-                        }
-                    })
-                }
-
-                // Remove stale task assignments inside this workspace.
-                const workspaceTaskScope = {
-                    OR: [
-                        { column: { board: { project: { workspaceId: currentUser.workspaceId!, archivedAt: null } } } },
-                        { push: { project: { workspaceId: currentUser.workspaceId!, archivedAt: null } } }
-                    ]
-                }
-
-                await tx.task.updateMany({
-                    where: {
-                        assigneeId: userId,
-                        ...workspaceTaskScope
-                    },
-                    data: {
-                        assigneeId: null
-                    }
-                })
-
-                await tx.taskAssignee.deleteMany({
-                    where: {
-                        userId,
-                        task: workspaceTaskScope
-                    }
-                })
-
-                // Also clear user's workspaceId and role if this was their main workspace
-                if (targetUser?.workspaceId === currentUser.workspaceId) {
-                    console.log(`[Users] Resetting user ${userId} role to 'Member' because they were removed from their main workspace.`)
-                    await tx.user.update({
-                        where: { id: userId },
-                        data: {
-                            workspaceId: null,
-                            role: 'Member' // Reset role to Member default
-                        }
-                    })
-                }
-            })
-        }
+        await fetchMutation(api.admin.removeWorkspaceMember, {
+            workspaceId: currentUser.workspaceId,
+            userId,
+        })
 
         revalidatePath('/dashboard/members')
         revalidatePath('/dashboard/projects')

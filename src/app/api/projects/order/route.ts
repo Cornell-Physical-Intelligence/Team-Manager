@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
+import { reorderWorkspaceProjects } from "@/lib/convex/projects"
 
 export async function POST(request: Request) {
     try {
@@ -15,44 +15,24 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "divisionIds must be an array" }, { status: 400 })
         }
 
-        const projectIds = Array.from(new Set(projectIdsRaw.filter((x: unknown) => typeof x === "string" && x.trim().length > 0)))
+        const projectIds = Array.from(
+            new Set(
+                projectIdsRaw.filter((entry: unknown) => typeof entry === "string" && entry.trim().length > 0)
+            )
+        )
         if (projectIds.length === 0) {
             return NextResponse.json({ error: "divisionIds cannot be empty" }, { status: 400 })
         }
 
-        const workspaceProjects = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId, archivedAt: null, id: { in: projectIds } },
-            select: { id: true },
+        const result = await reorderWorkspaceProjects({
+            userId: user.id,
+            workspaceId: user.workspaceId,
+            projectIds,
         })
 
-        if (workspaceProjects.length !== projectIds.length) {
-            return NextResponse.json({ error: "One or more divisions are not accessible" }, { status: 403 })
+        if ("error" in result) {
+            return NextResponse.json({ error: result.error }, { status: 403 })
         }
-
-        const workspaceProjectIds = await prisma.project.findMany({
-            where: { workspaceId: user.workspaceId, archivedAt: null },
-            select: { id: true },
-        })
-        const workspaceProjectIdSet = workspaceProjectIds.map((p) => p.id)
-
-        await prisma.$transaction(async (tx) => {
-            await tx.projectUserOrder.deleteMany({
-                where: {
-                    userId: user.id,
-                    projectId: { in: workspaceProjectIdSet, notIn: projectIds },
-                },
-            })
-
-            await Promise.all(
-                projectIds.map((projectId, index) =>
-                    tx.projectUserOrder.upsert({
-                        where: { userId_projectId: { userId: user.id, projectId } },
-                        create: { userId: user.id, projectId, order: index },
-                        update: { order: index },
-                    })
-                )
-            )
-        })
 
         return NextResponse.json({ success: true })
     } catch (error) {

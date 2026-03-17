@@ -1,6 +1,39 @@
 import { NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
 import { getCurrentUser } from "@/lib/auth"
+
+type TaskDoc = {
+    id: string
+    title: string
+    description?: string
+    status: string
+    assigneeId?: string
+    pushId?: string
+    columnId?: string
+    subteamId?: string
+    priority: string
+    requireAttachment: boolean
+    attachmentFolderId?: string
+    attachmentFolderName?: string
+    instructionsFileUrl?: string
+    instructionsFileName?: string
+    progress: number
+    enableProgress: boolean
+    startDate?: number
+    endDate?: number
+    dueDate?: number
+    submittedAt?: number
+    approvedAt?: number
+    createdAt: number
+    updatedAt: number
+}
+
+type TaskMeta = {
+    id: string
+    projectId: string
+    pushId?: string | null
+    columnId?: string | null
+}
 
 export async function GET(
     _request: Request,
@@ -13,37 +46,18 @@ export async function GET(
 
     try {
         const { id } = await params
+        const task = await fetchQuery(api.tasks.getMeta, {
+            taskId: id,
+            workspaceId: user.workspaceId,
+        }) as TaskMeta | null
 
-        const task = await prisma.task.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                pushId: true,
-                columnId: true,
-                column: {
-                    select: {
-                        board: { select: { projectId: true } }
-                    }
-                }
-            }
-        })
-
-        if (!task?.column?.board?.projectId) {
-            return NextResponse.json({ error: "Task not found" }, { status: 404 })
-        }
-
-        const project = await prisma.project.findUnique({
-            where: { id: task.column.board.projectId },
-            select: { workspaceId: true }
-        })
-
-        if (!project || project.workspaceId !== user.workspaceId) {
+        if (!task?.projectId) {
             return NextResponse.json({ error: "Task not found" }, { status: 404 })
         }
 
         return NextResponse.json({
             id: task.id,
-            projectId: task.column.board.projectId,
+            projectId: task.projectId,
             pushId: task.pushId,
             columnId: task.columnId,
         })
@@ -76,34 +90,12 @@ export async function PATCH(
         }
 
         // Verify task exists and belongs to user's workspace
-        const task = await prisma.task.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                column: {
-                    select: {
-                        board: {
-                            select: {
-                                project: { select: { workspaceId: true } }
-                            }
-                        }
-                    }
-                },
-                push: {
-                    select: {
-                        project: { select: { workspaceId: true } }
-                    }
-                }
-            }
-        })
+        const taskMeta = await fetchQuery(api.tasks.getMeta, {
+            taskId: id,
+            workspaceId: user.workspaceId,
+        }) as TaskMeta | null
 
-        const taskWorkspaceId = task?.column?.board?.project?.workspaceId ?? task?.push?.project?.workspaceId
-
-        if (!taskWorkspaceId) {
-            return NextResponse.json({ error: "Task not found" }, { status: 404 })
-        }
-
-        if (taskWorkspaceId !== user.workspaceId) {
+        if (!taskMeta) {
             return NextResponse.json({ error: "Task not found" }, { status: 404 })
         }
 
@@ -117,41 +109,49 @@ export async function PATCH(
                 )
             )
 
-            const validUsers = await prisma.workspaceMember.findMany({
-                where: {
-                    workspaceId: user.workspaceId,
-                    userId: { in: normalizedAssigneeIds }
-                },
-                select: { userId: true }
-            })
+            const validUserIds = await fetchQuery(api.workspaces.getWorkspaceUserIds, {
+                userIds: normalizedAssigneeIds,
+                workspaceId: user.workspaceId,
+            }) as string[]
 
-            const validUserIds = validUsers.map(u => u.userId)
             if (validUserIds.length !== normalizedAssigneeIds.length) {
                 return NextResponse.json({ error: "One or more assignees are not in this workspace" }, { status: 400 })
             }
 
-            // Update task assignees
-            await prisma.$transaction(async (tx) => {
-                // Remove existing assignees
-                await tx.taskAssignee.deleteMany({
-                    where: { taskId: id }
-                })
+            // Fetch the full task doc to preserve all fields
+            const task = await fetchQuery(api.tasks.getTaskById, { taskId: id }) as TaskDoc | null
 
-                // Add new assignees
-                if (validUserIds.length > 0) {
-                    await tx.taskAssignee.createMany({
-                        data: validUserIds.map(userId => ({
-                            taskId: id,
-                            userId
-                        }))
-                    })
-                }
+            if (!task) {
+                return NextResponse.json({ error: "Task not found" }, { status: 404 })
+            }
 
-                // Keep legacy field synchronized, including explicit unassign.
-                await tx.task.update({
-                    where: { id },
-                    data: { assigneeId: validUserIds[0] ?? null }
-                })
+            await fetchMutation(api.mirror.upsertTask, {
+                task: {
+                    id: task.id,
+                    title: task.title,
+                    description: task.description,
+                    status: task.status || "Todo",
+                    assigneeId: validUserIds[0] ?? undefined,
+                    pushId: task.pushId,
+                    columnId: task.columnId,
+                    subteamId: task.subteamId,
+                    priority: task.priority || "Medium",
+                    requireAttachment: task.requireAttachment ?? true,
+                    attachmentFolderId: task.attachmentFolderId,
+                    attachmentFolderName: task.attachmentFolderName,
+                    instructionsFileUrl: task.instructionsFileUrl,
+                    instructionsFileName: task.instructionsFileName,
+                    progress: task.progress ?? 0,
+                    enableProgress: task.enableProgress ?? false,
+                    startDate: task.startDate,
+                    endDate: task.endDate,
+                    dueDate: task.dueDate,
+                    submittedAt: task.submittedAt,
+                    approvedAt: task.approvedAt,
+                    createdAt: task.createdAt,
+                    updatedAt: Date.now(),
+                },
+                assigneeIds: validUserIds,
             })
         }
 

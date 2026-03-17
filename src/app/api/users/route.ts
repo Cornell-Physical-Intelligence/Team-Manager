@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { getErrorCode } from '@/lib/errors'
+import { api, createLegacyId, fetchMutation, fetchQuery } from '@/lib/convex/server'
 
 export async function GET(request: Request) {
     try {
@@ -19,77 +18,37 @@ export async function GET(request: Request) {
         const page = pageParam ? Math.max(1, parseInt(pageParam, 10) || 1) : null
         const limit = limitParam ? Math.min(100, Math.max(1, parseInt(limitParam, 10) || 50)) : null
 
-        const where = {
-            workspaceId: currentUser.workspaceId
-        }
-
         // If role=leads, return only Admin and Team Lead users
         if (role === 'leads') {
-            const memberships = await prisma.workspaceMember.findMany({
-                where: {
-                    ...where,
-                    role: { in: ['Admin', 'Team Lead'] }
-                },
-                select: {
-                    userId: true,
-                    role: true,
-                    name: true,
-                    user: { select: { name: true } }
-                },
-                orderBy: { name: 'asc' },
-                ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {})
+            const result = await fetchQuery(api.admin.getWorkspaceUsers, {
+                workspaceId: currentUser.workspaceId,
+                role: 'leads',
+                ...(page && limit ? { page, limit } : {}),
             })
-
-            const users = memberships.map((membership) => ({
-                id: membership.userId,
-                name: membership.name || membership.user.name,
-                role: membership.role
+            const users = result.users.map((user) => ({
+                id: user.id,
+                name: user.name,
+                role: user.role
             }))
 
             return NextResponse.json(users)
         }
 
-        // Build query with optional pagination
-        const [memberships, total] = await Promise.all([
-            prisma.workspaceMember.findMany({
-                where,
-                select: {
-                    role: true,
-                    name: true,
-                    user: {
-                        select: {
-                            id: true,
-                            name: true,
-                            email: true,
-                            avatar: true,
-                            skills: true,
-                            interests: true,
-                            hasOnboarded: true,
-                        }
-                    }
-                },
-                orderBy: { name: 'asc' },
-                ...(page && limit ? { skip: (page - 1) * limit, take: limit } : {})
-            }),
-            // Only count if paginating
-            page && limit ? prisma.workspaceMember.count({ where }) : Promise.resolve(null)
-        ])
-
-        const users = memberships.map((membership) => ({
-            ...membership.user,
-            name: membership.name || membership.user.name,
-            role: membership.role
-        }))
+        const result = await fetchQuery(api.admin.getWorkspaceUsers, {
+            workspaceId: currentUser.workspaceId,
+            ...(page && limit ? { page, limit } : {}),
+        })
+        const users = result.users
 
         // Return paginated response if pagination params provided
-        if (page && limit && total !== null) {
+        if (page && limit) {
             return NextResponse.json({
                 users,
                 pagination: {
                     page,
                     limit,
-                    total,
-                    totalPages: Math.ceil(total / limit)
+                    total: result.total,
+                    totalPages: Math.ceil(result.total / limit)
                 }
             })
         }
@@ -134,34 +93,23 @@ export async function POST(request: Request) {
         }
 
         const workspaceId = currentUser.workspaceId
-
-        const user = await prisma.$transaction(async (tx) => {
-            const created = await tx.user.create({
-                data: {
-                    email: email.trim().toLowerCase(),
-                    name: name.trim(),
-                    role: userRole,
-                    workspaceId
-                }
-            })
-
-            await tx.workspaceMember.create({
-                data: {
-                    userId: created.id,
-                    workspaceId,
-                    role: userRole,
-                    name: created.name
-                }
-            })
-
-            return created
+        const now = Date.now()
+        const result = await fetchMutation(api.admin.createWorkspaceUser, {
+            id: createLegacyId('user'),
+            workspaceMemberId: createLegacyId('workspace_member'),
+            workspaceId,
+            email: email.trim().toLowerCase(),
+            name: name.trim(),
+            role: userRole,
+            now,
         })
-        return NextResponse.json(user)
-    } catch (error: unknown) {
-        // Handle unique constraint violation
-        if (getErrorCode(error) === 'P2002') {
+
+        if ('error' in result && result.error === 'duplicate_email') {
             return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 })
         }
+
+        return NextResponse.json(result)
+    } catch (error: unknown) {
         console.error('[POST /api/users] Error:', error)
         return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
     }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
-import prisma from '@/lib/prisma'
+import { api, createLegacyId, fetchMutation, fetchQuery } from '@/lib/convex/server'
 import { createSession, SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from '@/lib/session'
 import { joinWorkspaceByCode } from '@/lib/workspaceInvites'
 import { createWorkspaceForUser } from '@/lib/workspaces'
@@ -35,9 +35,10 @@ async function syncPendingUserName(userId: string, currentName: string, pendingN
         return currentName
     }
 
-    await prisma.user.update({
-        where: { id: userId },
-        data: { name: trimmedPendingName },
+    await fetchMutation(api.auth.updateUserName, {
+        userId,
+        name: trimmedPendingName,
+        updatedAt: Date.now(),
     })
 
     return trimmedPendingName
@@ -188,33 +189,24 @@ export async function GET(request: Request) {
         console.log(`[Auth] Processing login for Discord ID: ${discordUser.id} (${discordUser.username})`)
 
         // STRATEGY: Find existing user by Discord ID first, then Email.
-        let user = await prisma.user.findUnique({
-            where: { discordId: discordUser.id },
-            include: { workspace: true }
+        const email = discordUser.email || `discord_${discordUser.id}@discord.user`
+        const emailCandidates = Array.from(new Set([
+            email,
+            `discord_${discordUser.id}@discord.user`,
+        ]))
+
+        const existingUser = await fetchQuery(api.auth.findUserForDiscordLogin, {
+            discordId: discordUser.id,
+            emailCandidates,
         })
 
-        if (user) {
-            console.log(`[Auth] Found existing user by Discord ID. Role: ${user.role}`)
+        if (existingUser) {
+            console.log(`[Auth] Found existing user. Role: ${existingUser.role}`)
         } else {
-            console.log(`[Auth] No user found by Discord ID. Checking email fallback...`)
-            // Fallback: Check by email if Discord ID lookup failed (legacy users)
-            const email = discordUser.email || `discord_${discordUser.id}@discord.user`
-            user = await prisma.user.findFirst({
-                where: {
-                    OR: [
-                        { email: email },
-                        { email: `discord_${discordUser.id}@discord.user` }
-                    ]
-                },
-                include: { workspace: true }
-            })
-
-            if (user) {
-                console.log(`[Auth] Found existing user by Email (${user.email}). Linking Discord ID. Role: ${user.role}`)
-            }
+            console.log("[Auth] No existing user found. Creating a new one.")
         }
 
-        if (user) {
+        if (existingUser) {
             // EXISTING USER: Login & Skip Onboarding
             const discordDisplayName: string = discordUser.global_name || discordUser.username
             const nextUserData: {
@@ -230,24 +222,28 @@ export async function GET(request: Request) {
 
             // Only sync name from Discord if the user hasn't completed onboarding yet.
             // Once a user customizes their name in CuPI, we should not overwrite it on re-login.
-            if (!user.hasOnboarded) {
+            if (!existingUser.hasOnboarded) {
                 nextUserData.name = discordDisplayName
             }
 
-            await prisma.user.update({
-                where: { id: user.id },
-                data: nextUserData
+            await fetchMutation(api.auth.updateUserFromDiscord, {
+                userId: existingUser.id,
+                name: nextUserData.name,
+                avatar: nextUserData.avatar || undefined,
+                discordId: nextUserData.discordId,
+                hasOnboarded: nextUserData.hasOnboarded,
+                updatedAt: Date.now(),
             })
 
-            console.log(`[Auth] Logged in user ${user.id}. Session active.`)
+            console.log(`[Auth] Logged in user ${existingUser.id}. Session active.`)
 
-            const session = await createSession(user.id)
+            const session = await createSession(existingUser.id)
 
             const pendingFlow = await applyPendingWorkspaceFlow({
                 cookieStore,
-                userId: user.id,
-                currentName: nextUserData.name || user.name,
-                shouldSyncName: !user.hasOnboarded,
+                userId: existingUser.id,
+                currentName: nextUserData.name || existingUser.name,
+                shouldSyncName: !existingUser.hasOnboarded,
             })
 
             // Redirect to Workspaces or Dashboard if invite processed
@@ -269,35 +265,35 @@ export async function GET(request: Request) {
 
         // NEW USER: Create & Go to Onboarding
         console.log(`[Auth] User not found. Creating NEW user.`)
-        user = await prisma.$transaction(async (tx) => {
-            const userCount = await tx.user.count()
-            const role = userCount === 0 ? 'Admin' : 'Member'
+        const userCount = await fetchQuery(api.auth.getUserCount, {})
+        const role = userCount === 0 ? 'Admin' : 'Member'
 
-            return tx.user.create({
-                data: {
-                    email: discordUser.email || `discord_${discordUser.id}@discord.user`,
-                    name: discordUser.global_name || discordUser.username,
-                    avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null,
-                    discordId: discordUser.id,
-                    role,
-                    hasOnboarded: false,
-                },
-                include: { workspace: true }
-            })
+        const newUser = await fetchMutation(api.auth.createUserFromDiscord, {
+            id: createLegacyId("user"),
+            email,
+            name: discordUser.global_name || discordUser.username,
+            avatar: discordUser.avatar
+                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+                : undefined,
+            discordId: discordUser.id,
+            role,
+            hasOnboarded: false,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
         })
 
-        console.log(`[Auth] Created new user ${user.id} with role Member.`)
+        console.log(`[Auth] Created new user ${newUser.id} with role ${role}.`)
 
         await applyPendingWorkspaceFlow({
             cookieStore,
-            userId: user.id,
-            currentName: user.name,
+            userId: newUser.id,
+            currentName: newUser.name,
             shouldSyncName: true,
         })
 
         const response = NextResponse.redirect(new URL('/onboarding', request.url))
 
-        const session = await createSession(user.id)
+        const session = await createSession(newUser.id)
 
         response.cookies.set(SESSION_COOKIE_NAME, session.token, {
             httpOnly: true,

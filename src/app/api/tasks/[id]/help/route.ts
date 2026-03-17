@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { api, fetchMutation, fetchQuery, createLegacyId } from '@/lib/convex/server'
 import { getCurrentUser } from '@/lib/auth'
 import { getTaskContext } from '@/lib/access'
+import {
+    appendActivityLogToConvex,
+    touchTaskInConvex,
+} from '@/lib/convex/mirror'
+import { createNotificationsInConvex } from '@/lib/convex/notifications'
+
+type HelpRequest = {
+    id: string
+    taskId: string
+    requestedBy: string
+    requestedByName: string
+    message?: string
+    status: string
+    resolvedBy?: string
+    resolvedByName?: string
+    resolvedAt?: number
+    createdAt: number
+    updatedAt: number
+}
 
 // GET - Get help request for a task
 export async function GET(
@@ -21,14 +40,11 @@ export async function GET(
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
-        const helpRequest = await prisma.helpRequest.findFirst({
-            where: {
-                taskId: id,
-                status: { in: ['open', 'acknowledged'] }
-            },
-            orderBy: { createdAt: 'desc' }
-        })
-        return NextResponse.json(helpRequest)
+        const helpRequests = await fetchQuery(api.tasks.getHelpRequests, {
+            taskId: id,
+            statuses: ['open', 'acknowledged'],
+        }) as HelpRequest[]
+        return NextResponse.json(helpRequests[0] ?? null)
     } catch (error) {
         console.error('Failed to fetch help request:', error)
         return NextResponse.json(null, { status: 200 })
@@ -56,120 +72,97 @@ export async function POST(
         const { message } = body
 
         // Verify task exists and get project info for notification
-        const task = await prisma.task.findUnique({
-            where: { id },
-            include: {
-                column: {
-                    include: {
-                        board: {
-                            include: {
-                                project: {
-                                    include: {
-                                        leadAssignments: {
-                                            orderBy: { createdAt: 'asc' },
-                                            include: { user: true }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        })
-
-        if (!task) {
+        const taskContext = await getTaskContext(id)
+        if (!taskContext || taskContext.workspaceId !== user.workspaceId) {
             return NextResponse.json({ error: 'Task not found' }, { status: 404 })
         }
 
-        if (task.column?.board?.project?.workspaceId !== user.workspaceId) {
-            return NextResponse.json({ error: 'Task not found' }, { status: 404 })
-        }
+        const workspaceId = taskContext.workspaceId
+        const projectId = taskContext.projectId
 
         // Check if there's already an open help request
-        const existingRequest = await prisma.helpRequest.findFirst({
-            where: {
-                taskId: id,
-                status: { in: ['open', 'acknowledged'] }
-            }
-        })
+        const existingRequests = await fetchQuery(api.tasks.getHelpRequests, {
+            taskId: id,
+            statuses: ['open', 'acknowledged'],
+        }) as HelpRequest[]
 
-        if (existingRequest) {
+        if (existingRequests.length > 0) {
             return NextResponse.json({ error: 'Help request already exists for this task' }, { status: 400 })
         }
 
         // Create the help request
-        const helpRequest = await prisma.helpRequest.create({
-            data: {
-                taskId: id,
-                requestedBy: user.id,
-                requestedByName: user.name || 'User',
-                message: message?.trim() || null
-            }
-        })
+        const helpRequestId = createLegacyId('help_request')
+        const now = Date.now()
+        const helpRequest: HelpRequest = {
+            id: helpRequestId,
+            taskId: id,
+            requestedBy: user.id,
+            requestedByName: user.name || 'User',
+            message: message?.trim() || undefined,
+            status: 'open',
+            createdAt: now,
+            updatedAt: now,
+        }
+        await fetchMutation(api.mirror.upsertHelpRequest, { helpRequest })
 
         // Log activity
-        await prisma.activityLog.create({
-            data: {
-                taskId: id,
-                taskTitle: task.title,
-                action: 'help_requested',
-                field: 'help',
-                oldValue: null,
-                newValue: 'open',
-                changedBy: user.id,
-                changedByName: user.name || 'User',
-                details: message ? `Asked for help: "${message}"` : 'Asked for help on this task'
-            }
+        await appendActivityLogToConvex({
+            taskId: id,
+            taskTitle: taskContext.title,
+            action: 'help_requested',
+            field: 'help',
+            newValue: 'open',
+            changedBy: user.id,
+            changedByName: user.name || 'User',
+            details: message ? `Asked for help: "${message}"` : 'Asked for help on this task',
         })
+        await touchTaskInConvex(id, now)
 
         // Create notification for project lead and admins
-        const project = task.column?.board?.project
-        const workspaceId = project?.workspaceId
+        if (workspaceId && projectId) {
+            // Get project lead IDs
+            const projectDetails = await fetchQuery(api.projectsAdmin.getProjectDetails, {
+                projectId,
+            }) as { leads: { id: string }[] } | null
 
-        if (workspaceId) {
             const leadIds = Array.from(
                 new Set(
-                    (project?.leadAssignments || [])
-                        .map((assignment) => assignment.userId)
+                    (projectDetails?.leads || [])
+                        .map((lead) => lead.id)
                         .filter((leadId) => leadId !== user.id)
                 )
             )
 
             if (leadIds.length > 0) {
-                await prisma.notification.createMany({
-                    data: leadIds.map((leadId) => ({
+                await createNotificationsInConvex(
+                    leadIds.map((leadId) => ({
                         workspaceId,
                         userId: leadId,
                         type: 'help_requested',
                         title: 'Help Requested',
-                        message: `${user.name} needs help with "${task.title}"${message ? `: ${message}` : ''}`,
-                        link: `/dashboard/projects/${project?.id}?task=${id}`
+                        message: `${user.name} needs help with "${taskContext.title}"${message ? `: ${message}` : ''}`,
+                        link: `/dashboard/projects/${projectId}?task=${id}`,
                     }))
-                })
+                )
             }
 
             // Notify admins in the workspace
-            const admins = await prisma.workspaceMember.findMany({
-                where: {
-                    workspaceId,
-                    role: 'Admin',
-                    userId: { notIn: [user.id, ...leadIds] }
-                },
-                select: { userId: true }
-            })
+            const adminMembers = await fetchQuery(api.workspaces.getWorkspaceAdmins, {
+                workspaceId,
+                excludeUserIds: [user.id, ...leadIds],
+            }) as { userId: string }[]
 
-            if (admins.length > 0) {
-                await prisma.notification.createMany({
-                    data: admins.map(admin => ({
+            if (adminMembers.length > 0) {
+                await createNotificationsInConvex(
+                    adminMembers.map((admin) => ({
                         workspaceId,
                         userId: admin.userId,
                         type: 'help_requested',
                         title: 'Help Requested',
-                        message: `${user.name} needs help with "${task.title}"${message ? `: ${message}` : ''}`,
-                        link: `/dashboard/projects/${project?.id}?task=${id}`
+                        message: `${user.name} needs help with "${taskContext.title}"${message ? `: ${message}` : ''}`,
+                        link: `/dashboard/projects/${projectId}?task=${id}`,
                     }))
-                })
+                )
             }
         }
 
@@ -213,89 +206,65 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
         }
 
-        // Verify help request exists
-        const helpRequest = await prisma.helpRequest.findUnique({
-            where: { id: helpRequestId }
-        })
+        // Verify help request exists and belongs to task
+        const helpRequest = await fetchQuery(api.tasks.getHelpRequest, { helpRequestId }) as HelpRequest | null
 
         if (!helpRequest || helpRequest.taskId !== id) {
             return NextResponse.json({ error: 'Help request not found' }, { status: 404 })
         }
 
-        const task = await prisma.task.findUnique({
-            where: { id },
-            select: {
-                title: true,
-                column: {
-                    select: {
-                        board: {
-                            select: {
-                                project: {
-                                    select: { id: true, workspaceId: true }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        })
-
-        if (task?.column?.board?.project?.workspaceId !== user.workspaceId) {
+        // Validate workspace via task context
+        const taskContext = await getTaskContext(id)
+        if (!taskContext || taskContext.workspaceId !== user.workspaceId) {
             return NextResponse.json({ error: 'Help request not found' }, { status: 404 })
         }
 
         const nextStatus = status as 'acknowledged' | 'resolved'
-        const updateData: {
-            status: 'acknowledged' | 'resolved'
-            resolvedBy?: string
-            resolvedByName?: string
-            resolvedAt?: Date
-        } = { status: nextStatus }
+        const now = Date.now()
+        const updatedHelpRequest: HelpRequest = {
+            ...helpRequest,
+            status: nextStatus,
+            updatedAt: now,
+        }
 
         if (nextStatus === 'resolved') {
-            updateData.resolvedBy = user.id
-            updateData.resolvedByName = user.name || 'User'
-            updateData.resolvedAt = new Date()
+            updatedHelpRequest.resolvedBy = user.id
+            updatedHelpRequest.resolvedByName = user.name || 'User'
+            updatedHelpRequest.resolvedAt = now
         }
 
-        const updated = await prisma.helpRequest.update({
-            where: { id: helpRequestId },
-            data: updateData
-        })
+        await fetchMutation(api.mirror.upsertHelpRequest, { helpRequest: updatedHelpRequest })
 
         // Log activity
-        if (task) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: task.title,
-                    action: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
-                    field: 'help',
-                    oldValue: helpRequest.status,
-                    newValue: nextStatus,
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: nextStatus === 'resolved' ? 'Resolved help request' : 'Acknowledged help request'
-                }
-            })
+        await appendActivityLogToConvex({
+            taskId: id,
+            taskTitle: taskContext.title,
+            action: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
+            field: 'help',
+            oldValue: helpRequest.status,
+            newValue: nextStatus,
+            changedBy: user.id,
+            changedByName: user.name || 'User',
+            details: nextStatus === 'resolved' ? 'Resolved help request' : 'Acknowledged help request',
+        })
 
-            // Notify the requester
-            const project = task.column?.board?.project
-            if (project?.workspaceId && helpRequest.requestedBy !== user.id) {
-                await prisma.notification.create({
-                    data: {
-                        workspaceId: project.workspaceId,
-                        userId: helpRequest.requestedBy,
-                        type: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
-                        title: nextStatus === 'resolved' ? 'Help Request Resolved' : 'Help Request Acknowledged',
-                        message: `${user.name} ${nextStatus === 'resolved' ? 'resolved' : 'acknowledged'} your help request on "${task.title}"`,
-                        link: `/dashboard/projects/${project.id}?task=${id}`
-                    }
-                })
-            }
+        // Notify the requester
+        const workspaceId = taskContext.workspaceId
+        const projectId = taskContext.projectId
+        if (workspaceId && projectId && helpRequest.requestedBy !== user.id) {
+            await createNotificationsInConvex([{
+                workspaceId,
+                userId: helpRequest.requestedBy,
+                type: nextStatus === 'resolved' ? 'help_resolved' : 'help_acknowledged',
+                title: nextStatus === 'resolved' ? 'Help Request Resolved' : 'Help Request Acknowledged',
+                message: `${user.name} ${nextStatus === 'resolved' ? 'resolved' : 'acknowledged'} your help request on "${taskContext.title}"`,
+                link: `/dashboard/projects/${projectId}?task=${id}`,
+            }])
         }
 
-        return NextResponse.json(updated)
+        await touchTaskInConvex(id, now)
+
+        return NextResponse.json(updatedHelpRequest)
     } catch (error) {
         console.error('Failed to update help request:', error)
         return NextResponse.json({ error: 'Failed to update help request' }, { status: 500 })
@@ -326,10 +295,8 @@ export async function DELETE(
             return NextResponse.json({ error: 'Help request ID is required' }, { status: 400 })
         }
 
-        // Verify help request exists and belongs to user or user is admin
-        const helpRequest = await prisma.helpRequest.findUnique({
-            where: { id: helpRequestId }
-        })
+        // Verify help request exists and belongs to task
+        const helpRequest = await fetchQuery(api.tasks.getHelpRequest, { helpRequestId }) as HelpRequest | null
 
         if (!helpRequest || helpRequest.taskId !== id) {
             return NextResponse.json({ error: 'Help request not found' }, { status: 404 })
@@ -345,31 +312,21 @@ export async function DELETE(
             return NextResponse.json({ error: 'Help request not found' }, { status: 404 })
         }
 
-        const task = await prisma.task.findUnique({
-            where: { id },
-            select: { title: true }
-        })
-
-        await prisma.helpRequest.delete({
-            where: { id: helpRequestId }
-        })
+        await fetchMutation(api.mirror.deleteHelpRequest, { helpRequestId })
 
         // Log activity
-        if (task) {
-            await prisma.activityLog.create({
-                data: {
-                    taskId: id,
-                    taskTitle: task.title,
-                    action: 'help_cancelled',
-                    field: 'help',
-                    oldValue: helpRequest.status,
-                    newValue: 'cancelled',
-                    changedBy: user.id,
-                    changedByName: user.name || 'User',
-                    details: 'Cancelled help request'
-                }
-            })
-        }
+        await appendActivityLogToConvex({
+            taskId: id,
+            taskTitle: taskContext.title,
+            action: 'help_cancelled',
+            field: 'help',
+            oldValue: helpRequest.status,
+            newValue: 'cancelled',
+            changedBy: user.id,
+            changedByName: user.name || 'User',
+            details: 'Cancelled help request',
+        })
+        await touchTaskInConvex(id, Date.now())
 
         return NextResponse.json({ success: true })
     } catch (error) {

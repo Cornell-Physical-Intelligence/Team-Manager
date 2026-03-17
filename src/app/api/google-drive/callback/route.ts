@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import prisma from "@/lib/prisma"
 import { getCurrentUser } from "@/lib/auth"
 import { driveConfigTableExists, getGoogleOAuthClient } from "@/lib/googleDrive"
+import {
+    getWorkspaceDriveConfigFromConvex,
+    upsertWorkspaceDriveConfigInConvex,
+} from "@/lib/convex/settings"
 import { encryptGoogleToken } from "@/lib/googleDriveTokens"
 
 export const runtime = "nodejs"
@@ -49,10 +52,7 @@ export async function GET(request: Request) {
 
     try {
         const { tokens } = await oauthClient.getToken(code)
-        const existing = await prisma.workspaceDriveConfig.findUnique({
-            where: { workspaceId: user.workspaceId },
-            select: { refreshToken: true, accessToken: true },
-        })
+        const existing = await getWorkspaceDriveConfigFromConvex(user.workspaceId)
 
         const refreshToken = tokens.refresh_token || existing?.refreshToken
 
@@ -60,23 +60,13 @@ export async function GET(request: Request) {
             return NextResponse.redirect(new URL("/dashboard?drive=error_no_refresh", request.url))
         }
 
-        await prisma.workspaceDriveConfig.upsert({
-            where: { workspaceId: user.workspaceId },
-            create: {
-                workspaceId: user.workspaceId,
-                refreshToken: encryptGoogleToken(refreshToken),
-                accessToken: encryptGoogleToken(tokens.access_token || null),
-                tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-                connectedById: user.id,
-                connectedByName: user.name,
-            },
-            update: {
-                refreshToken: encryptGoogleToken(refreshToken),
-                accessToken: encryptGoogleToken(tokens.access_token || existing?.accessToken || null),
-                tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-                connectedById: user.id,
-                connectedByName: user.name,
-            },
+        await upsertWorkspaceDriveConfigInConvex({
+            workspaceId: user.workspaceId,
+            refreshToken: encryptGoogleToken(refreshToken),
+            accessToken: encryptGoogleToken(tokens.access_token || existing?.accessToken || null),
+            tokenExpiry: tokens.expiry_date ?? null,
+            connectedById: user.id,
+            connectedByName: user.name,
         })
 
         return NextResponse.redirect(new URL("/dashboard?drive=connected", request.url))

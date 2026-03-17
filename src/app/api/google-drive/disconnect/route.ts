@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { deleteWorkspaceDriveConfigInConvex } from "@/lib/convex/settings"
 import { driveConfigTableExists } from "@/lib/googleDrive"
 
 export const runtime = "nodejs"
@@ -20,9 +20,7 @@ export async function POST() {
     }
 
     try {
-        await prisma.workspaceDriveConfig.deleteMany({
-            where: { workspaceId: user.workspaceId },
-        })
+        await deleteWorkspaceDriveConfigInConvex(user.workspaceId)
 
         return NextResponse.json({ success: true })
     } catch (error) {
