@@ -1,46 +1,19 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { DashboardHeatmap } from "./DashboardHeatmap"
-import type { DashboardHeatmapProps } from "./DashboardHeatmap"
+import { buildWorkloadTasks, computeWorkloadStats, normalizeWorkloadConfig } from "@/lib/workload"
 
-type HeatmapResponse = DashboardHeatmapProps
+export function DashboardHeatmapLoader({
+    workspaceId,
+}: {
+    workspaceId: string
+}) {
+    const payload = useQuery(api.dashboard.getHeatmapWidgetData, { workspaceId })
 
-export function DashboardHeatmapLoader() {
-    const [data, setData] = useState<HeatmapResponse | null>(null)
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        let cancelled = false
-        const load = async () => {
-            try {
-                const res = await fetch("/api/workload/heatmap", { cache: "no-store" })
-                const payload = await res.json()
-                if (!res.ok) throw new Error(payload?.error || "Failed to load heatmap")
-                if (!cancelled) {
-                    setData({
-                        userStats: Array.isArray(payload?.userStats) ? payload.userStats : [],
-                        criticalIssues: Array.isArray(payload?.criticalIssues) ? payload.criticalIssues : [],
-                        overloadedUsers: Array.isArray(payload?.overloadedUsers) ? payload.overloadedUsers : [],
-                        idleUsers: Array.isArray(payload?.idleUsers) ? payload.idleUsers : [],
-                        allTasks: Array.isArray(payload?.allTasks) ? payload.allTasks : [],
-                        projects: Array.isArray(payload?.projects) ? payload.projects : []
-                    })
-                }
-            } catch {
-                if (!cancelled) setData(null)
-            } finally {
-                if (!cancelled) setLoading(false)
-            }
-        }
-        load()
-        return () => {
-            cancelled = true
-        }
-    }, [])
-
-    if (loading) {
+    if (payload === undefined) {
         return (
             <section className="border border-border rounded-lg p-4">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -51,18 +24,105 @@ export function DashboardHeatmapLoader() {
         )
     }
 
-    if (!data || !Array.isArray(data.userStats) || data.userStats.length === 0) {
+    const config = normalizeWorkloadConfig(payload.config)
+    const users = payload.memberships.map((member) => ({
+        id: member.userId,
+        name: member.name || member.user.name,
+        avatar: member.user.avatar,
+        role: member.role,
+    }))
+
+    const now = new Date()
+    const workloadTasks = buildWorkloadTasks(
+        payload.tasks.map((task) => ({
+            ...task,
+            dueDate: task.dueDate ? new Date(task.dueDate) : null,
+            endDate: task.endDate ? new Date(task.endDate) : null,
+            startDate: task.startDate ? new Date(task.startDate) : null,
+            createdAt: new Date(task.createdAt),
+            updatedAt: new Date(task.updatedAt),
+            submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,
+            approvedAt: task.approvedAt ? new Date(task.approvedAt) : null,
+            helpRequests: task.helpRequests.map((request) => ({
+                ...request,
+                createdAt: new Date(request.createdAt),
+            })),
+            activityLogs: task.activityLogs.map((log) => ({
+                ...log,
+                createdAt: new Date(log.createdAt),
+            })),
+        })),
+        now,
+        config
+    )
+
+    const { userStats, overloadedUsers, idleUsers } = computeWorkloadStats(users, workloadTasks, config, now)
+
+    const criticalIssues: {
+        type: string
+        severity: "critical" | "warning" | "info"
+        message: string
+        count: number
+        tasks: typeof workloadTasks
+    }[] = []
+
+    const totalOverdue = workloadTasks.filter((task) => task.isOverdue).length
+    const totalStuck = workloadTasks.filter((task) => task.isStuck).length
+    const totalHelpRequests = workloadTasks.filter((task) => task.isBlockedByHelp).length
+    const totalUnassigned = workloadTasks.filter((task) => task.isUnassigned).length
+
+    if (totalOverdue > 0) {
+        criticalIssues.push({
+            type: "overdue",
+            severity: "critical",
+            message: `${totalOverdue} tasks are overdue`,
+            count: totalOverdue,
+            tasks: workloadTasks.filter((task) => task.isOverdue),
+        })
+    }
+
+    if (totalStuck > 0) {
+        criticalIssues.push({
+            type: "stuck",
+            severity: "warning",
+            message: `${totalStuck} tasks stuck (${config.thresholds.stuckDays}+ days)`,
+            count: totalStuck,
+            tasks: workloadTasks.filter((task) => task.isStuck),
+        })
+    }
+
+    if (totalHelpRequests > 0) {
+        criticalIssues.push({
+            type: "help",
+            severity: "warning",
+            message: `${totalHelpRequests} tasks need help`,
+            count: totalHelpRequests,
+            tasks: workloadTasks.filter((task) => task.isBlockedByHelp),
+        })
+    }
+
+    if (totalUnassigned > 0) {
+        criticalIssues.push({
+            type: "unassigned",
+            severity: "info",
+            message: `${totalUnassigned} tasks unassigned`,
+            count: totalUnassigned,
+            tasks: workloadTasks.filter((task) => task.isUnassigned),
+        })
+    }
+
+    if (userStats.length === 0) {
         return null
     }
 
     return (
         <DashboardHeatmap
-            userStats={data.userStats}
-            criticalIssues={data.criticalIssues}
-            overloadedUsers={data.overloadedUsers}
-            idleUsers={data.idleUsers}
-            allTasks={data.allTasks}
-            projects={data.projects}
+            userStats={userStats}
+            criticalIssues={criticalIssues}
+            overloadedUsers={overloadedUsers}
+            idleUsers={idleUsers}
+            allTasks={workloadTasks}
+            projects={payload.projects}
         />
     )
 }

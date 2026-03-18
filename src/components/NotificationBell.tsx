@@ -1,7 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Bell, Check, User, Clock, FileText, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Bell, Check, Clock, FileText, User } from "lucide-react"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -10,148 +12,96 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Badge } from "@/components/ui/badge"
 
 type Notification = {
     id: string
     type: string
     title: string
     message: string
-    link: string | null
+    link?: string | null
     read: boolean
-    createdAt: string
+    createdAt: number
 }
 
-export function NotificationBell() {
-    const [notifications, setNotifications] = useState<Notification[]>([])
+export function NotificationBell({
+    userId,
+    workspaceId,
+}: {
+    userId: string
+    workspaceId: string
+}) {
     const [open, setOpen] = useState(false)
     const [bellRingNonce, setBellRingNonce] = useState(0)
-    const [unreadCount, setUnreadCount] = useState(0)
-    const lastCheckTime = useRef<string>(new Date().toISOString())
-    const isTabVisible = useRef(true)
-    const hasFetchedFull = useRef(false)
-    const unreadCountRef = useRef(0)
+    const previousUnreadCount = useRef<number | null>(null)
 
-    // Full fetch - get all notifications
-    const fetchAllNotifications = async () => {
-        try {
-            const res = await fetch('/api/notifications')
-            if (res.ok) {
-                const data = await res.json()
-                setNotifications(data.notifications || [])
-                const count = (data.notifications || []).filter((n: Notification) => !n.read).length
-                setUnreadCount(count)
-                unreadCountRef.current = count
-                lastCheckTime.current = data.lastCheck || new Date().toISOString()
-                hasFetchedFull.current = true
-            }
-        } catch (e) {
-            console.error('Failed to fetch notifications', e)
-        }
-    }
+    const notifications = useQuery(api.notifications.listForUser, {
+        workspaceId,
+        userId,
+        limit: 20,
+    }) as Notification[] | undefined
+    const unreadCount = useQuery(api.notifications.getUnreadCount, {
+        workspaceId,
+        userId,
+    })
 
-    // Lightweight poll - just check count
-    const checkForNew = async () => {
-        if (!isTabVisible.current) return
+    const markRead = useMutation(api.notifications.markRead)
+    const markAllRead = useMutation(api.notifications.markAllRead)
 
-        try {
-            const res = await fetch('/api/notifications?countOnly=true')
-            if (res.ok) {
-                const data = await res.json()
-                const newCount = data.unreadCount || 0
-                if (newCount !== unreadCountRef.current) {
-                    // If count increased, ring the bell
-                    if (newCount > unreadCountRef.current) {
-                        setBellRingNonce(n => n + 1)
-                    }
-                    setUnreadCount(newCount)
-                    unreadCountRef.current = newCount
-                }
-            }
-        } catch (e) {
-            // Silent fail
-        }
-    }
-
-    // Track tab visibility
     useEffect(() => {
-        const handleVisibility = () => {
-            isTabVisible.current = document.visibilityState === 'visible'
+        if (typeof unreadCount !== "number") return
+
+        if (previousUnreadCount.current !== null && unreadCount > previousUnreadCount.current) {
+            setBellRingNonce((nonce) => nonce + 1)
         }
-        document.addEventListener('visibilitychange', handleVisibility)
-        return () => document.removeEventListener('visibilitychange', handleVisibility)
-    }, [])
 
-    // Initial fetch
-    useEffect(() => {
-        const timeoutId = window.setTimeout(() => {
-            void fetchAllNotifications()
-        }, 0)
+        previousUnreadCount.current = unreadCount
+    }, [unreadCount])
 
-        return () => window.clearTimeout(timeoutId)
-    }, [])
+    const resolvedUnreadCount = unreadCount ?? 0
+    const resolvedNotifications = notifications ?? []
 
-    // Smart polling - lightweight check every 5 seconds
-    useEffect(() => {
-        const interval = setInterval(checkForNew, 5000)
-        return () => clearInterval(interval)
-    }, [])
-
-    // Fetch full data when popover opens
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen)
-        if (isOpen) {
-            // Refresh notifications when opening
-            fetchAllNotifications()
-            if (unreadCount > 0) {
-                markAllAsRead()
-            }
+
+        if (isOpen && resolvedUnreadCount > 0) {
+            void markAllRead({
+                workspaceId,
+                userId,
+            })
         }
     }
 
-    const markAsRead = async (notificationId: string) => {
-        try {
-            await fetch('/api/notifications', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notificationId })
-            })
-            setNotifications(prev =>
-                prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
-            )
-        } catch (e) {
-            console.error('Failed to mark as read', e)
-        }
+    const handleMarkAllRead = () => {
+        void markAllRead({
+            workspaceId,
+            userId,
+        })
     }
 
-    const markAllAsRead = async () => {
-        try {
-            await fetch('/api/notifications', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ markAllRead: true })
-            })
-            setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-            setUnreadCount(0)
-            unreadCountRef.current = 0
-        } catch (e) {
-            console.error('Failed to mark all as read', e)
-        }
+    const markNotificationRead = async (notificationId: string) => {
+        await markRead({
+            workspaceId,
+            userId,
+            notificationId,
+        })
     }
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'member_joined': return <User className="h-4 w-4 text-muted-foreground" />
-            case 'task_due': return <Clock className="h-4 w-4 text-muted-foreground" />
-            case 'task_assigned': return <FileText className="h-4 w-4 text-muted-foreground" />
-            default: return <Bell className="h-4 w-4 text-muted-foreground" />
+            case "member_joined":
+                return <User className="h-4 w-4 text-muted-foreground" />
+            case "task_due":
+                return <Clock className="h-4 w-4 text-muted-foreground" />
+            case "task_assigned":
+                return <FileText className="h-4 w-4 text-muted-foreground" />
+            default:
+                return <Bell className="h-4 w-4 text-muted-foreground" />
         }
     }
 
-    const formatTime = (dateStr: string) => {
-        const date = new Date(dateStr)
-        const now = new Date()
-        const diff = now.getTime() - date.getTime()
+    const formatTime = (createdAt: number) => {
+        const now = Date.now()
+        const diff = now - createdAt
         const minutes = Math.floor(diff / 60000)
         const hours = Math.floor(minutes / 60)
         const days = Math.floor(hours / 24)
@@ -159,16 +109,22 @@ export function NotificationBell() {
         if (days > 0) return `${days}d ago`
         if (hours > 0) return `${hours}h ago`
         if (minutes > 0) return `${minutes}m ago`
-        return 'Just now'
+        return "Just now"
     }
 
-    const handleNotificationClick = (notification: Notification) => {
+    const handleNotificationClick = async (notification: Notification) => {
         if (!notification.read) {
-            markAsRead(notification.id)
+            try {
+                await markNotificationRead(notification.id)
+            } catch (error) {
+                console.error("Failed to mark notification as read", error)
+            }
         }
+
         if (notification.link) {
             window.location.assign(notification.link)
         }
+
         setOpen(false)
     }
 
@@ -179,7 +135,7 @@ export function NotificationBell() {
                     variant="ghost"
                     size="icon"
                     className="relative h-8 w-8"
-                    onClick={() => setBellRingNonce((n) => n + 1)}
+                    onClick={() => setBellRingNonce((nonce) => nonce + 1)}
                 >
                     <Bell
                         key={bellRingNonce}
@@ -188,9 +144,9 @@ export function NotificationBell() {
                             bellRingNonce > 0 && "motion-safe:animate-[cupi-bell-ring_900ms_cubic-bezier(0.16,1,0.3,1)_both]"
                         )}
                     />
-                    {unreadCount > 0 && (
+                    {resolvedUnreadCount > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center animate-pop">
-                            {unreadCount > 9 ? '9+' : unreadCount}
+                            {resolvedUnreadCount > 9 ? "9+" : resolvedUnreadCount}
                         </span>
                     )}
                 </Button>
@@ -198,12 +154,12 @@ export function NotificationBell() {
             <PopoverContent className="w-80 p-0" align="end">
                 <div className="flex items-center justify-between px-4 py-3 border-b">
                     <h4 className="font-semibold text-sm">Notifications</h4>
-                    {unreadCount > 0 && (
+                    {resolvedUnreadCount > 0 && (
                         <Button
                             variant="ghost"
                             size="sm"
                             className="text-xs h-7"
-                            onClick={markAllAsRead}
+                            onClick={handleMarkAllRead}
                         >
                             <Check className="h-3 w-3 mr-1" />
                             Mark all read
@@ -211,17 +167,22 @@ export function NotificationBell() {
                     )}
                 </div>
                 <ScrollArea className="h-[300px]">
-                    {notifications.length === 0 ? (
+                    {notifications === undefined ? (
+                        <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                            <Bell className="h-8 w-8 mb-2 opacity-50 animate-pulse" />
+                            <p className="text-sm">Loading notifications</p>
+                        </div>
+                    ) : resolvedNotifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
                             <Bell className="h-8 w-8 mb-2 opacity-50" />
                             <p className="text-sm">No notifications</p>
                         </div>
                     ) : (
                         <div className="divide-y">
-                            {notifications.map(notification => (
+                            {resolvedNotifications.map((notification) => (
                                 <div
                                     key={notification.id}
-                                    onClick={() => handleNotificationClick(notification)}
+                                    onClick={() => void handleNotificationClick(notification)}
                                     className={`flex gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors ${!notification.read ? 'bg-muted/30 dark:bg-muted/20' : ''
                                         }`}
                                 >

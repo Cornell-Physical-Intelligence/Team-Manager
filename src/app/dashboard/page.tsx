@@ -234,7 +234,7 @@ export default async function DashboardPage({
 
                         {/* Team Heatmap - Leadership Only */}
                         {isLeadership && (
-                            <DashboardHeatmapLoader />
+                            <DashboardHeatmapLoader workspaceId={user.workspaceId} />
                         )}
 
                         {/* Recent Activity */}
@@ -268,7 +268,7 @@ export default async function DashboardPage({
                         <div className="flex flex-col gap-5 h-full">
                             {/* Project Activity Tracker */}
                             <div className="shrink-0">
-                                <ProjectActivityTracker />
+                                <ProjectActivityTracker workspaceId={user.workspaceId} />
                             </div>
 
                             {/* Drive Uploads */}

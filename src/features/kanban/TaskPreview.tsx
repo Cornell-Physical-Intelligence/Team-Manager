@@ -20,6 +20,7 @@ import {
 import { getInitials } from "@/lib/utils"
 import { TaskChecklist } from "@/components/TaskChecklist"
 import { HelpRequest } from "@/components/HelpRequest"
+import { useDashboardUser } from "@/components/DashboardUserProvider"
 
 type Task = {
     id: string
@@ -281,6 +282,7 @@ const buildCommentTree = (comments: Comment[]): CommentWithReplies[] => {
 }
 
 export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTaskUpdated }: TaskPreviewProps) {
+    const dashboardUser = useDashboardUser()
     const [comments, setComments] = useState<Comment[]>([])
     const [attachments, setAttachments] = useState<Attachment[]>([])
     const [newComment, setNewComment] = useState("")
@@ -289,8 +291,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const [commentError, setCommentError] = useState<string | null>(null)
     const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
     const [enlargedImage, setEnlargedImage] = useState<{ url: string; name: string } | null>(null)
-    const [userRole, setUserRole] = useState<string>('Member')
-    const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null)
     const [isProcessingReview, setIsProcessingReview] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -306,6 +306,10 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const [folderTree, setFolderTree] = useState<DriveFolderNode[]>([])
     const [uploadsPath, setUploadsPath] = useState<string>("")
     const driveConfigLoadedRef = useRef(false)
+    const userRole = dashboardUser?.role ?? 'Member'
+    const currentUser = dashboardUser
+        ? { id: dashboardUser.id, name: dashboardUser.name }
+        : null
 
     // Scroll to bottom on new comments
     useEffect(() => {
@@ -313,24 +317,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
             commentsEndRef.current.scrollIntoView({ behavior: "smooth" })
         }
     }, [comments.length])
-
-    // Fetch user role and info
-    useEffect(() => {
-        if (open) {
-            fetch('/api/auth/role')
-                .then(res => res.json())
-                .then(data => {
-                    setUserRole(data.role || 'Member')
-                    if (data.id) {
-                        setCurrentUser({ id: data.id, name: data.name })
-                    }
-                })
-                .catch(() => {
-                    setUserRole('Member')
-                    setCurrentUser(null)
-                })
-        }
-    }, [open])
 
     useEffect(() => {
         if (!open || driveConfigLoadedRef.current) return

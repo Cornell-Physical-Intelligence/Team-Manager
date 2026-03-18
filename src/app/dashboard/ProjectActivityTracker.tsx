@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { ChevronRight, TrendingUp, TrendingDown, Minus, CheckCircle2, Clock, Loader2, AlertTriangle, Calendar, Target, Activity, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
@@ -35,18 +37,6 @@ type ProjectActivity = {
     totalInReview: number
     completionRate: number
     pushes: PushStats[]
-}
-
-type ProjectListItem = {
-    id: string
-    name: string
-    color?: string | null
-}
-
-function isProjectListItem(value: unknown): value is ProjectListItem {
-    return typeof value === 'object' && value !== null
-        && typeof (value as { id?: unknown }).id === 'string'
-        && typeof (value as { name?: unknown }).name === 'string'
 }
 
 // Check if a push is overdue
@@ -260,18 +250,17 @@ const getProjectVelocityTrend = (pushes: PushStats[]) => {
     return 'stable'
 }
 
-export function ProjectActivityTracker() {
+export function ProjectActivityTracker({
+    workspaceId,
+}: {
+    workspaceId: string
+}) {
     const router = useRouter()
-    const [projects, setProjects] = useState<ProjectActivity[]>([])
-    const [loading, setLoading] = useState(true)
     const [selectedProject, setSelectedProject] = useState<string | null>(null)
     const [hoveredPush, setHoveredPush] = useState<string | null>(null)
     const [openTooltipId, setOpenTooltipId] = useState<string | null>(null)
     const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-    useEffect(() => {
-        fetchProjectActivity()
-    }, [])
+    const projects = useQuery(api.settings.getProjectActivity, { workspaceId }) as ProjectActivity[] | undefined
 
     const handleMouseEnter = (projectId: string) => {
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
@@ -291,50 +280,24 @@ export function ProjectActivityTracker() {
         setOpenTooltipId(projectId)
     }
 
-    const fetchProjectActivity = async () => {
-        try {
-            const res = await fetch('/api/projects/activity', { credentials: 'include' })
-            const data = await res.json()
-
-            // Check if we got valid array data
-            if (res.ok && Array.isArray(data)) {
-                setProjects(data)
-                const firstWithPushes = data.find((p: ProjectActivity) => p.pushes.length > 0)
-                if (firstWithPushes) {
-                    setSelectedProject(firstWithPushes.id)
-                } else if (data.length > 0) {
-                    setSelectedProject(data[0].id)
-                }
-            } else {
-                // Try fetching all projects as fallback if activity endpoint fails
-                const projectsRes = await fetch('/api/projects', { credentials: 'include' })
-                const projectsData = await projectsRes.json()
-
-                if (projectsRes.ok && Array.isArray(projectsData)) {
-                    const transformed = projectsData.filter(isProjectListItem).map((p) => ({
-                        id: p.id,
-                        name: p.name,
-                        color: p.color || '#6b7280',
-                        totalTasks: 0,
-                        totalCompleted: 0,
-                        totalInReview: 0,
-                        completionRate: 0,
-                        pushes: []
-                    }))
-                    setProjects(transformed)
-                    if (transformed.length > 0) {
-                        setSelectedProject(transformed[0].id)
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Failed to fetch project activity:', error)
-        } finally {
-            setLoading(false)
+    useEffect(() => {
+        if (!projects || projects.length === 0) {
+            setSelectedProject(null)
+            return
         }
-    }
 
-    const selectedProjectData = projects.find(p => p.id === selectedProject)
+        setSelectedProject((current) => {
+            if (current && projects.some((project) => project.id === current)) {
+                return current
+            }
+
+            const firstWithPushes = projects.find((project) => project.pushes.length > 0)
+            return firstWithPushes?.id || projects[0].id
+        })
+    }, [projects])
+
+    const resolvedProjects = projects ?? []
+    const selectedProjectData = resolvedProjects.find((project) => project.id === selectedProject)
     const hoveredPushData = selectedProjectData?.pushes.find(p => p.id === hoveredPush)
 
     // Calculate project health and trends
@@ -367,7 +330,7 @@ export function ProjectActivityTracker() {
         router.push(`/dashboard/projects/${projectId}`)
     }
 
-    if (loading) {
+    if (projects === undefined) {
         return (
             <section className="border border-border rounded-lg p-4">
                 <div className="flex items-center justify-center h-48">
@@ -377,7 +340,7 @@ export function ProjectActivityTracker() {
         )
     }
 
-    if (projects.length === 0) {
+    if (resolvedProjects.length === 0) {
         return (
             <section className="border border-border rounded-lg p-4">
                 <h2 className="text-sm font-medium mb-3">Activity Log</h2>
@@ -398,7 +361,7 @@ export function ProjectActivityTracker() {
                 <div>
                     {/* Project Selector */}
                     <div className="flex gap-1 mb-4 overflow-x-auto pb-1 scrollbar-hide shrink-0 relative">
-                        {projects.map(project => {
+                        {resolvedProjects.map(project => {
                             const hasOverdue = project.pushes.some(isPushOverdue)
                             const trend = getProjectVelocityTrend(project.pushes)
                             const isActive = selectedProject === project.id

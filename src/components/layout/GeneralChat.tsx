@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Send, Smile, Loader2, ChevronDown, AtSign } from "lucide-react"
+import { Send, Smile, ChevronDown, AtSign } from "lucide-react"
+import { useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
 import { Button } from "@/components/ui/button"
@@ -10,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
+import { useDashboardUser } from "@/components/DashboardUserProvider"
 // GIPHY SDK
 import { GiphyFetch } from '@giphy/js-fetch-api'
 import { Grid } from '@giphy/react-components'
@@ -22,9 +25,10 @@ type Message = {
     type: string // "text" | "gif"
     authorId: string
     authorName: string
-    authorAvatar: string | null
-    createdAt: string
+    authorAvatar?: string | null
+    createdAt: number | string
     author?: {
+        id?: string
         name: string
         avatar: string | null
     }
@@ -38,14 +42,44 @@ type User = {
 
 export function GeneralChat({ isExpanded, onToggleExpand }: { isExpanded?: boolean; onToggleExpand?: () => void }) {
     const { toast } = useToast()
-    const [messages, setMessages] = React.useState<Message[]>([])
+    const currentUser = useDashboardUser()
     const [inputValue, setInputValue] = React.useState("")
-    const [currentUser, setCurrentUser] = React.useState<{ id: string, name: string, avatar: string | null } | null>(null)
     const scrollRef = React.useRef<HTMLDivElement>(null)
     const [giphyOpen, setGiphyOpen] = React.useState(false)
     const [searchTerm, setSearchTerm] = React.useState("")
-    const [members, setMembers] = React.useState<User[]>([])
+    const [pendingMessages, setPendingMessages] = React.useState<Message[]>([])
     const hasInitialScrolled = React.useRef(false)
+    const seenMessageIds = React.useRef<Set<string> | null>(null)
+    const workspaceId = currentUser?.workspaceId ?? null
+    const liveMessages = useQuery(
+        api.chat.listMessages,
+        workspaceId ? { workspaceId, limit: 50 } : "skip"
+    ) as Message[] | undefined
+    const workspaceUsers = useQuery(
+        api.admin.getWorkspaceUsers,
+        workspaceId ? { workspaceId } : "skip"
+    )
+    const members = React.useMemo<User[]>(
+        () =>
+            (workspaceUsers?.users ?? []).map((user) => ({
+                id: user.id,
+                name: user.name,
+                avatar: user.avatar,
+            })),
+        [workspaceUsers]
+    )
+    const messages = React.useMemo(() => {
+        const resolvedLiveMessages = liveMessages ?? []
+        if (pendingMessages.length === 0) {
+            return resolvedLiveMessages
+        }
+
+        const liveIds = new Set(resolvedLiveMessages.map((message) => message.id))
+
+        return [...resolvedLiveMessages, ...pendingMessages.filter((message) => !liveIds.has(message.id))]
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            .slice(-50)
+    }, [liveMessages, pendingMessages])
 
     // Scroll state
     const [showScrollButton, setShowScrollButton] = React.useState(false)
@@ -84,137 +118,36 @@ export function GeneralChat({ isExpanded, onToggleExpand }: { isExpanded?: boole
         }, 100)
     }
 
-    // Retrieve user identity
     React.useEffect(() => {
-        fetch('/api/auth/role')
-            .then(res => res.json())
-            .then(data => setCurrentUser(data))
-            .catch(console.error)
-    }, [])
+        if (!liveMessages) return
 
-    const fetchMembers = React.useCallback(async () => {
-        try {
-            // Fetch all users for mentions
-            const res = await fetch('/api/users')
-            if (res.ok) {
-                const data = await res.json()
-                if (Array.isArray(data)) {
-                    setMembers(prev => {
-                        if (JSON.stringify(prev) !== JSON.stringify(data)) {
-                            return data
-                        }
-                        return prev
-                    })
-                }
-            }
-        } catch (error) {
-            console.error(error)
+        const liveIds = new Set(liveMessages.map((message) => message.id))
+        setPendingMessages((prev) => prev.filter((message) => !liveIds.has(message.id)))
+    }, [liveMessages])
+
+    React.useEffect(() => {
+        if (!liveMessages) return
+
+        const nextSeenIds = new Set(liveMessages.map((message) => message.id))
+        if (seenMessageIds.current === null || !currentUser) {
+            seenMessageIds.current = nextSeenIds
+            return
         }
-    }, [])
 
-    // Initial fetch
-    React.useEffect(() => {
-        fetchMembers()
-    }, [fetchMembers])
+        for (const message of liveMessages) {
+            if (seenMessageIds.current.has(message.id)) continue
+            if (message.authorId === currentUser.id) continue
 
-    // Poll for members (30 seconds - members rarely change)
-    React.useEffect(() => {
-        const interval = setInterval(fetchMembers, 30000)
-        return () => clearInterval(interval)
-    }, [fetchMembers])
-
-    // Track last message timestamp for incremental updates
-    const lastMessageTime = React.useRef<string | null>(null)
-    const isTabVisible = React.useRef(true)
-
-    // Initial full fetch
-    const fetchAllMessages = React.useCallback(async () => {
-        try {
-            const res = await fetch('/api/chat?limit=50')
-            if (res.ok) {
-                const data = await res.json()
-                if (Array.isArray(data) && data.length > 0) {
-                    setMessages(data)
-                    lastMessageTime.current = data[data.length - 1]?.createdAt || null
-                }
+            if (message.content.includes("@everyone") || message.content.includes(`@${currentUser.name}`)) {
+                toast({
+                    title: `New mention from ${message.author?.name || message.authorName}`,
+                    description: message.content,
+                })
             }
-        } catch (error) {
-            console.error(error)
         }
-    }, [])
 
-    // Incremental fetch - only get new messages since last check
-    const fetchNewMessages = React.useCallback(async () => {
-        // Skip if tab is hidden or no previous messages
-        if (!isTabVisible.current || !lastMessageTime.current) return
-
-        try {
-            const since = encodeURIComponent(lastMessageTime.current)
-            const res = await fetch(`/api/chat?limit=50&since=${since}`)
-            if (res.ok) {
-                const newMsgs = await res.json()
-                if (Array.isArray(newMsgs) && newMsgs.length > 0) {
-                    setMessages(prev => {
-                        // Get existing message IDs for deduplication
-                        const existingIds = new Set(prev.map(m => m.id))
-                        // Filter out any messages we already have (prevents duplicates from race conditions)
-                        const trulyNewMsgs = newMsgs.filter((m: Message) => !existingIds.has(m.id))
-
-                        if (trulyNewMsgs.length === 0) return prev
-
-                        // Append new messages
-                        const updated = [...prev, ...trulyNewMsgs]
-                        // Keep only last 50 to prevent memory bloat
-                        const trimmed = updated.slice(-50)
-                        lastMessageTime.current = trimmed[trimmed.length - 1]?.createdAt || null
-
-                        // Show toast for mentions (only for truly new messages)
-                        trulyNewMsgs.forEach((m: Message) => {
-                            if (m.authorId !== currentUser?.id) {
-                                if (m.content.includes("@everyone") || (currentUser?.name && m.content.includes(`@${currentUser.name}`))) {
-                                    toast({
-                                        title: `New mention from ${m.author?.name || m.authorName}`,
-                                        description: m.content,
-                                    })
-                                }
-                            }
-                        })
-
-                        return trimmed
-                    })
-                }
-            }
-        } catch (error) {
-            console.error(error)
-        }
-    }, [currentUser, toast])
-
-    // Track tab visibility to pause polling when hidden
-    React.useEffect(() => {
-        const handleVisibility = () => {
-            isTabVisible.current = document.visibilityState === 'visible'
-        }
-        document.addEventListener('visibilitychange', handleVisibility)
-        return () => document.removeEventListener('visibilitychange', handleVisibility)
-    }, [])
-
-    // Initial fetch when component mounts
-    React.useEffect(() => {
-        fetchAllMessages()
-    }, [fetchAllMessages])
-
-    // Smart polling: 1 second when expanded + visible, stopped otherwise
-    React.useEffect(() => {
-        if (!isExpanded) return // Don't poll when collapsed
-
-        const interval = setInterval(() => {
-            if (isTabVisible.current) {
-                fetchNewMessages()
-            }
-        }, 1000)
-
-        return () => clearInterval(interval)
-    }, [isExpanded, fetchNewMessages])
+        seenMessageIds.current = nextSeenIds
+    }, [currentUser, liveMessages, toast])
 
     const scrollToBottom = React.useCallback((smooth = true) => {
         const viewport = scrollRef.current
@@ -258,7 +191,7 @@ export function GeneralChat({ isExpanded, onToggleExpand }: { isExpanded?: boole
     }, [])
 
     const sendMessage = async (content: string, type: "text" | "gif" = "text") => {
-        if (!content.trim()) return
+        if (!content.trim() || !currentUser) return
 
         // Optimistic update
         const tempId = crypto.randomUUID()
@@ -266,17 +199,18 @@ export function GeneralChat({ isExpanded, onToggleExpand }: { isExpanded?: boole
             id: tempId,
             content,
             type,
-            authorId: currentUser?.id || "temp",
-            authorName: currentUser?.name || "Me",
-            authorAvatar: currentUser?.avatar || null,
-            createdAt: new Date().toISOString(),
+            authorId: currentUser.id,
+            authorName: currentUser.name,
+            authorAvatar: currentUser.avatar,
+            createdAt: Date.now(),
             author: {
-                name: currentUser?.name || "Me",
-                avatar: currentUser?.avatar || null
+                id: currentUser.id,
+                name: currentUser.name,
+                avatar: currentUser.avatar,
             }
         }
 
-        setMessages(prev => [...prev, optimisticMsg])
+        setPendingMessages((prev) => [...prev, optimisticMsg])
         setInputValue("")
         setGiphyOpen(false)
         setIsAtBottom(true) // Force scroll on send
@@ -289,17 +223,27 @@ export function GeneralChat({ isExpanded, onToggleExpand }: { isExpanded?: boole
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content, type })
             })
-            if (res.ok) {
-                const newMsg = await res.json()
-                // Replace optimistic message with real one from server
-                setMessages(prev => prev.map(msg => msg.id === tempId ? newMsg : msg))
-                // Update lastMessageTime so polling doesn't re-add this message
-                lastMessageTime.current = newMsg.createdAt
+            if (!res.ok) {
+                throw new Error("Failed to send message")
             }
+
+            const newMsg = await res.json()
+            setPendingMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === tempId
+                        ? {
+                            ...newMsg,
+                            createdAt: typeof newMsg.createdAt === "string"
+                                ? new Date(newMsg.createdAt).getTime()
+                                : newMsg.createdAt,
+                        }
+                        : msg
+                )
+            )
         } catch (error) {
             console.error(error)
             // Remove optimistic message on error
-            setMessages(prev => prev.filter(msg => msg.id !== tempId))
+            setPendingMessages((prev) => prev.filter((msg) => msg.id !== tempId))
         }
     }
 

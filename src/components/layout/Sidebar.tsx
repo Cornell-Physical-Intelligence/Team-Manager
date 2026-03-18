@@ -3,6 +3,8 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { useMutation, useQuery } from "convex/react"
+import { api } from "@convex/_generated/api"
 import {
     LayoutDashboard, Users, LogOut, Settings, ChevronDown,
     Plus, MoreHorizontal, FolderKanban, Pencil, Trash2, User, GripVertical,
@@ -58,7 +60,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { GeneralChat } from "@/components/layout/GeneralChat"
 import { CreateProjectWizard } from "@/features/projects/CreateProjectWizard"
 import { preloadBoardModule } from "@/lib/board-module"
-import { subscribeSidebarSync } from "@/lib/sidebar-sync"
 
 type Project = {
     id: string
@@ -89,6 +90,7 @@ type UserData = {
     name: string
     role: string
     id: string | null
+    workspaceId?: string | null
     workspaceName?: string
     avatar?: string | null
 }
@@ -290,17 +292,8 @@ StaticProjectRow.displayName = "StaticProjectRow"
 export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUserData?: Partial<UserData>; isMobileSheet?: boolean } = {}) {
     const pathname = usePathname()
     const router = useRouter()
-    const [userData, setUserData] = React.useState<UserData>(() => ({
-        name: initialUserData?.name ?? "User",
-        role: initialUserData?.role ?? "Member",
-        id: initialUserData?.id ?? null,
-        workspaceName: initialUserData?.workspaceName,
-        avatar: initialUserData?.avatar ?? null,
-    }))
     const [projects, setProjects] = React.useState<Project[]>([])
     const [archivedProjects, setArchivedProjects] = React.useState<Project[]>([])
-    const [leadCandidates, setLeadCandidates] = React.useState<UserCandidate[]>([])
-    const [allUsers, setAllUsers] = React.useState<UserCandidate[]>([])
     const [projectsOpen, setProjectsOpen] = React.useState(true)
     const [archivedProjectsOpen, setArchivedProjectsOpen] = React.useState(false)
     const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
@@ -350,62 +343,87 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         [editLeadIds, selectedMemberIds]
     )
 
+    const initialUserId = initialUserData?.id ?? null
+    const initialWorkspaceId = initialUserData?.workspaceId ?? null
+    const workspaceUsersResult = useQuery(
+        api.admin.getWorkspaceUsers,
+        initialWorkspaceId ? { workspaceId: initialWorkspaceId } : "skip"
+    )
+    const leadUsersResult = useQuery(
+        api.admin.getWorkspaceUsers,
+        initialWorkspaceId ? { workspaceId: initialWorkspaceId, role: "leads" } : "skip"
+    )
+    const projectListResult = useQuery(
+        api.projectsAdmin.listProjects,
+        initialUserId && initialWorkspaceId
+            ? {
+                workspaceId: initialWorkspaceId,
+                userId: initialUserId,
+                includeArchived: true,
+                includeLead: true,
+            }
+            : "skip"
+    )
+    const reorderProjects = useMutation(api.projectsAdmin.reorderProjects)
+
+    const currentUserRecord = workspaceUsersResult?.users.find((candidate) => candidate.id === initialUserId)
+    const userData: UserData = {
+        name: currentUserRecord?.name ?? initialUserData?.name ?? "User",
+        role: currentUserRecord?.role ?? initialUserData?.role ?? "Member",
+        id: initialUserId,
+        workspaceId: initialWorkspaceId,
+        workspaceName: initialUserData?.workspaceName,
+        avatar: currentUserRecord?.avatar ?? initialUserData?.avatar ?? null,
+    }
+    const allUsers: UserCandidate[] = (workspaceUsersResult?.users ?? []).map((user) => ({
+        id: user.id,
+        name: user.name,
+        role: user.role,
+    }))
+    const leadCandidates: UserCandidate[] = (leadUsersResult?.users ?? []).map((user) => ({
+        id: user.id,
+        name: user.name,
+        role: user.role,
+    }))
+
     const isAdmin = userData.role === 'Admin' || userData.role === 'Team Lead'
     const prefetchProject = React.useCallback((projectId: string) => {
         preloadBoardModule()
         router.prefetch(`/dashboard/projects/${projectId}`)
     }, [router])
 
-    // Fetch user data
-    const fetchUserData = React.useCallback(() => {
-        fetch('/api/auth/role', { cache: 'no-store' })
-            .then(res => res.json())
-            .then(data => {
-                setUserData({
-                    name: data.name || 'User',
-                    role: data.role || 'Member',
-                    id: data.id,
-                    workspaceName: data.workspaceName,
-                    avatar: data.avatar
-                })
-            })
-            .catch(() => { })
-    }, [])
-
     React.useEffect(() => {
-        fetchUserData()
-        // Poll for role changes (60 seconds - roles rarely change)
-        const interval = setInterval(fetchUserData, 60000)
-        return () => clearInterval(interval)
-    }, [fetchUserData])
+        if (!projectListResult) return
 
-    // Fetch divisions with lead info
-    const fetchProjects = React.useCallback(() => {
-        fetch('/api/projects?includeLead=true&includeArchived=true', { cache: 'no-store' })
-            .then(res => res.json())
-            .then(data => {
-                if (!Array.isArray(data)) return
-                setProjects(data.filter((project) => !project.archivedAt))
-                setArchivedProjects(data.filter((project) => Boolean(project.archivedAt)))
-            })
-            .catch(() => { })
-    }, [])
+        const serializedProjects = projectListResult.map((project) => ({
+            ...project,
+            archivedAt: typeof project.archivedAt === "number"
+                ? new Date(project.archivedAt).toISOString()
+                : null,
+        }))
+
+        setProjects(serializedProjects.filter((project) => !project.archivedAt))
+        setArchivedProjects(serializedProjects.filter((project) => Boolean(project.archivedAt)))
+    }, [projectListResult])
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
     )
 
     const persistProjectOrder = React.useCallback(async (projectIds: string[]) => {
+        if (!userData.id || !userData.workspaceId) return
+
         try {
-            await fetch('/api/projects/order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectIds })
+            await reorderProjects({
+                userId: userData.id,
+                workspaceId: userData.workspaceId,
+                projectIds,
+                now: Date.now(),
             })
         } catch {
             // best-effort; sidebar will refresh order on next fetch
         }
-    }, [])
+    }, [reorderProjects, userData.id, userData.workspaceId])
 
     const handleProjectDragEnd = React.useCallback((event: DragEndEvent) => {
         const { active, over } = event
@@ -436,7 +454,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 return
             }
 
-            fetchProjects()
             router.refresh()
         } catch (error) {
             console.error(error)
@@ -444,39 +461,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
         } finally {
             setIsSubmitting(false)
         }
-    }, [fetchProjects, router])
-
-    // Fetch lead candidates & all users
-    const fetchUsers = React.useCallback(() => {
-        Promise.all([
-            fetch('/api/users?role=leads', { cache: 'no-store' }).then((res) => res.json()),
-            fetch('/api/users', { cache: 'no-store' }).then((res) => res.json()),
-        ])
-            .then(([leadData, userData]) => {
-                if (Array.isArray(leadData)) {
-                    setLeadCandidates(leadData)
-                }
-
-                if (Array.isArray(userData)) {
-                    setAllUsers(userData)
-                }
-            })
-            .catch(() => { })
-    }, [])
-
-    const refreshSidebarData = React.useCallback(() => {
-        fetchProjects()
-        fetchUsers()
-        fetchUserData()
-    }, [fetchProjects, fetchUserData, fetchUsers])
-
-    React.useEffect(() => {
-        refreshSidebarData()
-    }, [refreshSidebarData])
-
-    React.useEffect(() => {
-        return subscribeSidebarSync(refreshSidebarData)
-    }, [refreshSidebarData])
+    }, [router])
 
     React.useEffect(() => {
         const timer = window.setTimeout(() => {
@@ -559,7 +544,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 })
             })
             if (res.ok) {
-                fetchProjects()
                 setEditingProject(null)
                 router.refresh()
             } else {
@@ -589,7 +573,6 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 body: JSON.stringify({ confirmName: deleteConfirmName.trim() })
             })
             if (res.ok) {
-                fetchProjects()
                 setDeleteConfirm(null)
                 setDeleteConfirmName("")
                 router.push('/dashboard')
@@ -833,7 +816,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 onOpenChange={setCreateDialogOpen}
                 leadCandidates={leadCandidates}
                 allUsers={allUsers}
-                onProjectCreated={fetchProjects}
+                onProjectCreated={() => router.refresh()}
             />
 
             {/* Edit Dialog */}

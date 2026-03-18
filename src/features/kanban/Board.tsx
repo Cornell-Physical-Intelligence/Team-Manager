@@ -38,6 +38,7 @@ import { TaskDialog } from "./TaskDialog"
 import { TaskPreview } from "./TaskPreview"
 import { useConfetti } from "./Confetti"
 import { PushChainStrip } from "./PushChainStrip"
+import { useDashboardUser } from "@/components/DashboardUserProvider"
 
 type Task = {
     id: string
@@ -140,10 +141,9 @@ export function Board({
     initialPushId
 }: BoardProps) {
     const router = useRouter()
+    const dashboardUser = useDashboardUser()
     const [columns, setColumns] = useState<ColumnData[]>(board.columns)
     const [activeTask, setActiveTask] = useState<Task | null>(null)
-    const [userRole, setUserRole] = useState<string>('Member')
-    const [userId, setUserId] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
     const [creatingColumnId, setCreatingColumnId] = useState<string | null>(null)
     const [creatingPushId, setCreatingPushId] = useState<string | null>(null)
@@ -191,6 +191,8 @@ export function Board({
 
     const [editingPush, setEditingPush] = useState<PushType | null>(null)
 
+    const userRole = dashboardUser?.role ?? 'Member'
+    const userId = dashboardUser?.id ?? null
     const isAdmin = userRole === 'Admin' || userRole === 'Team Lead'
     const { triggerConfetti } = useConfetti()
 
@@ -210,25 +212,12 @@ export function Board({
         }
     }, [initialNewTask, columns, initialPushId, creatingColumnId, mounted])
 
-    const fetchUserRole = useCallback(async () => {
-        try {
-            const res = await fetch('/api/auth/role')
-            const data = await res.json()
-            setUserRole(data.role || 'Member')
-            setUserId(data.id || null)
-        } catch {
-            setUserRole('Member')
-            setUserId(null)
-        }
-    }, [])
-
     useEffect(() => {
         setMounted(true)
-        fetchUserRole()
         fetch('/api/tasks/check-overdue', { method: 'POST' }).catch(err =>
             console.error('Failed to check overdue tasks:', err)
         )
-    }, [fetchUserRole])
+    }, [])
 
     useEffect(() => {
         setColumns(board.columns)
@@ -376,12 +365,6 @@ export function Board({
         }, didExpand ? 300 : 100)
 
     }, [highlightTaskId, mounted, columns, loadPushTasks, projectId])
-
-    useEffect(() => {
-        const handleFocus = () => fetchUserRole()
-        window.addEventListener('focus', handleFocus)
-        return () => window.removeEventListener('focus', handleFocus)
-    }, [fetchUserRole])
 
     // Sync from props when board data actually changes (from router.refresh)
     // This happens AFTER server operations complete
