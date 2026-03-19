@@ -109,9 +109,6 @@ export function DashboardPageClient({
                         <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                     </Link>
                 )}
-
-                {isLeadership && <ProjectActivityTracker workspaceId={user.workspaceId} />}
-
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 space-y-4">
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -223,6 +220,7 @@ export function DashboardPageClient({
 
                     {isLeadership && (
                         <div className="flex flex-col gap-4 h-full">
+                            <ProjectActivityTracker workspaceId={user.workspaceId} />
                             <DriveUploadWidget
                                 className="flex-1"
                                 initialConfig={{
