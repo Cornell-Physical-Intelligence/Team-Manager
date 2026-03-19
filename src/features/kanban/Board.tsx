@@ -40,6 +40,7 @@ import { TaskPreview } from "./TaskPreview"
 import { useConfetti } from "./Confetti"
 import { PushChainStrip } from "./PushChainStrip"
 import { useDashboardUser } from "@/components/DashboardUserProvider"
+import { applyCreatedTask, applyUpdatedTask, inferLoadedPushes, mergeBoardTask } from "./board-state"
 
 type Task = {
     id: string
@@ -99,39 +100,6 @@ type BoardProps = {
     initialNewTask?: boolean
     initialAssigneeId?: string | null
     initialPushId?: string | null
-}
-
-function inferLoadedPushes(
-    cols: ColumnData[],
-    pushList: PushType[]
-): Record<string, true> {
-    const countsByPush = new Map<string, number>()
-    for (const col of cols) {
-        for (const task of col.tasks) {
-            const pushId = task.push?.id
-            if (!pushId) continue
-            countsByPush.set(pushId, (countsByPush.get(pushId) || 0) + 1)
-        }
-    }
-
-    const loaded: Record<string, true> = {}
-    for (const push of pushList) {
-        const actual = countsByPush.get(push.id) || 0
-        if (actual === push.taskCount) loaded[push.id] = true
-    }
-    return loaded
-}
-
-function mergeBoardTask(existingTask: Task | null, incomingTask: Task): Task {
-    if (!existingTask) {
-        return incomingTask
-    }
-
-    return {
-        ...existingTask,
-        ...incomingTask,
-        columnId: incomingTask.columnId ?? existingTask.columnId,
-    }
 }
 
 export function Board({
@@ -913,51 +881,11 @@ export function Board({
     )
 
     const handleTaskCreated = (newTask: Task) => {
-        setColumns(prev => prev.map(col => {
-            if (col.id === newTask.columnId) {
-                const existingTask = col.tasks.find(t => t.id === newTask.id) ?? null
-                if (existingTask) {
-                    return {
-                        ...col,
-                        tasks: col.tasks.map(task => task.id === newTask.id ? mergeBoardTask(task, newTask) : task)
-                    }
-                }
-                return { ...col, tasks: [...col.tasks, newTask] }
-            }
-            return col
-        }))
+        setColumns(prev => applyCreatedTask(prev, newTask))
     }
 
     const handleTaskUpdated = (updatedTask: Task) => {
-        setColumns(prev => {
-            const existingTask =
-                prev.flatMap(col => col.tasks).find(task => task.id === updatedTask.id) ?? null
-            const mergedTask = mergeBoardTask(existingTask, updatedTask)
-
-            if (!mergedTask.columnId) {
-                return prev
-            }
-
-            return prev.map(col => {
-                const existingTaskIndex = col.tasks.findIndex(t => t.id === mergedTask.id)
-
-                if (col.id === mergedTask.columnId) {
-                    if (existingTaskIndex !== -1) {
-                        const newTasks = [...col.tasks]
-                        newTasks[existingTaskIndex] = mergeBoardTask(col.tasks[existingTaskIndex] ?? null, mergedTask)
-                        return { ...col, tasks: newTasks }
-                    }
-
-                    return { ...col, tasks: [...col.tasks, mergedTask] }
-                }
-
-                if (existingTaskIndex !== -1) {
-                    return { ...col, tasks: col.tasks.filter(t => t.id !== mergedTask.id) }
-                }
-
-                return col
-            })
-        })
+        setColumns(prev => applyUpdatedTask(prev, updatedTask))
 
         setPreviewingTask(prev => prev?.id === updatedTask.id ? mergeBoardTask(prev, updatedTask) : prev)
         setEditingTask(prev => prev?.id === updatedTask.id ? mergeBoardTask(prev, updatedTask) : prev)
