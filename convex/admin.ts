@@ -248,12 +248,11 @@ async function deleteProjectGraph(ctx: MutationCtx, projectId: string, workspace
     }
 
     for (const task of taskMap.values()) {
-        const [taskAssignees, comments, attachments, checklistItems, helpRequests, activityLogs] = await Promise.all([
+        const [taskAssignees, comments, attachments, checklistItems, activityLogs] = await Promise.all([
             ctx.db.query("taskAssignees").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
             ctx.db.query("comments").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
             ctx.db.query("taskAttachments").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
             ctx.db.query("taskChecklistItems").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
-            ctx.db.query("helpRequests").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
             ctx.db.query("activityLogs").withIndex("by_taskId", (q) => q.eq("taskId", task.id)).collect(),
         ])
 
@@ -262,7 +261,7 @@ async function deleteProjectGraph(ctx: MutationCtx, projectId: string, workspace
             .withIndex("by_taskId", (q) => q.eq("taskId", task.id))
             .unique()
 
-        for (const row of [...taskAssignees, ...comments, ...attachments, ...checklistItems, ...helpRequests, ...activityLogs]) {
+        for (const row of [...taskAssignees, ...comments, ...attachments, ...checklistItems, ...activityLogs]) {
             await ctx.db.delete(row._id)
         }
         if (taskDeletion && taskDeletion.workspaceId === workspaceId) {

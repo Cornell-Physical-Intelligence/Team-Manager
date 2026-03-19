@@ -23,7 +23,6 @@ import {
 import { getInitials } from "@/lib/utils"
 import { MAX_ATTACHMENT_SIZE } from "@/lib/attachments"
 import { TaskChecklist } from "@/components/TaskChecklist"
-import { HelpRequest } from "@/components/HelpRequest"
 import { useDashboardUser } from "@/components/DashboardUserProvider"
 
 type Task = {
@@ -1155,14 +1154,7 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                         </div>
                     </div>
 
-                    {/* Footer with Help Request (left) and Task Info (right) */}
-                    <div className="border-t px-3 py-2 shrink-0 flex items-center justify-between text-[10px] text-muted-foreground">
-                        <HelpRequest
-                            taskId={task.id}
-                            taskTitle={task.title}
-                            currentUserId={currentUser?.id}
-                            userRole={userRole}
-                        />
+                    <div className="border-t px-3 py-2 shrink-0 flex items-center justify-end text-[10px] text-muted-foreground">
                         <div className="flex items-center gap-3">
                             <span className="flex items-center gap-1" suppressHydrationWarning>
                                 <Clock className="h-2.5 w-2.5" />

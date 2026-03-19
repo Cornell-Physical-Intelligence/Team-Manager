@@ -15,7 +15,7 @@ import {
     useDraggable,
 } from "@dnd-kit/core"
 import {
-    Clock, HelpCircle, Filter, AlertTriangle, CheckCircle2
+    Clock, Filter, AlertTriangle, CheckCircle2
 } from "lucide-react"
 import { cn, getInitials } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -53,8 +53,6 @@ type Task = {
     attachmentsCount: number
     checklistTotal: number
     checklistCompleted: number
-    hasHelpRequest: boolean
-    helpRequestStatus: string | null
     submittedAt: string | null
     createdAt: string
     updatedAt: string
@@ -178,8 +176,7 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
             className={cn(
                 "w-full touch-none text-left group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-all duration-200 overflow-hidden cursor-grab active:cursor-grabbing",
                 "hover:shadow-md hover:border-primary/20",
-                "border-border",
-                task.hasHelpRequest && "ring-1 ring-amber-300/50"
+                "border-border"
             )}
         >
             {/* Title */}
@@ -227,10 +224,6 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                         )
                     )}
 
-                    {/* Help request indicator */}
-                    {task.hasHelpRequest && (
-                        <HelpCircle className="h-3.5 w-3.5 text-amber-500/80 shrink-0" />
-                    )}
                 </div>
 
                 {/* Project Badge (Right) */}
@@ -324,7 +317,6 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
     const [columns, setColumns] = useState<Column[]>(initialColumns)
     const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
     const [showOverdueOnly, setShowOverdueOnly] = useState(false)
-    const [showHelpRequests, setShowHelpRequests] = useState(false)
     const [activeTask, setActiveTask] = useState<Task | null>(null)
     const [overColumnId, setOverColumnId] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
@@ -393,18 +385,14 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                     const { isOverdue } = getDueInfo(task.dueDate)
                     if (!isOverdue) return false
                 }
-                if (showHelpRequests && !task.hasHelpRequest) {
-                    return false
-                }
                 return true
             })
         }))
-    }, [columns, selectedProjects, showOverdueOnly, showHelpRequests])
+    }, [columns, selectedProjects, showOverdueOnly])
 
     const totalTasks = columns.reduce((acc, col) => acc + col.tasks.length, 0)
     const filteredTotalTasks = filteredColumns.reduce((acc, col) => acc + col.tasks.length, 0)
     const overdueCount = columns.flatMap(c => c.tasks).filter(t => t.columnName !== 'Done' && getDueInfo(t.dueDate).isOverdue).length
-    const helpRequestCount = columns.flatMap(c => c.tasks).filter(t => t.hasHelpRequest).length
 
     const toggleProject = (projectId: string) => {
         setSelectedProjects(prev => {
@@ -418,7 +406,6 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
     const clearFilters = () => {
         setSelectedProjects(new Set())
         setShowOverdueOnly(false)
-        setShowHelpRequests(false)
     }
 
     const handleTaskClick = useCallback((task: Task) => {
@@ -533,7 +520,7 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
         }
     }, [columns, toast])
 
-    const hasActiveFilters = selectedProjects.size > 0 || showOverdueOnly || showHelpRequests
+    const hasActiveFilters = selectedProjects.size > 0 || showOverdueOnly
 
     return (
         <DndContext
@@ -571,7 +558,7 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                                     Filter
                                     {hasActiveFilters && (
                                         <span className="ml-1.5 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-[10px]">
-                                            {selectedProjects.size + (showOverdueOnly ? 1 : 0) + (showHelpRequests ? 1 : 0)}
+                                            {selectedProjects.size + (showOverdueOnly ? 1 : 0)}
                                         </span>
                                     )}
                                 </Button>
@@ -585,14 +572,6 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                                 >
                                     <Clock className="h-3 w-3 mr-2 text-red-500" />
                                     Overdue only ({overdueCount})
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                    checked={showHelpRequests}
-                                    onCheckedChange={setShowHelpRequests}
-                                    className="text-xs"
-                                >
-                                    <HelpCircle className="h-3 w-3 mr-2 text-amber-500" />
-                                    Needs help ({helpRequestCount})
                                 </DropdownMenuCheckboxItem>
 
                                 {projects.length > 0 && (

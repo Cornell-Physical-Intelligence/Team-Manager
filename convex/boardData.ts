@@ -14,7 +14,6 @@ type LegacyIdTable =
     | "comments"
     | "taskAttachments"
     | "taskChecklistItems"
-    | "helpRequests"
     | "activityLogs"
     | "taskDeletions"
     | "workspaceMembers"

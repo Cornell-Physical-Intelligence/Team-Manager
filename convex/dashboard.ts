@@ -91,7 +91,6 @@ type HydratedTask = {
     commentsCount: number
     attachmentsCount: number
     checklistItems: { id: string; completed: boolean }[]
-    helpRequests: { id: string; status: string; createdAt: string }[]
     activityLogs: { createdAt: string; action: string }[]
 }
 
@@ -241,14 +240,6 @@ async function hydrateTasks(
                 .collect()
         )
     )
-    const helpRequests = await Promise.all(
-        tasks.map((task) =>
-            ctx.db
-                .query("helpRequests")
-                .withIndex("by_taskId", (q) => q.eq("taskId", task.id))
-                .collect()
-        )
-    )
     const activityLogs = await Promise.all(
         tasks.map((task) =>
             ctx.db
@@ -296,9 +287,6 @@ async function hydrateTasks(
             task.assigneeId,
             ...taskAssignees[index].map((assignee) => assignee.userId),
         ])
-        const openHelpRequests = helpRequests[index]
-            .filter((request) => request.status === "open" || request.status === "acknowledged")
-            .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0) || left.id.localeCompare(right.id))
         const latestActivity = activityLogs[index]
             .slice()
             .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0) || left.id.localeCompare(right.id))
@@ -368,11 +356,6 @@ async function hydrateTasks(
             checklistItems: checklistItems[index].map((item) => ({
                 id: item.id,
                 completed: item.completed,
-            })),
-            helpRequests: openHelpRequests.map((request) => ({
-                id: request.id,
-                status: request.status,
-                createdAt: new Date(request.createdAt).toISOString(),
             })),
             activityLogs: latestActivity.map((log) => ({
                 createdAt: new Date(log.createdAt).toISOString(),
@@ -660,8 +643,6 @@ export const getMyBoardPageData = query({
             attachmentsCount: task.attachmentsCount,
             checklistTotal: task.checklistItems.length,
             checklistCompleted: task.checklistItems.filter((item) => item.completed).length,
-            hasHelpRequest: task.helpRequests.length > 0,
-            helpRequestStatus: task.helpRequests[0]?.status || null,
             submittedAt: task.submittedAt,
             createdAt: task.createdAt,
             updatedAt: task.updatedAt,
@@ -768,7 +749,6 @@ export const getHeatmapWidgetData = query({
                 approvedAt: task.approvedAt,
                 progress: task.progress,
                 enableProgress: task.enableProgress,
-                helpRequests: task.helpRequests,
                 checklistItems: task.checklistItems,
                 activityLogs: task.activityLogs,
             })),
@@ -856,7 +836,6 @@ export const getHeatmapPageData = query({
                 approvedAt: task.approvedAt,
                 progress: task.progress,
                 enableProgress: task.enableProgress,
-                helpRequests: task.helpRequests,
                 checklistItems: task.checklistItems,
                 activityLogs: task.activityLogs,
             })),

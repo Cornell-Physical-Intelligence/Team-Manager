@@ -43,10 +43,6 @@ export function DashboardHeatmapLoader({
             updatedAt: new Date(task.updatedAt),
             submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,
             approvedAt: task.approvedAt ? new Date(task.approvedAt) : null,
-            helpRequests: task.helpRequests.map((request) => ({
-                ...request,
-                createdAt: new Date(request.createdAt),
-            })),
             activityLogs: task.activityLogs.map((log) => ({
                 ...log,
                 createdAt: new Date(log.createdAt),
@@ -68,7 +64,6 @@ export function DashboardHeatmapLoader({
 
     const totalOverdue = workloadTasks.filter((task) => task.isOverdue).length
     const totalStuck = workloadTasks.filter((task) => task.isStuck).length
-    const totalHelpRequests = workloadTasks.filter((task) => task.isBlockedByHelp).length
     const totalUnassigned = workloadTasks.filter((task) => task.isUnassigned).length
 
     if (totalOverdue > 0) {
@@ -88,16 +83,6 @@ export function DashboardHeatmapLoader({
             message: `${totalStuck} tasks stuck (${config.thresholds.stuckDays}+ days)`,
             count: totalStuck,
             tasks: workloadTasks.filter((task) => task.isStuck),
-        })
-    }
-
-    if (totalHelpRequests > 0) {
-        criticalIssues.push({
-            type: "help",
-            severity: "warning",
-            message: `${totalHelpRequests} tasks need help`,
-            count: totalHelpRequests,
-            tasks: workloadTasks.filter((task) => task.isBlockedByHelp),
         })
     }
 

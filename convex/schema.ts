@@ -214,23 +214,6 @@ export default defineSchema({
         .index("by_taskId", ["taskId"])
         .index("by_taskId_order", ["taskId", "order"]),
 
-    helpRequests: defineTable({
-        id: v.string(),
-        taskId: v.string(),
-        requestedBy: v.string(),
-        requestedByName: v.string(),
-        message: v.optional(v.string()),
-        status: v.string(),
-        resolvedBy: v.optional(v.string()),
-        resolvedByName: v.optional(v.string()),
-        resolvedAt: v.optional(v.number()),
-        createdAt: v.number(),
-        updatedAt: v.number(),
-    })
-        .index("by_legacy_id", ["id"])
-        .index("by_taskId", ["taskId"])
-        .index("by_status", ["status"]),
-
     activityLogs: defineTable({
         id: v.string(),
         taskId: v.optional(v.string()),

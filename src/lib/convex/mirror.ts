@@ -263,42 +263,6 @@ export async function deleteChecklistItemFromConvex(itemId: string) {
     await fetchMutation(api.mirror.deleteTaskChecklistItem, { itemId })
 }
 
-type HelpRequestSnapshot = {
-    id: string
-    taskId: string
-    requestedBy: string
-    requestedByName: string
-    message?: string | null
-    status: string
-    resolvedBy?: string | null
-    resolvedByName?: string | null
-    resolvedAt?: Timestampable
-    createdAt?: Timestampable
-    updatedAt?: Timestampable
-}
-
-export async function upsertHelpRequestToConvex(helpRequest: HelpRequestSnapshot) {
-    await fetchMutation(api.mirror.upsertHelpRequest, {
-        helpRequest: {
-            id: helpRequest.id,
-            taskId: helpRequest.taskId,
-            requestedBy: helpRequest.requestedBy,
-            requestedByName: helpRequest.requestedByName,
-            message: helpRequest.message || undefined,
-            status: helpRequest.status,
-            resolvedBy: helpRequest.resolvedBy || undefined,
-            resolvedByName: helpRequest.resolvedByName || undefined,
-            resolvedAt: toTimestamp(helpRequest.resolvedAt),
-            createdAt: toTimestamp(helpRequest.createdAt) ?? Date.now(),
-            updatedAt: toTimestamp(helpRequest.updatedAt) ?? Date.now(),
-        },
-    })
-}
-
-export async function deleteHelpRequestFromConvex(helpRequestId: string) {
-    await fetchMutation(api.mirror.deleteHelpRequest, { helpRequestId })
-}
-
 export async function touchTaskInConvex(taskId: string, updatedAt?: number) {
     await fetchMutation(api.mirror.touchTask, {
         taskId,

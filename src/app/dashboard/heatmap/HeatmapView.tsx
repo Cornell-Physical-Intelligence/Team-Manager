@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import {
-    AlertTriangle, Clock, HelpCircle, Users, UserX, CheckCircle2,
+    AlertTriangle, Clock, Users, UserX, CheckCircle2,
     ChevronRight, ArrowLeft, TrendingUp, AlertCircle, Loader2,
     Circle, Zap, Target, BarChart3
 } from "lucide-react"
@@ -33,9 +33,7 @@ type Task = {
     daysUntilDue: number | null
     daysSinceActivity: number | null
     isStuck: boolean
-    isBlockedByHelp: boolean
     isUnassigned: boolean
-    helpRequestStatus: string | null
     checklistTotal: number
     checklistCompleted: number
     createdAt: string
@@ -55,7 +53,6 @@ type UserStat = {
     doneTasks: number
     overdueTasks: number
     stuckTasks: number
-    helpRequestTasks: number
     workloadScore: number
     status: 'struggling' | 'available' | 'on-track'
     tasks: Task[]
@@ -82,7 +79,6 @@ type HeatmapViewProps = {
         totalOverdue: number
         totalStuck: number
         totalUnassigned: number
-        totalHelpRequests: number
         tasksInReview: number
         overdueThisWeek: number
     }
@@ -165,9 +161,6 @@ function TaskListDialog({
                                 {task.isStuck && (
                                     <span className="text-[9px] text-amber-500">Stuck</span>
                                 )}
-                                {task.isBlockedByHelp && (
-                                    <HelpCircle className="h-3 w-3 text-amber-500" />
-                                )}
                                 {navigating === task.id ? (
                                     <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                                 ) : (
@@ -245,7 +238,6 @@ export function HeatmapView({
                                 <div className="flex items-center gap-2 mb-1">
                                     {issue.type === 'overdue' && <Clock className="h-4 w-4 text-red-500" />}
                                     {issue.type === 'stuck' && <AlertTriangle className="h-4 w-4 text-amber-500" />}
-                                    {issue.type === 'help' && <HelpCircle className="h-4 w-4 text-amber-500" />}
                                     {issue.type === 'unassigned' && <UserX className="h-4 w-4 text-blue-500" />}
                                     {issue.type === 'review_queue' && <Target className="h-4 w-4 text-amber-500" />}
                                     {issue.type === 'overloaded' && <Zap className="h-4 w-4 text-amber-500" />}
@@ -323,11 +315,6 @@ export function HeatmapView({
                                         {user.stuckTasks > 0 && (
                                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
                                                 {user.stuckTasks} stuck
-                                            </span>
-                                        )}
-                                        {user.helpRequestTasks > 0 && (
-                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/50">
-                                                {user.helpRequestTasks} help
                                             </span>
                                         )}
                                         <span

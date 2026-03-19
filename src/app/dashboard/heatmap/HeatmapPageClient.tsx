@@ -33,10 +33,6 @@ export function HeatmapPageClient({
             updatedAt: new Date(task.updatedAt),
             submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,
             approvedAt: task.approvedAt ? new Date(task.approvedAt) : null,
-            helpRequests: task.helpRequests.map((request) => ({
-                ...request,
-                createdAt: new Date(request.createdAt),
-            })),
             activityLogs: task.activityLogs.map((log) => ({
                 ...log,
                 createdAt: new Date(log.createdAt),
@@ -63,9 +59,7 @@ export function HeatmapPageClient({
         daysUntilDue: task.daysUntilDue,
         daysSinceActivity: task.daysSinceActivity,
         isStuck: task.isStuck,
-        isBlockedByHelp: task.isBlockedByHelp,
         isUnassigned: task.isUnassigned,
-        helpRequestStatus: task.isBlockedByHelp ? "open" : null,
         checklistTotal: task.checklistTotal,
         checklistCompleted: task.checklistCompleted,
         createdAt: task.createdAt.toISOString(),
@@ -84,7 +78,6 @@ export function HeatmapPageClient({
         totalOverdue: transformedTasks.filter((task) => task.isOverdue && task.columnName !== "Done").length,
         totalStuck: transformedTasks.filter((task) => task.isStuck).length,
         totalUnassigned: transformedTasks.filter((task) => task.isUnassigned).length,
-        totalHelpRequests: transformedTasks.filter((task) => task.isBlockedByHelp).length,
         tasksInReview: transformedTasks.filter((task) => task.columnName === "Review").length,
         overdueThisWeek: transformedTasks.filter((task) => {
             if (!task.dueDate || task.columnName === "Done") return false
@@ -112,16 +105,6 @@ export function HeatmapPageClient({
             message: `${bottlenecks.totalStuck} tasks stuck in progress (no activity for ${config.thresholds.stuckDays}+ days)`,
             count: bottlenecks.totalStuck,
             tasks: transformedTasks.filter((task) => task.isStuck),
-        })
-    }
-
-    if (bottlenecks.totalHelpRequests > 0) {
-        criticalIssues.push({
-            type: "help",
-            severity: "warning",
-            message: `${bottlenecks.totalHelpRequests} tasks need help`,
-            count: bottlenecks.totalHelpRequests,
-            tasks: transformedTasks.filter((task) => task.isBlockedByHelp),
         })
     }
 

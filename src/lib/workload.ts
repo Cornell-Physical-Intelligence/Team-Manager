@@ -29,7 +29,6 @@ export type WorkloadConfig = {
     weights: {
         overdue: number
         stuck: number
-        help: number
         dueSoon: number
         age: number
         progress: number
@@ -39,7 +38,6 @@ export type WorkloadConfig = {
     status: {
         strugglingScore: number
         criticalOverdueCount: number
-        criticalHelpCount: number
         criticalStuckCount: number
         availableRequiresNoRisk: boolean
     }
@@ -72,7 +70,6 @@ export const DEFAULT_WORKLOAD_CONFIG: WorkloadConfig = {
     weights: {
         overdue: 4,
         stuck: 2,
-        help: 2,
         dueSoon: 1,
         age: 1,
         progress: 1,
@@ -82,7 +79,6 @@ export const DEFAULT_WORKLOAD_CONFIG: WorkloadConfig = {
     status: {
         strugglingScore: 4,
         criticalOverdueCount: 1,
-        criticalHelpCount: 1,
         criticalStuckCount: 2,
         availableRequiresNoRisk: true
     }
@@ -107,13 +103,11 @@ export type WorkloadTask = {
     approvedAt: Date | null
     progress: number
     enableProgress: boolean
-    helpRequestCount: number
     lastActivityAt: Date | null
     daysSinceActivity: number | null
     isOverdue: boolean
     daysUntilDue: number | null
     isStuck: boolean
-    isBlockedByHelp: boolean
     isUnassigned: boolean
     isReviewStale: boolean
     checklistTotal: number
@@ -140,7 +134,6 @@ export type WorkloadUserStat = {
     doneTasks: number
     overdueTasks: number
     stuckTasks: number
-    helpRequestTasks: number
     dueSoonTasks: number
     reviewStaleTasks: number
     progressLagTasks: number
@@ -180,7 +173,6 @@ type WorkloadTaskInput = {
     approvedAt?: Date | null
     progress?: number | null
     enableProgress?: boolean | null
-    helpRequests?: Array<unknown> | null
     activityLogs?: Array<{ createdAt?: Date | null }> | null
     checklistItems?: Array<{ completed?: boolean | null }> | null
 }
@@ -316,7 +308,6 @@ export const normalizeWorkloadConfig = (config?: Partial<WorkloadConfig> | null)
         weights: {
             overdue: clamp(toNumber(merged.weights.overdue, DEFAULT_WORKLOAD_CONFIG.weights.overdue), 0, 10),
             stuck: clamp(toNumber(merged.weights.stuck, DEFAULT_WORKLOAD_CONFIG.weights.stuck), 0, 10),
-            help: clamp(toNumber(merged.weights.help, DEFAULT_WORKLOAD_CONFIG.weights.help), 0, 10),
             dueSoon: clamp(toNumber(merged.weights.dueSoon, DEFAULT_WORKLOAD_CONFIG.weights.dueSoon), 0, 10),
             age: clamp(toNumber(merged.weights.age, DEFAULT_WORKLOAD_CONFIG.weights.age), 0, 10),
             progress: clamp(toNumber(merged.weights.progress, DEFAULT_WORKLOAD_CONFIG.weights.progress), 0, 10),
@@ -331,11 +322,6 @@ export const normalizeWorkloadConfig = (config?: Partial<WorkloadConfig> | null)
             ),
             criticalOverdueCount: clamp(
                 toInt(merged.status.criticalOverdueCount, DEFAULT_WORKLOAD_CONFIG.status.criticalOverdueCount),
-                0,
-                10
-            ),
-            criticalHelpCount: clamp(
-                toInt(merged.status.criticalHelpCount, DEFAULT_WORKLOAD_CONFIG.status.criticalHelpCount),
                 0,
                 10
             ),
@@ -411,8 +397,6 @@ export const buildWorkloadTasks = (
             columnName === 'In Progress' &&
             daysSinceActivity !== null &&
             daysSinceActivity >= config.thresholds.stuckDays
-        const helpRequestCount = task.helpRequests?.length ?? 0
-        const isBlockedByHelp = helpRequestCount > 0
         const isUnassigned = assigneeIds.length === 0 && columnName !== 'Done'
         const isReviewStale = Boolean(
             columnName === 'Review' &&
@@ -441,13 +425,11 @@ export const buildWorkloadTasks = (
             approvedAt: task.approvedAt ?? null,
             progress: typeof task.progress === 'number' ? task.progress : 0,
             enableProgress: Boolean(task.enableProgress),
-            helpRequestCount,
             lastActivityAt: lastActivityAt ? new Date(lastActivityAt) : null,
             daysSinceActivity,
             isOverdue,
             daysUntilDue,
             isStuck,
-            isBlockedByHelp,
             isUnassigned,
             isReviewStale,
             checklistTotal: checklistItems.length,
@@ -491,7 +473,6 @@ export const computeWorkloadStats = (
         const doneTasks = userTasks.filter(task => task.columnName === 'Done').length
         const overdueTasks = activeTasks.filter(task => task.isOverdue).length
         const stuckTasks = activeTasks.filter(task => task.isStuck).length
-        const helpRequestTasks = activeTasks.filter(task => task.isBlockedByHelp).length
         const dueSoonTasks = activeTasks.filter(
             task =>
                 task.daysUntilDue !== null &&
@@ -555,7 +536,6 @@ export const computeWorkloadStats = (
         const riskScore =
             overdueTasks * config.weights.overdue +
             stuckTasks * config.weights.stuck +
-            helpRequestTasks * config.weights.help +
             dueSoonTasks * config.weights.dueSoon +
             reviewStaleTasks * config.weights.review +
             progressLagTasks * config.weights.progress +
@@ -565,7 +545,6 @@ export const computeWorkloadStats = (
 
         const hasCriticalSignal =
             (config.status.criticalOverdueCount > 0 && overdueTasks >= config.status.criticalOverdueCount) ||
-            (config.status.criticalHelpCount > 0 && helpRequestTasks >= config.status.criticalHelpCount) ||
             (config.status.criticalStuckCount > 0 && stuckTasks >= config.status.criticalStuckCount)
 
         const isOverloaded =
@@ -601,7 +580,6 @@ export const computeWorkloadStats = (
             doneTasks,
             overdueTasks,
             stuckTasks,
-            helpRequestTasks,
             dueSoonTasks,
             reviewStaleTasks,
             progressLagTasks,

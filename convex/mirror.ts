@@ -77,20 +77,6 @@ const checklistItemShape = {
     updatedAt: v.number(),
 }
 
-const helpRequestShape = {
-    id: v.string(),
-    taskId: v.string(),
-    requestedBy: v.string(),
-    requestedByName: v.string(),
-    message: v.optional(v.string()),
-    status: v.string(),
-    resolvedBy: v.optional(v.string()),
-    resolvedByName: v.optional(v.string()),
-    resolvedAt: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-}
-
 export const upsertTask = mutation({
     args: {
         task: v.object(taskShape),
@@ -367,44 +353,6 @@ export const deleteTaskChecklistItem = mutation({
 
         if (item) {
             await ctx.db.delete(item._id)
-        }
-
-        return { success: true }
-    },
-})
-
-export const upsertHelpRequest = mutation({
-    args: {
-        helpRequest: v.object(helpRequestShape),
-    },
-    handler: async (ctx, args) => {
-        const existing = await ctx.db
-            .query("helpRequests")
-            .withIndex("by_legacy_id", (q) => q.eq("id", args.helpRequest.id))
-            .unique()
-
-        if (existing) {
-            await ctx.db.patch(existing._id, args.helpRequest)
-        } else {
-            await ctx.db.insert("helpRequests", args.helpRequest)
-        }
-
-        return { success: true }
-    },
-})
-
-export const deleteHelpRequest = mutation({
-    args: {
-        helpRequestId: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const helpRequest = await ctx.db
-            .query("helpRequests")
-            .withIndex("by_legacy_id", (q) => q.eq("id", args.helpRequestId))
-            .unique()
-
-        if (helpRequest) {
-            await ctx.db.delete(helpRequest._id)
         }
 
         return { success: true }

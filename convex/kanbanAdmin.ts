@@ -720,14 +720,6 @@ export const deleteTask = mutation({
             await ctx.db.delete(row._id)
         }
 
-        const helpRequestRows = await ctx.db
-            .query("helpRequests")
-            .withIndex("by_taskId", (q: any) => q.eq("taskId", args.taskId))
-            .collect()
-        for (const row of helpRequestRows) {
-            await ctx.db.delete(row._id)
-        }
-
         const activityLogRows = await ctx.db
             .query("activityLogs")
             .withIndex("by_taskId", (q: any) => q.eq("taskId", args.taskId))

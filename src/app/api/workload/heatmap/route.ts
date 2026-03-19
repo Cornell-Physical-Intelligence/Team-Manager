@@ -35,10 +35,6 @@ export async function GET() {
                 updatedAt: new Date(task.updatedAt),
                 submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,
                 approvedAt: task.approvedAt ? new Date(task.approvedAt) : null,
-                helpRequests: task.helpRequests.map((req) => ({
-                    ...req,
-                    createdAt: new Date(req.createdAt),
-                })),
                 activityLogs: task.activityLogs.map((log) => ({
                     ...log,
                     createdAt: new Date(log.createdAt),
@@ -55,7 +51,6 @@ export async function GET() {
 
         const totalOverdue = workloadTasks.filter((t) => t.isOverdue).length
         const totalStuck = workloadTasks.filter((t) => t.isStuck).length
-        const totalHelpRequests = workloadTasks.filter((t) => t.isBlockedByHelp).length
         const totalUnassigned = workloadTasks.filter((t) => t.isUnassigned).length
 
         if (totalOverdue > 0) {
@@ -63,9 +58,6 @@ export async function GET() {
         }
         if (totalStuck > 0) {
             criticalIssues.push({ type: "stuck", severity: "warning", message: `${totalStuck} tasks stuck (${config.thresholds.stuckDays}+ days)`, count: totalStuck, tasks: workloadTasks.filter((t) => t.isStuck) })
-        }
-        if (totalHelpRequests > 0) {
-            criticalIssues.push({ type: "help", severity: "warning", message: `${totalHelpRequests} tasks need help`, count: totalHelpRequests, tasks: workloadTasks.filter((t) => t.isBlockedByHelp) })
         }
         if (totalUnassigned > 0) {
             criticalIssues.push({ type: "unassigned", severity: "info", message: `${totalUnassigned} tasks unassigned`, count: totalUnassigned, tasks: workloadTasks.filter((t) => t.isUnassigned) })

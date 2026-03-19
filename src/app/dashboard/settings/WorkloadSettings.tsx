@@ -219,10 +219,9 @@ export function WorkloadSettings() {
                 </Section>
 
                 <Section title="Status Triggers" description="When to mark someone as struggling.">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         <Field label="Struggling Score" hint="Risk threshold" value={config.status.strugglingScore} onChange={v => updateStatus('strugglingScore', v)} min={0} max={20} />
                         <Field label="Critical Overdue" hint="Task count" value={config.status.criticalOverdueCount} onChange={v => updateStatus('criticalOverdueCount', v)} min={0} max={10} />
-                        <Field label="Critical Help" hint="Help requests" value={config.status.criticalHelpCount} onChange={v => updateStatus('criticalHelpCount', v)} min={0} max={10} />
                         <Field label="Critical Stuck" hint="Stuck tasks" value={config.status.criticalStuckCount} onChange={v => updateStatus('criticalStuckCount', v)} min={0} max={10} />
                     </div>
                 </Section>
@@ -231,7 +230,6 @@ export function WorkloadSettings() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <Field label="Overdue" value={config.weights.overdue} onChange={v => updateWeights('overdue', v)} min={0} max={10} />
                         <Field label="Stuck" value={config.weights.stuck} onChange={v => updateWeights('stuck', v)} min={0} max={10} />
-                        <Field label="Help Request" value={config.weights.help} onChange={v => updateWeights('help', v)} min={0} max={10} />
                         <Field label="Due Soon" value={config.weights.dueSoon} onChange={v => updateWeights('dueSoon', v)} min={0} max={10} />
                         <Field label="Aging" value={config.weights.age} onChange={v => updateWeights('age', v)} min={0} max={10} />
                         <Field label="Progress Lag" value={config.weights.progress} onChange={v => updateWeights('progress', v)} min={0} max={10} />

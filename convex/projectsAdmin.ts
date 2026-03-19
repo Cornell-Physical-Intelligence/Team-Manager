@@ -181,7 +181,6 @@ async function deleteRowsByIndex<TableName extends
     | "comments"
     | "taskAttachments"
     | "taskChecklistItems"
-    | "helpRequests"
     | "activityLogs">(
     ctx: MutationCtx,
     table: TableName,
@@ -555,7 +554,6 @@ export const deleteProject = mutation({
             await deleteRowsByIndex(ctx, "comments", "by_taskId", task.id)
             await deleteRowsByIndex(ctx, "taskAttachments", "by_taskId", task.id)
             await deleteRowsByIndex(ctx, "taskChecklistItems", "by_taskId", task.id)
-            await deleteRowsByIndex(ctx, "helpRequests", "by_taskId", task.id)
             await deleteRowsByIndex(ctx, "activityLogs", "by_taskId", task.id)
             await ctx.db.delete(task._id)
         }

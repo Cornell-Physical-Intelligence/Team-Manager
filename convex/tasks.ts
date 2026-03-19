@@ -138,36 +138,6 @@ export const getChecklistItem = query({
     },
 })
 
-export const getHelpRequests = query({
-    args: {
-        taskId: v.string(),
-        statuses: v.optional(v.array(v.string())),
-    },
-    handler: async (ctx, args) => {
-        let items = await ctx.db
-            .query("helpRequests")
-            .withIndex("by_taskId", (q) => q.eq("taskId", args.taskId))
-            .collect()
-        if (args.statuses !== undefined) {
-            const statusSet = new Set(args.statuses)
-            items = items.filter((item) => statusSet.has(item.status))
-        }
-        return items.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)).map(stripDoc)
-    },
-})
-
-export const getHelpRequest = query({
-    args: { helpRequestId: v.string() },
-    handler: async (ctx, args) => {
-        const item = await ctx.db
-            .query("helpRequests")
-            .withIndex("by_legacy_id", (q) => q.eq("id", args.helpRequestId))
-            .unique()
-        if (!item) return null
-        return stripDoc(item)
-    },
-})
-
 export const getAttachments = query({
     args: { taskId: v.string() },
     handler: async (ctx, args) => {

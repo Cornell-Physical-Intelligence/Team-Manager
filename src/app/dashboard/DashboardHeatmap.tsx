@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
     ChevronRight, Loader2, Plus, UserX, TrendingUp, TrendingDown,
-    Calendar, Clock, CheckCircle2, AlertCircle, HelpCircle, X, ArrowLeft, ExternalLink, GripVertical
+    Calendar, Clock, CheckCircle2, AlertCircle, X, ArrowLeft, ExternalLink, GripVertical
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,6 @@ export type HeatmapTask = {
     assigneeIds: string[]
     isOverdue: boolean
     isStuck: boolean
-    isBlockedByHelp: boolean
     isUnassigned: boolean
 }
 
@@ -53,7 +52,6 @@ export type HeatmapUserStat = {
     doneTasks: number
     overdueTasks: number
     stuckTasks: number
-    helpRequestTasks: number
     workloadScore: number
     status: 'struggling' | 'available' | 'on-track'
     tasks: HeatmapTask[]
@@ -283,18 +281,6 @@ function UserDetailDialog({
                             </Tooltip>
                         </TooltipProvider>
                     )}
-                    {task.isBlockedByHelp && (
-                        <TooltipProvider delayDuration={500}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <HelpCircle className="h-3 w-3" />
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                    Needs help
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
                 </div>
             </div>
 
@@ -358,8 +344,8 @@ function UserDetailDialog({
                             <div className="flex items-center gap-3.5 text-[10px] text-muted-foreground font-medium pr-4 mt-0.5">
                                 <span><span className="text-foreground/90 font-semibold">{user.activeTasks}</span> Active</span>
                                 <span><span className="text-foreground/90 font-semibold">{doneTasks.length}</span> Done</span>
-                                {(user.overdueTasks > 0 || user.stuckTasks > 0 || user.helpRequestTasks > 0) && (
-                                    <span><span className="text-foreground/90 font-semibold">{user.overdueTasks + user.stuckTasks + user.helpRequestTasks}</span> Issues</span>
+                                {(user.overdueTasks > 0 || user.stuckTasks > 0) && (
+                                    <span><span className="text-foreground/90 font-semibold">{user.overdueTasks + user.stuckTasks}</span> Issues</span>
                                 )}
                             </div>
 
@@ -739,8 +725,8 @@ export function DashboardHeatmap({
 }: DashboardHeatmapProps) {
     const [selectedUser, setSelectedUser] = useState<HeatmapUserStat | null>(null)
     const [assigningToUser, setAssigningToUser] = useState<HeatmapUserStat | null>(null)
-    const [issuePopup, setIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
-    const [previousIssuePopup, setPreviousIssuePopup] = useState<'overdue' | 'stuck' | 'help' | null>(null)
+    const [issuePopup, setIssuePopup] = useState<'overdue' | 'stuck' | null>(null)
+    const [previousIssuePopup, setPreviousIssuePopup] = useState<'overdue' | 'stuck' | null>(null)
     const [quickAddTaskUser, setQuickAddTaskUser] = useState<HeatmapUserStat | null>(null)
     const [quickAddSelection, setQuickAddSelection] = useState<{ projectId: string; pushId: string } | null>(null)
     const [quickAddRequireManualContinue, setQuickAddRequireManualContinue] = useState(false)
@@ -766,7 +752,6 @@ export function DashboardHeatmap({
     // Calculate issue counts
     const overdueTasks = allTasks.filter(t => t.isOverdue && t.columnName !== 'Done')
     const stuckTasks = allTasks.filter(t => t.isStuck && t.columnName !== 'Done')
-    const helpTasks = allTasks.filter(t => t.isBlockedByHelp && t.columnName !== 'Done')
 
     // Sort users by workload (most active first)
     const sortedUsers = [...userStats].sort((a, b) => b.activeTasks - a.activeTasks)
@@ -827,21 +812,6 @@ export function DashboardHeatmap({
                             >
                                 <Clock className="h-2.5 w-2.5" />
                                 {stuckTasks.length} Stuck
-                            </button>
-                        )}
-                        {helpTasks.length > 0 && (
-                            <button
-                                onClick={() => setIssuePopup('help')}
-                                className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-sm font-medium border tag-shimmer transition-colors hover:bg-muted/50"
-                                style={{
-                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
-                                    borderColor: 'rgba(156, 163, 175, 0.3)',
-                                    color: 'rgb(107, 114, 128)',
-                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
-                                } as React.CSSProperties}
-                            >
-                                <HelpCircle className="h-2.5 w-2.5" />
-                                {helpTasks.length} Need Help
                             </button>
                         )}
                     </div>
@@ -1004,7 +974,7 @@ export function DashboardHeatmap({
             <Dialog open={!!issuePopup} onOpenChange={() => setIssuePopup(null)}>
                 <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col" showCloseButton={true}>
                     <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-1.5 pt-2">
-                        {(issuePopup === 'overdue' ? overdueTasks : issuePopup === 'stuck' ? stuckTasks : helpTasks).map(task => {
+                        {(issuePopup === 'overdue' ? overdueTasks : stuckTasks).map(task => {
                             // Get assignees from userStats
                             const assignees = userStats.filter(u => task.assigneeIds.includes(u.id))
 

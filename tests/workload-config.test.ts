@@ -61,7 +61,6 @@ const normalizationCases: Array<{
     { name: 'clamps load weight maximum', config: { weights: { load: 99 } as never }, actual: c => c.weights.load, expected: 10 },
     { name: 'clamps strugglingScore maximum', config: { status: { strugglingScore: 99 } as never }, actual: c => c.status.strugglingScore, expected: 20 },
     { name: 'clamps criticalOverdueCount maximum', config: { status: { criticalOverdueCount: 99 } as never }, actual: c => c.status.criticalOverdueCount, expected: 10 },
-    { name: 'clamps criticalHelpCount maximum', config: { status: { criticalHelpCount: 99 } as never }, actual: c => c.status.criticalHelpCount, expected: 10 },
     { name: 'clamps criticalStuckCount maximum', config: { status: { criticalStuckCount: 99 } as never }, actual: c => c.status.criticalStuckCount, expected: 10 },
     { name: 'preserves availableRequiresNoRisk booleans', config: { status: { availableRequiresNoRisk: false } as never }, actual: c => c.status.availableRequiresNoRisk, expected: false },
 ]

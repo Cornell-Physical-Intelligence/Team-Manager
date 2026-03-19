@@ -163,48 +163,6 @@ function buildSignalFromLog(log: any, project: { id: string; name: string }) {
     const createdAt = new Date(log.createdAt).toISOString()
     const taskTitle = log.taskTitle ?? "Untitled task"
 
-    if (log.action === "help_requested") {
-        return {
-            id: `signal-${project.id}-${log.id}`,
-            kind: "help",
-            severity: "critical" as const,
-            headline: `${project.name}: help requested`,
-            detail: `${taskTitle} needs intervention.`,
-            createdAt,
-            projectId: project.id,
-            taskId: log.taskId ?? null,
-            taskTitle,
-        }
-    }
-
-    if (log.action === "help_acknowledged") {
-        return {
-            id: `signal-${project.id}-${log.id}`,
-            kind: "help_acknowledged",
-            severity: "info" as const,
-            headline: `${project.name}: help acknowledged`,
-            detail: `${taskTitle} now has an owner on the issue.`,
-            createdAt,
-            projectId: project.id,
-            taskId: log.taskId ?? null,
-            taskTitle,
-        }
-    }
-
-    if (log.action === "help_resolved") {
-        return {
-            id: `signal-${project.id}-${log.id}`,
-            kind: "help_resolved",
-            severity: "info" as const,
-            headline: `${project.name}: blocker resolved`,
-            detail: `${taskTitle} is no longer blocked by a help request.`,
-            createdAt,
-            projectId: project.id,
-            taskId: log.taskId ?? null,
-            taskTitle,
-        }
-    }
-
     if (log.action === "deleted") {
         return {
             id: `signal-${project.id}-${log.id}`,
@@ -560,23 +518,13 @@ export const getProjectActivity = query({
         const reworkCutoff = now - REWORK_WINDOW_DAYS * DAY_MS
         const recentSignalCutoff = now - 21 * DAY_MS
 
-        const [recentLogs, openHelpRequests, acknowledgedHelpRequests] = await Promise.all([
+        const [recentLogs] = await Promise.all([
             ctx.db
                 .query("activityLogs")
                 .withIndex("by_createdAt")
                 .order("desc")
                 .take(2000),
-            ctx.db
-                .query("helpRequests")
-                .withIndex("by_status", (q) => q.eq("status", "open"))
-                .collect(),
-            ctx.db
-                .query("helpRequests")
-                .withIndex("by_status", (q) => q.eq("status", "acknowledged"))
-                .collect(),
         ])
-
-        const activeHelpRequests = [...openHelpRequests, ...acknowledgedHelpRequests]
 
         const divisions = await Promise.all(
             projects
@@ -607,9 +555,6 @@ export const getProjectActivity = query({
                     const divisionLogs = recentLogs
                         .filter((log: any) => log.taskId && taskIdSet.has(log.taskId))
                         .sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0) || b.id.localeCompare(a.id))
-
-                    const divisionHelpRequests = activeHelpRequests.filter((request: any) => taskIdSet.has(request.taskId))
-                    const blockedTaskIds = new Set(divisionHelpRequests.map((request: any) => request.taskId))
 
                     const totalTasks = tasks.length
                     const completedTasks = tasks.filter((task) => isTaskDone(task, doneColumnIds)).length
@@ -695,7 +640,6 @@ export const getProjectActivity = query({
 
                     const riskScore =
                         overdueCount * 8 +
-                        blockedTaskIds.size * 6 +
                         staleCount * 4 +
                         reworkCount14d * 4 +
                         (oldestReviewDays !== null && oldestReviewDays >= REVIEW_STALE_DAYS ? oldestReviewDays * 2 : 0) +
@@ -741,19 +685,6 @@ export const getProjectActivity = query({
                                 taskTitle: null,
                             }
                             : null,
-                        blockedTaskIds.size > 0
-                            ? {
-                                id: `summary-blocked-${project.id}`,
-                                kind: "blocked",
-                                severity: "warning" as const,
-                                headline: `${project.name}: blocked work`,
-                                detail: `${blockedTaskIds.size} task${blockedTaskIds.size === 1 ? "" : "s"} waiting on help.`,
-                                createdAt: new Date(lastActivityAt || now).toISOString(),
-                                projectId: project.id,
-                                taskId: null,
-                                taskTitle: null,
-                            }
-                            : null,
                         reworkCount14d > 0
                             ? {
                                 id: `summary-rework-${project.id}`,
@@ -792,7 +723,6 @@ export const getProjectActivity = query({
                         inReviewCount,
                         inProgressCount,
                         todoCount,
-                        blockedCount: blockedTaskIds.size,
                         overdueCount,
                         staleCount,
                         reworkCount14d,
@@ -826,7 +756,6 @@ export const getProjectActivity = query({
                 behindPlanCount: divisions.filter(
                     (division) => division.scheduleDeltaPct !== null && division.scheduleDeltaPct <= -BEHIND_PLAN_PCT
                 ).length,
-                blockedTasks: divisions.reduce((sum, division) => sum + division.blockedCount, 0),
                 staleTasks: divisions.reduce((sum, division) => sum + division.staleCount, 0),
                 overdueTasks: divisions.reduce((sum, division) => sum + division.overdueCount, 0),
                 reworkEvents14d: divisions.reduce((sum, division) => sum + division.reworkCount14d, 0),

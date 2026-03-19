@@ -34,7 +34,6 @@ type Division = {
     inReviewCount: number
     inProgressCount: number
     todoCount: number
-    blockedCount: number
     overdueCount: number
     staleCount: number
     reworkCount14d: number
@@ -55,7 +54,6 @@ type ActivityMonitor = {
     windowDays: number
     summary: {
         behindPlanCount: number
-        blockedTasks: number
         staleTasks: number
         overdueTasks: number
         reworkEvents14d: number
@@ -305,7 +303,6 @@ function buildLegacyMonitor(projects: LegacyProjectActivity[]): ActivityMonitor 
                 inReviewCount,
                 inProgressCount,
                 todoCount,
-                blockedCount: 0,
                 overdueCount,
                 staleCount: 0,
                 reworkCount14d: 0,
@@ -327,7 +324,6 @@ function buildLegacyMonitor(projects: LegacyProjectActivity[]): ActivityMonitor 
         windowDays: MONITOR_WINDOW_DAYS,
         summary: {
             behindPlanCount: divisions.filter((division) => division.scheduleDeltaPct !== null && division.scheduleDeltaPct <= -LEGACY_BEHIND_PLAN_PCT).length,
-            blockedTasks: 0,
             staleTasks: 0,
             overdueTasks: divisions.reduce((sum, division) => sum + division.overdueCount, 0),
             reworkEvents14d: 0,

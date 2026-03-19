@@ -49,7 +49,6 @@ function buildTaskInput(overrides: Record<string, unknown> = {}) {
         approvedAt: null,
         progress: 50,
         enableProgress: true,
-        helpRequests: [],
         activityLogs: [{ createdAt: daysAgo(1) }],
         checklistItems: [{ completed: true }, { completed: false }],
         ...overrides,
@@ -76,11 +75,6 @@ const buildTaskCases = [
         name: 'detects review stale tasks',
         overrides: { column: { name: 'Review', board: { project: { id: 'project-1', name: 'Division One', color: '#3b82f6' } } }, submittedAt: daysAgo(CONFIG.thresholds.reviewStaleDays + 1) },
         assertTask: (task: ReturnType<typeof buildWorkloadTasks>[number]) => assert.equal(task.isReviewStale, true),
-    },
-    {
-        name: 'detects blocked by help requests',
-        overrides: { helpRequests: [{ id: 'help-1' }] },
-        assertTask: (task: ReturnType<typeof buildWorkloadTasks>[number]) => assert.equal(task.isBlockedByHelp, true),
     },
     {
         name: 'detects unassigned active tasks',
@@ -131,7 +125,7 @@ type StatusScenario = {
     name: string
     tasks: ReturnType<typeof buildWorkloadTasks>
     expectedStatus: 'available' | 'on-track' | 'struggling'
-    expected: Partial<{ overdueTasks: number; stuckTasks: number; helpRequestTasks: number; dueSoonTasks: number; reviewStaleTasks: number; progressLagTasks: number; agingTasks: number }>
+    expected: Partial<{ overdueTasks: number; stuckTasks: number; dueSoonTasks: number; reviewStaleTasks: number; progressLagTasks: number; agingTasks: number }>
 }
 
 const statusScenarios: StatusScenario[] = [
@@ -152,12 +146,6 @@ const statusScenarios: StatusScenario[] = [
         tasks: buildWorkloadTasks([buildTaskInput({ dueDate: daysAgo(1) })], NOW, CONFIG),
         expectedStatus: 'struggling',
         expected: { overdueTasks: 1 },
-    },
-    {
-        name: 'struggling for active help requests',
-        tasks: buildWorkloadTasks([buildTaskInput({ helpRequests: [{ id: 'help-1' }] })], NOW, CONFIG),
-        expectedStatus: 'struggling',
-        expected: { helpRequestTasks: 1 },
     },
     {
         name: 'tracks stale review tasks',
