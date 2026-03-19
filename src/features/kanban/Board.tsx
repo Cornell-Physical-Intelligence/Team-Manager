@@ -122,6 +122,18 @@ function inferLoadedPushes(
     return loaded
 }
 
+function mergeBoardTask(existingTask: Task | null, incomingTask: Task): Task {
+    if (!existingTask) {
+        return incomingTask
+    }
+
+    return {
+        ...existingTask,
+        ...incomingTask,
+        columnId: incomingTask.columnId ?? existingTask.columnId,
+    }
+}
+
 export function Board({
     board,
     projectId,
@@ -436,8 +448,10 @@ export function Board({
                 if (originalColumnId) setColumns(board.columns)
                 return false
             }
-            const push = result.task?.push
-            if (push?.id && push.status) {
+            const push = result.task && typeof result.task === "object" && "push" in result.task
+                ? result.task.push
+                : null
+            if (push && typeof push === "object" && "id" in push && "status" in push && push.id && push.status) {
                 setPushStatusOverrides((prev) => ({
                     ...prev,
                     [push.id]: push.status as 'Active' | 'Completed'
@@ -901,10 +915,12 @@ export function Board({
     const handleTaskCreated = (newTask: Task) => {
         setColumns(prev => prev.map(col => {
             if (col.id === newTask.columnId) {
-                // Check if task already exists (may have been added by sync polling)
-                const taskExists = col.tasks.some(t => t.id === newTask.id)
-                if (taskExists) {
-                    return col
+                const existingTask = col.tasks.find(t => t.id === newTask.id) ?? null
+                if (existingTask) {
+                    return {
+                        ...col,
+                        tasks: col.tasks.map(task => task.id === newTask.id ? mergeBoardTask(task, newTask) : task)
+                    }
                 }
                 return { ...col, tasks: [...col.tasks, newTask] }
             }
@@ -913,24 +929,38 @@ export function Board({
     }
 
     const handleTaskUpdated = (updatedTask: Task) => {
-        setColumns(prev => prev.map(col => {
-            const existingTaskIndex = col.tasks.findIndex(t => t.id === updatedTask.id)
+        setColumns(prev => {
+            const existingTask =
+                prev.flatMap(col => col.tasks).find(task => task.id === updatedTask.id) ?? null
+            const mergedTask = mergeBoardTask(existingTask, updatedTask)
 
-            if (col.id === updatedTask.columnId) {
-                if (existingTaskIndex !== -1) {
-                    const newTasks = [...col.tasks]
-                    newTasks[existingTaskIndex] = updatedTask
-                    return { ...col, tasks: newTasks }
-                } else {
-                    return { ...col, tasks: [...col.tasks, updatedTask] }
-                }
-            } else {
-                if (existingTaskIndex !== -1) {
-                    return { ...col, tasks: col.tasks.filter(t => t.id !== updatedTask.id) }
-                }
+            if (!mergedTask.columnId) {
+                return prev
             }
-            return col
-        }))
+
+            return prev.map(col => {
+                const existingTaskIndex = col.tasks.findIndex(t => t.id === mergedTask.id)
+
+                if (col.id === mergedTask.columnId) {
+                    if (existingTaskIndex !== -1) {
+                        const newTasks = [...col.tasks]
+                        newTasks[existingTaskIndex] = mergeBoardTask(col.tasks[existingTaskIndex] ?? null, mergedTask)
+                        return { ...col, tasks: newTasks }
+                    }
+
+                    return { ...col, tasks: [...col.tasks, mergedTask] }
+                }
+
+                if (existingTaskIndex !== -1) {
+                    return { ...col, tasks: col.tasks.filter(t => t.id !== mergedTask.id) }
+                }
+
+                return col
+            })
+        })
+
+        setPreviewingTask(prev => prev?.id === updatedTask.id ? mergeBoardTask(prev, updatedTask) : prev)
+        setEditingTask(prev => prev?.id === updatedTask.id ? mergeBoardTask(prev, updatedTask) : prev)
     }
 
     const handleTaskDeleted = (taskId: string) => {

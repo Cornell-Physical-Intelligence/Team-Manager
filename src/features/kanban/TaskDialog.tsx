@@ -639,7 +639,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 }
 
                 if (result.task && onTaskUpdated) {
-                    onTaskUpdated(result.task)
+                    onTaskUpdated(result.task as TaskDialogResultTask)
                 }
 
                 handleClose()

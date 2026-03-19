@@ -71,6 +71,10 @@ async function getWorkspaceDriveConfig(workspaceId: string) {
     return fetchQuery(api.settings.getWorkspaceDriveConfig, { workspaceId })
 }
 
+async function getHydratedTask(taskId: string) {
+    return fetchQuery(api.tasks.getById, { taskId })
+}
+
 // ─────────────────────────────────────────────────────────────
 // createTask
 // ─────────────────────────────────────────────────────────────
@@ -178,9 +182,10 @@ export async function createTask(input: CreateTaskInput) {
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`)
+        const hydratedTask = await getHydratedTask(taskResult.task.id)
         return {
             success: true,
-            task: {
+            task: hydratedTask ?? {
                 id: taskResult.task.id,
                 title: title.trim(),
                 columnId: taskResult.task.columnId,
@@ -261,10 +266,11 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
             )
         }
 
+        const hydratedTask = await getHydratedTask(taskId)
+
         return {
             success: true as const,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            task: { id: taskId, title: r.taskTitle, columnId } as any,
+            task: hydratedTask ?? { id: taskId, title: r.taskTitle, columnId },
         }
     } catch (e) {
         console.error("Update task error:", e)
@@ -399,26 +405,9 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
         if (r.projectId) {
             revalidatePath(`/dashboard/projects/${r.projectId}`)
         }
+        const hydratedTask = await getHydratedTask(taskId)
 
-        // Convert number timestamps to ISO strings for client compatibility
-        const rawTask = r.task
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const serializedTask: any = rawTask
-            ? {
-                ...rawTask,
-                id: rawTask.id as string,
-                title: rawTask.title as string,
-                columnId: (rawTask.columnId as string | null | undefined) ?? null,
-                startDate: typeof rawTask.startDate === 'number' ? new Date(rawTask.startDate as number).toISOString() : ((rawTask.startDate as string | null) ?? null),
-                endDate: typeof rawTask.endDate === 'number' ? new Date(rawTask.endDate as number).toISOString() : ((rawTask.endDate as string | null) ?? null),
-                submittedAt: typeof rawTask.submittedAt === 'number' ? new Date(rawTask.submittedAt as number).toISOString() : ((rawTask.submittedAt as string | null) ?? null),
-                approvedAt: typeof rawTask.approvedAt === 'number' ? new Date(rawTask.approvedAt as number).toISOString() : ((rawTask.approvedAt as string | null) ?? null),
-                createdAt: typeof rawTask.createdAt === 'number' ? new Date(rawTask.createdAt as number).toISOString() : (rawTask.createdAt as string | null) ?? null,
-                updatedAt: typeof rawTask.updatedAt === 'number' ? new Date(rawTask.updatedAt as number).toISOString() : (rawTask.updatedAt as string | null) ?? null,
-            }
-            : null
-
-        return { success: true, task: serializedTask }
+        return { success: true, task: hydratedTask ?? r.task }
     } catch (e) {
         console.error("Update details error:", e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
