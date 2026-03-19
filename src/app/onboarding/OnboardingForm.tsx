@@ -9,19 +9,35 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from "lucide-react"
 
-type OnboardingFormProps = {
+export type OnboardingFormProps = {
     userId: string
     suggestedName: string
+    initialStep?: 1 | 2
+    initialName?: string
+    initialInterests?: string
+    initialError?: string
+    previewSubmitting?: boolean
+    previewMode?: boolean
 }
 
-export function OnboardingForm({ userId, suggestedName }: OnboardingFormProps) {
+export function OnboardingForm({
+    userId,
+    suggestedName,
+    initialStep = 1,
+    initialName,
+    initialInterests = "",
+    initialError = "",
+    previewSubmitting = false,
+    previewMode = false,
+}: OnboardingFormProps) {
     const router = useRouter()
     const updateOnboardingProfile = useMutation(api.auth.updateOnboardingProfile)
-    const [step, setStep] = useState(1)
-    const [name, setName] = useState(suggestedName)
-    const [interests, setInterests] = useState("")
+    const [step, setStep] = useState<1 | 2>(initialStep)
+    const [name, setName] = useState(initialName ?? suggestedName)
+    const [interests, setInterests] = useState(initialInterests)
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [error, setError] = useState("")
+    const [error, setError] = useState(initialError)
+    const isBusy = isSubmitting || previewSubmitting
 
     const handleNext = () => {
         if (step === 1) {
@@ -50,6 +66,11 @@ export function OnboardingForm({ userId, suggestedName }: OnboardingFormProps) {
 
         if (!interests.trim()) {
             setError("Please tell us a bit about your interests")
+            return
+        }
+
+        if (previewMode) {
+            setError("")
             return
         }
 
@@ -128,9 +149,9 @@ export function OnboardingForm({ userId, suggestedName }: OnboardingFormProps) {
                 type="button"
                 onClick={step === 2 ? handleSubmit : handleNext}
                 className="w-full h-10 sm:h-11 text-sm sm:text-base font-medium shadow-sm transition-all hover:translate-y-[-1px]"
-                disabled={isSubmitting}
+                disabled={isBusy}
             >
-                {isSubmitting ? (
+                {isBusy ? (
                     <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Setting up...

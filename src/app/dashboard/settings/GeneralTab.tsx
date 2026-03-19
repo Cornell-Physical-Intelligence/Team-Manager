@@ -2,9 +2,9 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CopyButton } from "@/components/CopyButton"
 import { DisplayNameSettings } from "./DisplayNameSettings"
 import { AppearanceSettings } from "./AppearanceSettings"
-import { CopyButton } from "./CopyButton"
 
 type GeneralTabProps = {
     userName: string
