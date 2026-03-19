@@ -311,6 +311,10 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
     const editProjectDialogContentRef = React.useRef<HTMLDivElement | null>(null)
     const [settingsSpinNonce, setSettingsSpinNonce] = React.useState(0)
     const previousPathRef = React.useRef<string>('/dashboard')
+    const shellWarmStartedRef = React.useRef(false)
+    const warmedProjectIdsRef = React.useRef<Set<string>>(new Set())
+    const shellWarmTimersRef = React.useRef<number[]>([])
+    const projectWarmTimersRef = React.useRef<number[]>([])
 
     // Track previous path for settings toggle
     React.useEffect(() => {
@@ -393,8 +397,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
 
     const isAdmin = userData.role === 'Admin' || userData.role === 'Team Lead'
     const convex = useConvex()
-    const prefetchDashboardHome = React.useCallback(() => {
+    const prefetchDashboardHome = React.useCallback((options?: { subscriptionMs?: number }) => {
         if (!initialUserId || !initialWorkspaceId) return
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
         router.prefetch("/dashboard")
         convex.prewarmQuery({
             query: api.dashboard.getDashboardPageData,
@@ -403,23 +408,24 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 workspaceId: initialWorkspaceId,
                 role: userData.role,
             },
-            extendSubscriptionFor: 15_000,
+            extendSubscriptionFor,
         })
         if (isAdmin) {
             convex.prewarmQuery({
                 query: api.dashboard.getHeatmapWidgetData,
                 args: { workspaceId: initialWorkspaceId },
-                extendSubscriptionFor: 15_000,
+                extendSubscriptionFor,
             })
             convex.prewarmQuery({
                 query: api.settings.getProjectActivity,
                 args: { workspaceId: initialWorkspaceId },
-                extendSubscriptionFor: 15_000,
+                extendSubscriptionFor,
             })
         }
     }, [convex, initialUserId, initialWorkspaceId, isAdmin, router, userData.role])
-    const prefetchMyBoard = React.useCallback(() => {
+    const prefetchMyBoard = React.useCallback((options?: { subscriptionMs?: number }) => {
         if (!initialUserId || !initialWorkspaceId) return
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
         router.prefetch("/dashboard/my-board")
         convex.prewarmQuery({
             query: api.dashboard.getMyBoardPageData,
@@ -427,20 +433,42 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                 userId: initialUserId,
                 workspaceId: initialWorkspaceId,
             },
-            extendSubscriptionFor: 15_000,
+            extendSubscriptionFor,
         })
     }, [convex, initialUserId, initialWorkspaceId, router])
-    const prefetchSettings = React.useCallback(() => {
+    const prefetchSettings = React.useCallback((options?: { subscriptionMs?: number }) => {
         if (!initialWorkspaceId) return
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
         router.prefetch("/dashboard/settings")
         convex.prewarmQuery({
             query: api.settings.getPageData,
             args: { workspaceId: initialWorkspaceId },
-            extendSubscriptionFor: 15_000,
+            extendSubscriptionFor,
         })
     }, [convex, initialWorkspaceId, router])
-    const prefetchProject = React.useCallback((projectId: string) => {
+    const prefetchMembers = React.useCallback((options?: { subscriptionMs?: number }) => {
+        if (!initialWorkspaceId) return
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
+        router.prefetch("/dashboard/members")
+        convex.prewarmQuery({
+            query: api.dashboard.getMembersPageData,
+            args: { workspaceId: initialWorkspaceId },
+            extendSubscriptionFor,
+        })
+    }, [convex, initialWorkspaceId, router])
+    const prefetchHeatmapPage = React.useCallback((options?: { subscriptionMs?: number }) => {
+        if (!initialWorkspaceId) return
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
+        router.prefetch("/dashboard/heatmap")
+        convex.prewarmQuery({
+            query: api.dashboard.getHeatmapPageData,
+            args: { workspaceId: initialWorkspaceId },
+            extendSubscriptionFor,
+        })
+    }, [convex, initialWorkspaceId, router])
+    const prefetchProject = React.useCallback((projectId: string, options?: { subscriptionMs?: number }) => {
         preloadBoardModule()
+        const extendSubscriptionFor = options?.subscriptionMs ?? 15_000
         router.prefetch(`/dashboard/projects/${projectId}`)
         if (initialWorkspaceId) {
             convex.prewarmQuery({
@@ -449,7 +477,7 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                     projectId,
                     workspaceId: initialWorkspaceId,
                 },
-                extendSubscriptionFor: 15_000,
+                extendSubscriptionFor,
             })
         }
     }, [convex, initialWorkspaceId, router])
@@ -530,6 +558,78 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
             window.clearTimeout(timer)
         }
     }, [])
+
+    React.useEffect(() => {
+        return () => {
+            shellWarmTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+            projectWarmTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+        }
+    }, [])
+
+    React.useEffect(() => {
+        if (isMobileSheet || shellWarmStartedRef.current || !initialUserId || !initialWorkspaceId) {
+            return
+        }
+
+        shellWarmStartedRef.current = true
+        const longWarmMs = 180_000
+        const warmTasks: Array<() => void> = [
+            () => prefetchDashboardHome({ subscriptionMs: longWarmMs }),
+            () => prefetchMyBoard({ subscriptionMs: longWarmMs }),
+            () => prefetchSettings({ subscriptionMs: longWarmMs }),
+        ]
+
+        if (isAdmin) {
+            warmTasks.push(
+                () => prefetchMembers({ subscriptionMs: longWarmMs }),
+                () => prefetchHeatmapPage({ subscriptionMs: longWarmMs })
+            )
+        }
+
+        warmTasks.forEach((warmTask, index) => {
+            const timerId = window.setTimeout(() => {
+                warmTask()
+            }, 150 + index * 120)
+            shellWarmTimersRef.current.push(timerId)
+        })
+    }, [
+        initialUserId,
+        initialWorkspaceId,
+        isAdmin,
+        isMobileSheet,
+        prefetchDashboardHome,
+        prefetchHeatmapPage,
+        prefetchMembers,
+        prefetchMyBoard,
+        prefetchSettings,
+    ])
+
+    React.useEffect(() => {
+        if (isMobileSheet) return
+
+        projectWarmTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+        projectWarmTimersRef.current = []
+
+        const activeQueue = projects.filter((project) => !warmedProjectIdsRef.current.has(project.id))
+        const archivedQueue = archivedProjects.filter((project) => !warmedProjectIdsRef.current.has(project.id))
+        const queue = [...activeQueue, ...archivedQueue]
+
+        if (queue.length === 0) return
+
+        const longWarmMs = 180_000
+        queue.forEach((project, index) => {
+            const timerId = window.setTimeout(() => {
+                warmedProjectIdsRef.current.add(project.id)
+                prefetchProject(project.id, { subscriptionMs: longWarmMs })
+            }, 700 + index * 140)
+            projectWarmTimersRef.current.push(timerId)
+        })
+
+        return () => {
+            projectWarmTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+            projectWarmTimersRef.current = []
+        }
+    }, [archivedProjects, isMobileSheet, prefetchProject, projects])
 
     // When editing division changes, update the lead id state
     React.useEffect(() => {
@@ -651,8 +751,8 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                         )}
                         aria-label="Workspace settings"
                         title="Settings"
-                        onMouseEnter={prefetchSettings}
-                        onFocus={prefetchSettings}
+                        onMouseEnter={() => prefetchSettings()}
+                        onFocus={() => prefetchSettings()}
                         onClick={(e) => {
                             e.preventDefault()
                             prefetchSettings()
@@ -694,9 +794,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                 prefetchDashboardHome()
                                 setNavigatingTo("/dashboard")
                             }}
-                            onMouseEnter={prefetchDashboardHome}
-                            onFocus={prefetchDashboardHome}
-                            onTouchStart={prefetchDashboardHome}
+                            onMouseEnter={() => prefetchDashboardHome()}
+                            onFocus={() => prefetchDashboardHome()}
+                            onTouchStart={() => prefetchDashboardHome()}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -715,9 +815,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                 prefetchMyBoard()
                                 setNavigatingTo("/dashboard/my-board")
                             }}
-                            onMouseEnter={prefetchMyBoard}
-                            onFocus={prefetchMyBoard}
-                            onTouchStart={prefetchMyBoard}
+                            onMouseEnter={() => prefetchMyBoard()}
+                            onFocus={() => prefetchMyBoard()}
+                            onTouchStart={() => prefetchMyBoard()}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm",
                                 pathname === "/dashboard/my-board" ? "bg-muted font-medium" : "text-muted-foreground"
@@ -814,9 +914,9 @@ export function Sidebar({ initialUserData, isMobileSheet = false }: { initialUse
                                     prefetchSettings()
                                     setNavigatingTo("/dashboard/settings")
                                 }}
-                                onMouseEnter={prefetchSettings}
-                                onFocus={prefetchSettings}
-                                onTouchStart={prefetchSettings}
+                                onMouseEnter={() => prefetchSettings()}
+                                onFocus={() => prefetchSettings()}
+                                onTouchStart={() => prefetchSettings()}
                                 className={cn(
                                     "flex items-center gap-3 rounded-md px-3 py-2 transition-all hover:translate-x-0.5 text-sm mt-2",
                                     pathname === "/dashboard/settings" ? "bg-muted font-medium" : "text-muted-foreground"
