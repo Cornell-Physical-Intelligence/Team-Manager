@@ -592,9 +592,9 @@ export function ProjectActivityTracker({
             <div className="mb-3 text-xs font-medium">Project Monitor</div>
 
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "graph" | "stack")} className="flex min-h-0 flex-1 flex-col">
-                <TabsList className="grid h-8 w-full grid-cols-2">
-                    <TabsTrigger value="graph" className="text-xs">Graph</TabsTrigger>
-                    <TabsTrigger value="stack" className="text-xs">Stack</TabsTrigger>
+                <TabsList className="grid h-8 w-full grid-cols-2 items-center">
+                    <TabsTrigger value="graph" className="h-6 self-center text-xs leading-none">Graph</TabsTrigger>
+                    <TabsTrigger value="stack" className="h-6 self-center text-xs leading-none">Stack</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="graph" className="mt-3 min-h-0 flex-1">
