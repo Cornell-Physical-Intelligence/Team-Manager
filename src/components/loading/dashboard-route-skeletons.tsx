@@ -1,13 +1,13 @@
 export function DashboardRouteSkeleton() {
     return (
         <div className="h-full overflow-y-auto">
-            <div className="p-4 md:p-6 space-y-5">
+            <div className="p-3 md:p-4 space-y-4">
                 <div className="flex items-center gap-3">
                     <div className="h-6 w-44 bg-muted rounded animate-pulse" />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    <div className="lg:col-span-2 space-y-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2 space-y-4">
                         <section className="rounded-lg p-4 bg-muted/30">
                             <div className="mb-3">
                                 <div className="h-4 w-20 bg-muted rounded animate-pulse" />
@@ -37,7 +37,7 @@ export function DashboardRouteSkeleton() {
                         </section>
                     </div>
 
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                         <section className="rounded-lg p-4 bg-muted/30">
                             <div className="h-4 w-16 bg-muted rounded animate-pulse mb-3" />
                             <div className="space-y-2">
@@ -60,12 +60,12 @@ export function DashboardRouteSkeleton() {
 export function MyBoardRouteSkeleton() {
     return (
         <div className="h-full flex flex-col">
-            <div className="p-4 flex items-center justify-between shrink-0">
+            <div className="p-3 md:p-4 flex items-center justify-between shrink-0">
                 <div className="h-5 w-32 bg-muted rounded animate-pulse" />
                 <div className="h-8 w-24 bg-muted rounded animate-pulse" />
             </div>
 
-            <div className="flex-1 overflow-x-auto p-4">
+            <div className="flex-1 overflow-x-auto p-3 md:p-4">
                 <div className="flex gap-3 h-full">
                     {[0, 1, 2, 3].map((colIndex) => (
                         <div

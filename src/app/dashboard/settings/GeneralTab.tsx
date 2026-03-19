@@ -16,7 +16,7 @@ type GeneralTabProps = {
 
 export function GeneralTab({ userName, userId, userRole, inviteCode, inviteLink }: GeneralTabProps) {
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h2 className="text-lg font-semibold">General</h2>
                 <p className="text-xs text-muted-foreground mt-1">Your profile and preferences.</p>

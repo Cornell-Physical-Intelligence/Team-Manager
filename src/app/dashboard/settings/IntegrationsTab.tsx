@@ -252,7 +252,7 @@ type IntegrationsTabProps = {
 
 export function IntegrationsTab({ driveConfig, discordChannelId, isAdmin }: IntegrationsTabProps) {
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h2 className="text-lg font-semibold">Integrations</h2>
                 <p className="text-xs text-muted-foreground mt-1">Connect external services to your workspace.</p>

@@ -213,7 +213,7 @@ export function MembersTab({ members, allProjects, currentUserEmail, canManage, 
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h2 className="text-lg font-semibold">Members</h2>
                 <p className="text-xs text-muted-foreground mt-1">Manage roles, names, and division assignments.</p>

@@ -949,9 +949,9 @@ export function Board({
                 className="flex flex-col min-w-0"
             >
 
-                <div className="p-4 space-y-4">
+                <div className="p-3 space-y-3">
                     {pushes.length === 0 && (
-                        <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground border-2 border-dashed rounded-xl m-4 bg-muted/10">
+                        <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground border-2 border-dashed rounded-xl m-3 bg-muted/10">
                             <p className="text-lg font-medium">No projects yet...</p>
                             <p className="text-sm mt-1">A project is a time-boxed sprint to group related tasks</p>
                         </div>

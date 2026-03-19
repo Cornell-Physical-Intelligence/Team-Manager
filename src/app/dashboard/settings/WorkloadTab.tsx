@@ -8,7 +8,7 @@ export function WorkloadTab() {
     const [open, setOpen] = useState(false)
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <div>
                 <h2 className="text-lg font-semibold">Workload</h2>
                 <p className="text-xs text-muted-foreground mt-1">Configure how team member status is computed on the heatmap.</p>

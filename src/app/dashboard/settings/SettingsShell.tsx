@@ -41,7 +41,7 @@ export function SettingsShell({ children, visibleTabs }: SettingsShellProps) {
     const activeTab = selectedTab && tabIds.includes(selectedTab) ? selectedTab : initialTab
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 w-full max-w-5xl mx-auto p-6 pb-20">
+        <div className="flex flex-col md:flex-row gap-4 w-full max-w-5xl mx-auto p-3 md:p-4 pb-16">
             {/* Mobile: horizontal scrollable pills */}
             <nav className="md:hidden flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
                 {tabs.map((tab) => (

@@ -548,8 +548,8 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
         >
             <div className="flex min-h-full flex-col bg-background md:bg-transparent">
                 {/* Header */}
-                <div className="shrink-0 border-b bg-background p-4">
-                    <div className="flex items-center justify-between gap-4">
+                <div className="shrink-0 border-b bg-background p-3 md:p-4">
+                    <div className="flex items-center justify-between gap-3">
                         <div>
                             <h1 className="text-lg font-semibold">{`${userName}'s Board`}</h1>
                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -633,7 +633,7 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                 </div>
 
                 {/* Kanban Board - Grid layout that fits the screen */}
-                <div className="flex-1 overflow-auto p-4">
+                <div className="flex-1 overflow-auto p-3 md:p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full">
                         {filteredColumns.map(column => (
                             <DroppableKanbanColumn

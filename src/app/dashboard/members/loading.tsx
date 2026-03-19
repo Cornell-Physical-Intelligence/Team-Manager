@@ -3,7 +3,7 @@
 export default function MembersLoading() {
     return (
         <div className="h-full overflow-y-auto">
-            <div className="p-4 md:p-6 space-y-5">
+            <div className="p-3 md:p-4 space-y-4">
                 <div className="flex items-center justify-between">
                     <div className="h-6 w-28 bg-muted rounded animate-pulse" />
                     <div className="h-9 w-24 bg-muted rounded animate-pulse" />

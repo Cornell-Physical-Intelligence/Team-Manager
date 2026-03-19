@@ -2,7 +2,7 @@
 
 export default function SettingsLoading() {
     return (
-        <div className="flex flex-col md:flex-row gap-6 w-full max-w-5xl mx-auto p-6">
+        <div className="flex flex-col md:flex-row gap-4 w-full max-w-5xl mx-auto p-4">
             {/* Sidebar skeleton */}
             <div className="hidden md:flex flex-col gap-1 w-[180px] shrink-0 pt-1">
                 {[0, 1, 2, 3, 4].map((i) => (
@@ -15,7 +15,7 @@ export default function SettingsLoading() {
             </div>
 
             {/* Content skeleton */}
-            <div className="flex-1 space-y-5">
+            <div className="flex-1 space-y-4">
                 <div className="h-6 w-24 bg-muted rounded animate-pulse" />
                 {[0, 1, 2].map((i) => (
                     <div

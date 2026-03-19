@@ -156,7 +156,7 @@ function BoardPreview({
     const showBacklog = pushes.length === 0 || backlogColumns.some((column) => column.tasks.length > 0)
 
     return (
-        <div className="p-4 space-y-4">
+        <div className="p-3 space-y-3">
             {showBacklog && (
                 <section className="space-y-3">
                     {pushes.length > 0 && (

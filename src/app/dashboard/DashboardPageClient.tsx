@@ -74,7 +74,7 @@ export function DashboardPageClient({
 
     return (
         <div className="h-full overflow-y-auto">
-            <div className="p-4 md:p-6 space-y-5">
+            <div className="p-3 md:p-4 space-y-4">
                 {inviteNotice && <InviteNoticeCard notice={inviteNotice} />}
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -112,9 +112,9 @@ export function DashboardPageClient({
                     </Link>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    <div className="lg:col-span-2 space-y-5">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                             <section className={cn(
                                 "border border-border rounded-lg p-4 h-full",
                                 isLeadership ? "xl:col-span-1" : "xl:col-span-2"
@@ -243,7 +243,7 @@ export function DashboardPageClient({
                     </div>
 
                     {isLeadership && (
-                        <div className="flex flex-col gap-5 h-full">
+                        <div className="flex flex-col gap-4 h-full">
                             <div className="shrink-0">
                                 <ProjectActivityTracker workspaceId={user.workspaceId} />
                             </div>
