@@ -50,7 +50,7 @@ export default async function OnboardingPage({
 
             <div className="relative z-20 w-full max-w-md space-y-4">
                 {inviteNotice && (
-                    <InviteNoticeCard notice={inviteNotice} className="bg-white/80 border-zinc-200" />
+                    <InviteNoticeCard notice={inviteNotice} />
                 )}
                 <Card className="w-full shadow-xl border-zinc-200 bg-white/80 backdrop-blur-xl">
                     <CardHeader className="text-center space-y-3 sm:space-y-4 pb-2 px-4 sm:px-6">
