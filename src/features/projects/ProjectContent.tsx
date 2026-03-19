@@ -4,7 +4,7 @@ import { Suspense, lazy, useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { LayoutGrid, Calendar, Plus } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { loadBoardModule } from "@/lib/board-module"
+import { loadBoardModule, preloadBoardModule } from "@/lib/board-module"
 import { TaskDialog } from "@/features/kanban/TaskDialog"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 import { ProjectGanttChart } from "@/features/timeline/ProjectGanttChart"
@@ -27,6 +27,7 @@ function hexToRgba(hex: string, alpha: number) {
 }
 
 const Board = lazy(loadBoardModule)
+preloadBoardModule()
 
 type PushType = {
     id: string
@@ -89,95 +90,34 @@ type ProjectContentProps = {
     pushes?: PushType[]
 }
 
-function PreviewColumns({
-    columns,
-    accentColor,
-}: {
-    columns: NonNullable<ProjectContentProps["board"]>["columns"]
-    accentColor: string
-}) {
+function ProjectBoardSkeleton() {
     return (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {columns
-                .slice()
-                .sort((a, b) => a.order - b.order)
-                .map((column) => (
-                    <div key={column.id} className="rounded-lg border bg-muted/20 p-3">
-                        <div className="mb-3 flex items-center gap-2">
-                            <h3 className="text-sm font-medium">{column.name}</h3>
-                            <span className="text-xs text-muted-foreground">{column.tasks.length}</span>
+        <div className="h-full overflow-x-auto p-3">
+            <div className="flex min-h-full min-w-max gap-3">
+                {[0, 1, 2, 3].map((columnIndex) => (
+                    <section
+                        key={columnIndex}
+                        className="flex w-[280px] shrink-0 flex-col rounded-lg border bg-background/50"
+                    >
+                        <div className="flex items-center justify-between p-3">
+                            <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+                            <div className="h-5 w-5 rounded-full bg-muted animate-pulse" />
                         </div>
-                        <div className="space-y-2">
-                            {column.tasks.slice(0, 8).map((task) => (
+                        <div className="flex-1 space-y-2 p-2">
+                            {Array.from({ length: 3 - (columnIndex % 2) }).map((_, cardIndex) => (
                                 <div
-                                    key={task.id}
-                                    className="rounded-md border bg-card p-3 shadow-sm"
-                                    style={{ borderColor: `${accentColor}22` }}
+                                    key={cardIndex}
+                                    className="rounded-lg border bg-background/60 p-3 animate-pulse"
+                                    style={{ animationDelay: `${(columnIndex * 3 + cardIndex) * 35}ms` }}
                                 >
-                                    <div className="line-clamp-2 text-sm font-medium leading-snug">{task.title}</div>
-                                    {task.assignees && task.assignees.length > 0 && (
-                                        <div className="mt-2 text-xs text-muted-foreground">
-                                            {task.assignees.slice(0, 2).map((assignee) => assignee.user.name).join(", ")}
-                                        </div>
-                                    )}
+                                    <div className="h-4 w-3/4 rounded bg-muted" />
+                                    <div className="mt-2 h-3 w-1/2 rounded bg-muted/80" />
                                 </div>
                             ))}
-                            {column.tasks.length > 8 && (
-                                <div className="px-1 text-xs text-muted-foreground">
-                                    +{column.tasks.length - 8} more
-                                </div>
-                            )}
-                            {column.tasks.length === 0 && (
-                                <div className="px-1 py-4 text-center text-xs text-muted-foreground">No tasks</div>
-                            )}
                         </div>
-                    </div>
+                    </section>
                 ))}
-        </div>
-    )
-}
-
-function BoardPreview({
-    board,
-    pushes,
-    projectColor,
-}: {
-    board: NonNullable<ProjectContentProps["board"]>
-    pushes: PushType[]
-    projectColor: string
-}) {
-    const getColumnsForPush = (pushId: string | null) =>
-        board.columns.map((column) => ({
-            ...column,
-            tasks: column.tasks.filter((task) => pushId === null ? !task.push : task.push?.id === pushId),
-        }))
-
-    const backlogColumns = getColumnsForPush(null)
-    const showBacklog = pushes.length === 0 || backlogColumns.some((column) => column.tasks.length > 0)
-
-    return (
-        <div className="p-3 space-y-3">
-            {showBacklog && (
-                <section className="space-y-3">
-                    {pushes.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: projectColor }} />
-                            <h2 className="text-sm font-semibold">Backlog</h2>
-                        </div>
-                    )}
-                    <PreviewColumns columns={backlogColumns} accentColor={projectColor} />
-                </section>
-            )}
-
-            {pushes.map((push) => (
-                <section key={push.id} className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full" style={{ backgroundColor: push.color }} />
-                        <h2 className="text-sm font-semibold">{push.name}</h2>
-                    </div>
-                    <PreviewColumns columns={getColumnsForPush(push.id)} accentColor={push.color} />
-                </section>
-            ))}
+            </div>
         </div>
     )
 }
@@ -343,7 +283,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
             <div className="flex-1 min-h-0">
                 {view === 'kanban' ? (
                     boardState ? (
-                        <Suspense fallback={<BoardPreview board={boardState} pushes={pushes} projectColor={projectColor} />}>
+                        <Suspense fallback={<ProjectBoardSkeleton />}>
                             <Board
                                 board={boardState}
                                 projectId={project.id}
