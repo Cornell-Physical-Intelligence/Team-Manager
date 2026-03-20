@@ -307,7 +307,7 @@ export function TimelineManagerDialog({
                             pushes={pushes}
                             onPushesChange={handlePushesChange}
                             minHeight={400}
-                            maxInteractiveDate={today}
+                            minInteractiveDate={today}
                         />
 
                         {pushes.length > 0 && (

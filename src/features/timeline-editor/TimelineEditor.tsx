@@ -34,7 +34,7 @@ type TimelineEditorProps = {
     viewRange?: TimelineViewRange
     readOnly?: boolean
     minHeight?: number
-    maxInteractiveDate?: Date | null
+    minInteractiveDate?: Date | null
 }
 
 const ROW_HEIGHT = 48
@@ -49,7 +49,7 @@ export function TimelineEditor({
     viewRange: externalViewRange,
     readOnly = false,
     minHeight = 200,
-    maxInteractiveDate = null,
+    minInteractiveDate = null,
 }: TimelineEditorProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const [selectedPushId, setSelectedPushId] = useState<string | null>(null)
@@ -78,9 +78,9 @@ export function TimelineEditor({
     // Bar drag indicator state (shows date tag next to bar when dragging)
     const [barDragInfo, setBarDragInfo] = useState<{ date: Date; row: number; isEnd?: boolean } | null>(null)
     const today = useMemo(() => startOfDay(new Date()), [])
-    const maxTimelineDate = useMemo(
-        () => maxInteractiveDate ? startOfDay(maxInteractiveDate) : null,
-        [maxInteractiveDate]
+    const minTimelineDate = useMemo(
+        () => minInteractiveDate ? startOfDay(minInteractiveDate) : null,
+        [minInteractiveDate]
     )
 
     // Calculate dynamic view range based on pushes with extra space
@@ -111,12 +111,12 @@ export function TimelineEditor({
     const totalDuration = viewRange.end.getTime() - viewRange.start.getTime()
 
     const clampInteractiveDate = useCallback((date: Date) => {
-        if (maxTimelineDate && date > maxTimelineDate) {
-            return maxTimelineDate
+        if (minTimelineDate && date < minTimelineDate) {
+            return minTimelineDate
         }
 
         return startOfDay(date)
-    }, [maxTimelineDate])
+    }, [minTimelineDate])
 
     const getDateFromClientX = useCallback((clientX: number) => {
         if (!containerRef.current) return new Date()
