@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import {
     Dialog,
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { TimelineEditor } from "@/features/timeline-editor/TimelineEditor"
-import { type PushDraft, startOfDay } from "@/features/timeline-editor/types"
+import { type PushDraft } from "@/features/timeline-editor/types"
 import { createPush, updatePush, deletePush } from "@/app/actions/pushes"
 import { Check, Loader2, Sparkles } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
@@ -85,7 +85,6 @@ export function TimelineManagerDialog({
     const savePromiseRef = useRef<Promise<boolean> | null>(null)
     const savedPushesRef = useRef<PushDraft[]>([])
     const latestPushesRef = useRef<PushDraft[]>([])
-    const today = useMemo(() => startOfDay(new Date()), [])
 
     // Sync initial pushes to local state when dialog opens
     useEffect(() => {
@@ -307,7 +306,6 @@ export function TimelineManagerDialog({
                             pushes={pushes}
                             onPushesChange={handlePushesChange}
                             minHeight={400}
-                            minInteractiveDate={today}
                         />
 
                         {pushes.length > 0 && (

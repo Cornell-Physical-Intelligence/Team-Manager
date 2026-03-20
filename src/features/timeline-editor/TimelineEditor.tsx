@@ -34,7 +34,6 @@ type TimelineEditorProps = {
     viewRange?: TimelineViewRange
     readOnly?: boolean
     minHeight?: number
-    minInteractiveDate?: Date | null
 }
 
 const ROW_HEIGHT = 48
@@ -49,7 +48,6 @@ export function TimelineEditor({
     viewRange: externalViewRange,
     readOnly = false,
     minHeight = 200,
-    minInteractiveDate = null,
 }: TimelineEditorProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const [selectedPushId, setSelectedPushId] = useState<string | null>(null)
@@ -78,10 +76,6 @@ export function TimelineEditor({
     // Bar drag indicator state (shows date tag next to bar when dragging)
     const [barDragInfo, setBarDragInfo] = useState<{ date: Date; row: number; isEnd?: boolean } | null>(null)
     const today = useMemo(() => startOfDay(new Date()), [])
-    const minTimelineDate = useMemo(
-        () => minInteractiveDate ? startOfDay(minInteractiveDate) : null,
-        [minInteractiveDate]
-    )
 
     // Calculate dynamic view range based on pushes with extra space
     const calculatedViewRange = useMemo(() => {
@@ -110,21 +104,13 @@ export function TimelineEditor({
     const viewRange = externalViewRange || calculatedViewRange
     const totalDuration = viewRange.end.getTime() - viewRange.start.getTime()
 
-    const clampInteractiveDate = useCallback((date: Date) => {
-        if (minTimelineDate && date < minTimelineDate) {
-            return minTimelineDate
-        }
-
-        return startOfDay(date)
-    }, [minTimelineDate])
-
     const getDateFromClientX = useCallback((clientX: number) => {
         if (!containerRef.current) return new Date()
         const rect = containerRef.current.getBoundingClientRect()
         const percent = (clientX - rect.left) / rect.width
         const timestamp = viewRange.start.getTime() + percent * totalDuration
-        return clampInteractiveDate(new Date(timestamp))
-    }, [viewRange, totalDuration, clampInteractiveDate])
+        return startOfDay(new Date(timestamp))
+    }, [viewRange, totalDuration])
 
     const getPositionPercent = useCallback((date: Date) => {
         return ((date.getTime() - viewRange.start.getTime()) / totalDuration) * 100
