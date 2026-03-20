@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const screen = request.nextUrl.searchParams.get("screen") === "workspaces"
         ? "workspaces"
         : "onboarding"
-    const displayName = request.nextUrl.searchParams.get("name")?.trim() || "Preview User"
+    const displayName = request.nextUrl.searchParams.get("name")?.trim() || "New Member"
     const interests = request.nextUrl.searchParams.get("interests")?.trim() || "Systems, robotics, and product design."
     const now = Date.now()
 
@@ -59,10 +59,10 @@ export async function GET(request: NextRequest) {
 
     response.cookies.set("discord_user", JSON.stringify({
         id: "preview-demo",
-        username: "preview_user",
+        username: "new_member",
         discriminator: "0001",
         avatar: null,
-        global_name: displayName,
+        global_name: null,
     }), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

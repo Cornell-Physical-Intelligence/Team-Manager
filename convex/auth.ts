@@ -1,9 +1,20 @@
-import { mutation, query } from "./_generated/server"
+import { mutation, query, type MutationCtx } from "./_generated/server"
 import { v } from "convex/values"
 import {
     getUserByLegacyId,
     hydrateUserForSession,
 } from "./lib"
+
+async function syncWorkspaceMemberNames(ctx: MutationCtx, userId: string, name: string) {
+    const memberships = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .collect()
+
+    for (const membership of memberships) {
+        await ctx.db.patch(membership._id, { name })
+    }
+}
 
 export const createSession = mutation({
     args: {
@@ -185,6 +196,11 @@ export const updateUserFromDiscord = mutation({
         }
 
         await ctx.db.patch(user._id, patch)
+
+        if (args.name !== undefined) {
+            await syncWorkspaceMemberNames(ctx, args.userId, args.name)
+        }
+
         return { success: true }
     },
 })
@@ -235,6 +251,8 @@ export const updateOnboardingProfile = mutation({
             updatedAt: args.updatedAt,
         })
 
+        await syncWorkspaceMemberNames(ctx, args.userId, args.name)
+
         return { success: true }
     },
 })
@@ -255,6 +273,8 @@ export const updateUserName = mutation({
             name: args.name,
             updatedAt: args.updatedAt,
         })
+
+        await syncWorkspaceMemberNames(ctx, args.userId, args.name)
 
         return { success: true }
     },

@@ -118,13 +118,13 @@ export default async function AuthPreviewPage({
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
                     <OnboardingCard
                         userId="preview-user"
-                        suggestedName="Preview User"
+                        suggestedName=""
                         discordUser={{
                             id: "preview-user",
-                            username: "preview_user",
+                            username: "new_member",
                             discriminator: "0001",
                             avatar: null,
-                            global_name: "Preview User",
+                            global_name: null,
                         }}
                         inviteNotice={inviteNotice}
                         formProps={{

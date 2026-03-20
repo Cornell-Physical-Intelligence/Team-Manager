@@ -44,7 +44,7 @@ export default async function OnboardingPage({
             <div className="relative z-20 w-full">
                 <OnboardingCard
                     userId={user.id}
-                    suggestedName={discordUser.global_name || discordUser.username}
+                    suggestedName=""
                     discordUser={discordUser}
                     inviteNotice={inviteNotice}
                 />
