@@ -1089,7 +1089,7 @@ export function Board({
                                                         className={cn(
                                                             "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-[background-color,border-color,color]",
                                                             isComplete
-                                                                ? "border-green-200/80 bg-green-50/60 text-green-800 hover:border-green-300 hover:bg-green-100/80"
+                                                                ? "border-transparent bg-transparent text-green-700 hover:bg-green-50/60"
                                                                 : "border-green-200/80 bg-green-50/35 text-foreground hover:border-green-300 hover:bg-green-100/70"
                                                         )}
                                                     >
