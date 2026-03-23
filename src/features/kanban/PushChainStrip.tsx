@@ -385,20 +385,36 @@ export function PushChainStrip({
                                         "hover:bg-accent/50 dark:hover:bg-accent/20"
                                     )}
                                 >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="flex w-40 shrink-0 items-center gap-2">
-                                            <span className={cn(
-                                                "font-semibold text-base md:text-lg tracking-tight truncate",
-                                                pushIsComplete && "text-muted-foreground"
-                                            )}>
-                                                {push.name}
-                                            </span>
-                                        </div>
-                                        {(myTaskCounts[push.id] ?? 0) > 0 && (
-                                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
+                                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                                        <span className={cn(
+                                            "font-semibold text-base md:text-lg tracking-tight truncate",
+                                            pushIsComplete && "text-muted-foreground"
+                                        )}>
+                                            {push.name}
+                                        </span>
+
+                                        {/* Badge: grey count, collapses when push opens */}
+                                        <span
+                                            className="flex items-center overflow-hidden shrink-0"
+                                            style={{
+                                                width: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? '1.1rem' : '0',
+                                                transition: 'width 0.18s ease-in-out',
+                                            }}
+                                        >
+                                            <span
+                                                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-muted-foreground"
+                                                style={{
+                                                    backgroundColor: 'hsl(var(--muted-foreground) / 0.15)',
+                                                    transition: 'transform 0.18s ease-in-out, opacity 0.18s ease-in-out',
+                                                    transform: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? 'scale(1)' : 'scale(0.4)',
+                                                    opacity: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? 1 : 0,
+                                                }}
+                                            >
                                                 {(myTaskCounts[push.id] ?? 0) > 99 ? '99' : myTaskCounts[push.id]}
                                             </span>
-                                        )}
+                                        </span>
+
+                                        {/* Add Task: appears when push expands (admin only) */}
                                         {isAdmin && (
                                             <div
                                                 role="button"
@@ -406,15 +422,25 @@ export function PushChainStrip({
                                                     e.stopPropagation()
                                                     onAddTask(push)
                                                 }}
-                                                className={cn(
-                                                    "h-7 flex items-center gap-1 px-2 rounded-md border transition-all shrink-0 text-xs",
-                                                    pushIsComplete
-                                                        ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50"
-                                                        : "border-border bg-background hover:bg-muted/50"
-                                                )}
+                                                className="flex items-center gap-1 rounded-md border text-xs shrink-0 overflow-hidden cursor-pointer"
+                                                style={{
+                                                    height: '28px',
+                                                    maxWidth: isContentOpen ? '100px' : '0px',
+                                                    paddingLeft: isContentOpen ? '8px' : '0',
+                                                    paddingRight: isContentOpen ? '8px' : '0',
+                                                    opacity: isContentOpen ? 1 : 0,
+                                                    transform: isContentOpen ? 'scale(1)' : 'scale(0.7)',
+                                                    transformOrigin: 'left center',
+                                                    pointerEvents: isContentOpen ? 'auto' : 'none',
+                                                    borderColor: isContentOpen ? undefined : 'transparent',
+                                                    color: pushIsComplete ? 'hsl(var(--muted-foreground) / 0.5)' : undefined,
+                                                    transition: isContentOpen
+                                                        ? 'max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.28s cubic-bezier(0.34,1.56,0.64,1) 0.06s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1) 0.06s, border-color 0.2s'
+                                                        : 'all 0.15s ease-in',
+                                                }}
                                             >
-                                                <Plus className="h-3.5 w-3.5" />
-                                                <span className="hidden sm:inline">Add Task</span>
+                                                <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                <span className="hidden sm:inline whitespace-nowrap">Add Task</span>
                                             </div>
                                         )}
                                     </div>

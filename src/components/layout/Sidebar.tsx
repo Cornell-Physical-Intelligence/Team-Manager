@@ -154,10 +154,13 @@ type ProjectRowProps = {
     onToggleArchive: (project: Project) => void
 }
 
-function ProjectTaskBadge({ count }: { count: number }) {
+function ProjectTaskBadge({ count, color }: { count: number; color?: string | null }) {
     if (count === 0) return <span className="h-4 w-4 shrink-0" />
     return (
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
+        <span
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white"
+            style={{ backgroundColor: color || '#3b82f6' }}
+        >
             {count > 99 ? "99" : count}
         </span>
     )
@@ -209,7 +212,7 @@ function ProjectRowInner({
             />
             {dragHandle ?? (
                 <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center">
-                    <ProjectTaskBadge count={taskCount} />
+                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} />
                 </div>
             )}
             <Link
@@ -319,7 +322,7 @@ const SortableProjectRow = React.memo((props: ProjectRowProps) => {
                     {...listeners}
                     title="Reorder"
                 >
-                    <ProjectTaskBadge count={taskCount} />
+                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} />
                 </button>
             )}
         />

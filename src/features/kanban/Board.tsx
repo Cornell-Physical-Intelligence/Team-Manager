@@ -1013,6 +1013,15 @@ export function Board({
                         const completionPercent = push.taskCount > 0 ? (push.completedCount / push.taskCount) * 100 : 0
                         const showMarkCompleteAction = isAdmin && (isComplete || allTasksDone)
                         const pushDateLabel = `${new Date(push.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - ${push.endDate ? new Date(push.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Ongoing'}`
+                        const myPushTaskCount = userId
+                            ? columns.reduce((sum, col) => {
+                                if (col.name === 'Done') return sum
+                                return sum + col.tasks.filter(t =>
+                                    t.push?.id === push.id &&
+                                    (t.assigneeId === userId || t.assignees?.some(a => a.user.id === userId))
+                                ).length
+                            }, 0)
+                            : 0
 
                         return (
                             <div key={push.id} className="relative group/push-container">
@@ -1037,8 +1046,8 @@ export function Board({
                                             isLocked ? "cursor-not-allowed bg-muted/30" : "hover:bg-accent/50 dark:hover:bg-accent/20"
                                         )}
                                     >
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="flex w-40 shrink-0 items-center gap-2">
+                                        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                                            <div className="flex items-center gap-2">
                                                 <span className={cn(
                                                     "font-semibold text-base md:text-lg tracking-tight truncate",
                                                     isComplete && "text-muted-foreground",
@@ -1046,20 +1055,34 @@ export function Board({
                                                 )}>
                                                     {push.name}
                                                 </span>
-                                                {isLocked && !isComplete && (
-                                                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50" />
-                                                )}
                                             </div>
 
-                                            {(() => {
-                                                const myCount = userId ? columns.flatMap(c => c.tasks).filter(t => t.push?.id === push.id && (t.assigneeId === userId || t.assignees?.some(a => a.user.id === userId))).length : 0
-                                                return myCount > 0 ? (
-                                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
-                                                        {myCount > 99 ? '99' : myCount}
-                                                    </span>
-                                                ) : null
-                                            })()}
+                                            {isLocked && !isComplete && (
+                                                <Lock className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                            )}
 
+                                            {/* Badge: grey count, collapses when push opens */}
+                                            <span
+                                                className="flex items-center overflow-hidden shrink-0"
+                                                style={{
+                                                    width: (!isOpen && myPushTaskCount > 0) ? '1.1rem' : '0',
+                                                    transition: 'width 0.18s ease-in-out',
+                                                }}
+                                            >
+                                                <span
+                                                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-muted-foreground"
+                                                    style={{
+                                                        backgroundColor: 'hsl(var(--muted-foreground) / 0.15)',
+                                                        transition: 'transform 0.18s ease-in-out, opacity 0.18s ease-in-out',
+                                                        transform: (!isOpen && myPushTaskCount > 0) ? 'scale(1)' : 'scale(0.4)',
+                                                        opacity: (!isOpen && myPushTaskCount > 0) ? 1 : 0,
+                                                    }}
+                                                >
+                                                    {myPushTaskCount > 99 ? '99' : myPushTaskCount}
+                                                </span>
+                                            </span>
+
+                                            {/* Add Task: appears when push expands (admin only) */}
                                             {isAdmin && (
                                                 <div
                                                     role="button"
@@ -1083,16 +1106,27 @@ export function Board({
                                                         }
                                                     }}
                                                     className={cn(
-                                                        "h-7 flex items-center gap-1 px-2 rounded-md border transition-all relative z-10 shrink-0 text-xs",
-                                                        isLocked
-                                                            ? "cursor-not-allowed opacity-50 bg-muted text-muted-foreground border-transparent"
-                                                            : isComplete
-                                                                ? "border-border/50 text-muted-foreground/50 hover:bg-muted/50 hover:text-muted-foreground"
-                                                                : "border-border bg-background hover:bg-muted/50"
+                                                        "flex items-center gap-1 rounded-md border text-xs shrink-0 overflow-hidden",
+                                                        isLocked ? "cursor-not-allowed" : "cursor-pointer"
                                                     )}
+                                                    style={{
+                                                        height: '28px',
+                                                        maxWidth: isOpen ? '100px' : '0px',
+                                                        paddingLeft: isOpen ? '8px' : '0',
+                                                        paddingRight: isOpen ? '8px' : '0',
+                                                        opacity: isOpen ? (isLocked ? 0.5 : 1) : 0,
+                                                        transform: isOpen ? 'scale(1)' : 'scale(0.7)',
+                                                        transformOrigin: 'left center',
+                                                        pointerEvents: isOpen ? 'auto' : 'none',
+                                                        borderColor: isOpen ? undefined : 'transparent',
+                                                        color: isComplete ? 'hsl(var(--muted-foreground) / 0.5)' : undefined,
+                                                        transition: isOpen
+                                                            ? 'max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.28s cubic-bezier(0.34,1.56,0.64,1) 0.06s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1) 0.06s, border-color 0.2s'
+                                                            : 'all 0.15s ease-in',
+                                                    }}
                                                 >
-                                                    <Plus className="h-3.5 w-3.5" />
-                                                    <span className="hidden sm:inline">Add Task</span>
+                                                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                    <span className="hidden sm:inline whitespace-nowrap">Add Task</span>
                                                 </div>
                                             )}
                                         </div>
