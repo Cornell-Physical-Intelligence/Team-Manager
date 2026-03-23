@@ -991,6 +991,7 @@ export function Board({
                                         loadPushTasks={loadPushTasks}
                                         loadedPushes={loadedPushes}
                                         loadingPushes={loadingPushes}
+                                        myTaskCounts={userId ? Object.fromEntries(chain.map(p => [p.id, columns.flatMap(c => c.tasks).filter(t => t.push?.id === p.id && (t.assigneeId === userId || t.assignees?.some(a => a.user.id === userId))).length])) : {}}
                                         renderPushBoard={(pushId) => {
                                             const pushColumns = getPushTasks(pushId)
                                             return renderPushBoard(pushColumns, pushId)
@@ -1036,8 +1037,8 @@ export function Board({
                                             isLocked ? "cursor-not-allowed bg-muted/30" : "hover:bg-accent/50 dark:hover:bg-accent/20"
                                         )}
                                     >
-                                        <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="flex w-40 shrink-0 items-center gap-2">
                                                 <span className={cn(
                                                     "font-semibold text-base md:text-lg tracking-tight truncate",
                                                     isComplete && "text-muted-foreground",
@@ -1045,11 +1046,19 @@ export function Board({
                                                 )}>
                                                     {push.name}
                                                 </span>
+                                                {isLocked && !isComplete && (
+                                                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+                                                )}
                                             </div>
 
-                                            {isLocked && !isComplete && (
-                                                <Lock className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                                            )}
+                                            {(() => {
+                                                const myCount = userId ? columns.flatMap(c => c.tasks).filter(t => t.push?.id === push.id && (t.assigneeId === userId || t.assignees?.some(a => a.user.id === userId))).length : 0
+                                                return myCount > 0 ? (
+                                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
+                                                        {myCount > 99 ? '99' : myCount}
+                                                    </span>
+                                                ) : null
+                                            })()}
 
                                             {isAdmin && (
                                                 <div

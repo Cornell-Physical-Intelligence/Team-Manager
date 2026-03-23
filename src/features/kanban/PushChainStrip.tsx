@@ -30,6 +30,7 @@ type PushChainStripProps = {
     loadedPushes: Record<string, true>
     loadingPushes: Record<string, true>
     renderPushBoard: (pushId: string) => React.ReactNode
+    myTaskCounts?: Record<string, number>
 }
 
 const COLLAPSED_WIDTH = 56
@@ -51,7 +52,8 @@ export function PushChainStrip({
     loadPushTasks,
     loadedPushes,
     loadingPushes,
-    renderPushBoard
+    renderPushBoard,
+    myTaskCounts = {},
 }: PushChainStripProps) {
     // Active push = first incomplete push in chain
     const activePushId = useMemo(() => {
@@ -383,13 +385,20 @@ export function PushChainStrip({
                                         "hover:bg-accent/50 dark:hover:bg-accent/20"
                                     )}
                                 >
-                                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                                        <span className={cn(
-                                            "font-semibold text-base md:text-lg tracking-tight truncate",
-                                            pushIsComplete && "text-muted-foreground"
-                                        )}>
-                                            {push.name}
-                                        </span>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="flex w-40 shrink-0 items-center gap-2">
+                                            <span className={cn(
+                                                "font-semibold text-base md:text-lg tracking-tight truncate",
+                                                pushIsComplete && "text-muted-foreground"
+                                            )}>
+                                                {push.name}
+                                            </span>
+                                        </div>
+                                        {(myTaskCounts[push.id] ?? 0) > 0 && (
+                                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white">
+                                                {(myTaskCounts[push.id] ?? 0) > 99 ? '99' : myTaskCounts[push.id]}
+                                            </span>
+                                        )}
                                         {isAdmin && (
                                             <div
                                                 role="button"
