@@ -157,7 +157,7 @@ export function CondensedTimeline({ pushes, projectId, onPushUpdate }: Condensed
                         </div>
 
                         <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                            <span>{pushes.length} push{pushes.length !== 1 ? 'es' : ''}</span>
+                            <span>{pushes.length} project{pushes.length !== 1 ? 's' : ''}</span>
                             <ChevronDown className="h-3 w-3" />
                         </div>
                     </button>

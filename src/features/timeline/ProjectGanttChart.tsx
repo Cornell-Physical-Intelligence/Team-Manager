@@ -37,6 +37,7 @@ type ProjectGanttChartProps = {
     tasks: Task[]
     projectId: string
     pushes?: PushType[]
+    projectColor?: string
 }
 
 const formatDateShort = (date: Date) => {
@@ -47,7 +48,7 @@ const formatDateFull = (date: Date) => {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export function ProjectGanttChart({ tasks, projectId, pushes = [] }: ProjectGanttChartProps) {
+export function ProjectGanttChart({ tasks, projectId, pushes = [], projectColor }: ProjectGanttChartProps) {
     const [hoveredTask, setHoveredTask] = useState<string | null>(null)
 
     const tasksWithDates = tasks.filter(t => t.startDate).map(t => {
@@ -188,7 +189,7 @@ export function ProjectGanttChart({ tasks, projectId, pushes = [] }: ProjectGant
                         {/* Timeline Header */}
                         <div className="flex shrink-0 border-b">
                             <div className="sticky left-0 z-30 shrink-0 border-r bg-background px-2 py-2" style={{ width: `${pushColumnWidth}px` }}>
-                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Push</span>
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Project</span>
                             </div>
                             <div className="sticky z-30 shrink-0 border-r bg-background px-2 py-2" style={{ width: '160px', left: `${pushColumnWidth}px` }}>
                                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Task</span>
@@ -230,7 +231,7 @@ export function ProjectGanttChart({ tasks, projectId, pushes = [] }: ProjectGant
                                     style={{
                                         left: `calc(${pushColumnWidth + 160}px + (100% - ${pushColumnWidth + 160}px) * ${todayPos / 100})`,
                                         height: `${orderedGroups.reduce((acc, g) => acc + g.tasks.length * ROW_HEIGHT, 0)}px`,
-                                        zIndex: 9999
+                                        zIndex: 2
                                     }}
                                 />
                             )}
@@ -360,7 +361,7 @@ export function ProjectGanttChart({ tasks, projectId, pushes = [] }: ProjectGant
                                                                                 left: `${left}%`,
                                                                                 width: `${width}%`,
                                                                                 minWidth: '20px',
-                                                                                backgroundColor: group.color
+                                                                                backgroundColor: projectColor || group.color
                                                                             }}
                                                                             onMouseEnter={() => setHoveredTask(task.id)}
                                                                             onMouseLeave={() => setHoveredTask(null)}

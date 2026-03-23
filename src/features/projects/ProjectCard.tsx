@@ -9,6 +9,14 @@ import { useState, useTransition } from "react"
 import { ChevronDown, User, ExternalLink } from "lucide-react"
 import Link from "next/link"
 
+function hexToRgba(hex: string, alpha: number) {
+    const n = hex.trim().replace(/^#/, "")
+    const r = parseInt(n.slice(0, 2), 16)
+    const g = parseInt(n.slice(2, 4), 16)
+    const b = parseInt(n.slice(4, 6), 16)
+    return `rgba(${r},${g},${b},${alpha})`
+}
+
 type Project = {
     id: string
     name: string
@@ -24,9 +32,11 @@ type Props = {
     project: Project
     users: { id: string; name: string; role: string }[]
     isAdmin: boolean
+    taskCount?: number
+    projectColor?: string | null
 }
 
-export function ProjectCard({ project, users, isAdmin }: Props) {
+export function ProjectCard({ project, users, isAdmin, taskCount = 0, projectColor }: Props) {
     const [isPending, startTransition] = useTransition()
     const [leadIds, setLeadIds] = useState(project.leadIds || [])
     const selectedLeadNames = users.filter((user) => leadIds.includes(user.id)).map((user) => user.name)
@@ -43,9 +53,22 @@ export function ProjectCard({ project, users, isAdmin }: Props) {
         })
     }
 
+    const badgeColor = projectColor || '#3b82f6'
+
     return (
         <Card className="hover:bg-muted/50 transition-colors h-full group relative">
             <Link href={`/dashboard/projects/${project.id}`} className="absolute inset-0 z-0" />
+            {taskCount > 0 && (
+                <span
+                    className="absolute -top-2 -left-2 z-20 flex h-5 w-5 items-center justify-center rounded text-[9px] font-bold leading-none pointer-events-none"
+                    style={{
+                        backgroundColor: hexToRgba(badgeColor, 0.35),
+                        color: 'rgba(0,0,0,0.85)',
+                    }}
+                >
+                    {taskCount > 99 ? '99' : taskCount}
+                </span>
+            )}
             <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-sm font-medium line-clamp-1">{project.name}</CardTitle>
@@ -56,7 +79,7 @@ export function ProjectCard({ project, users, isAdmin }: Props) {
             </CardHeader>
             <CardContent className="pt-0">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{project._count.pushes} push{project._count.pushes !== 1 ? 'es' : ''}</span>
+                    <span>{project._count.pushes} project{project._count.pushes !== 1 ? 's' : ''}</span>
                     {isAdmin ? (
                         <div
                             className="relative z-10"

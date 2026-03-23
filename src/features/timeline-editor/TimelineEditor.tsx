@@ -574,14 +574,14 @@ export function TimelineEditor({
                 if (!open) handleDialogClose()
             }}>
                 <DialogContent showCloseButton={false} className="sm:max-w-[320px] p-5">
-                    <DialogTitle className="sr-only">Name this push</DialogTitle>
-                    <DialogDescription className="sr-only">Enter a name for the new push you just created.</DialogDescription>
+                    <DialogTitle className="sr-only">Name this project</DialogTitle>
+                    <DialogDescription className="sr-only">Enter a name for the new project you just created.</DialogDescription>
                     <div className="space-y-3">
                         <Input
                             id="new-push-name"
                             value={newPushName}
                             onChange={(e) => setNewPushName(e.target.value)}
-                            placeholder="Push name..."
+                            placeholder="Project name..."
                             autoFocus
                             className="h-9"
                             onKeyDown={(e) => {
@@ -637,7 +637,7 @@ export function TimelineEditor({
                                         syncEditingPush({ name: value })
                                     }
                                 }}
-                                placeholder="Push name"
+                                placeholder="Project name"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">

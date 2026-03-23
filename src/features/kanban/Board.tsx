@@ -16,6 +16,26 @@ import { api } from "@convex/_generated/api"
 import { cn } from "@/lib/utils"
 import { createPortal } from "react-dom"
 import { Plus, ChevronDown, Check, Pencil, Lock } from "lucide-react"
+
+function hexToRgba(hex: string, alpha: number) {
+    const normalized = hex.trim().replace(/^#/, "")
+    const expanded = normalized.length === 3 ? normalized.split("").map((c) => c + c).join("") : normalized
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) return `rgba(59,130,246,${alpha})`
+    const r = parseInt(expanded.slice(0, 2), 16)
+    const g = parseInt(expanded.slice(2, 4), 16)
+    const b = parseInt(expanded.slice(4, 6), 16)
+    return `rgba(${r},${g},${b},${alpha})`
+}
+
+function lightenColor(hex: string, amount: number) {
+    // amount 0 = original color, 1 = white
+    const n = (hex || '#3b82f6').trim().replace(/^#/, "")
+    if (!/^[0-9a-fA-F]{6}$/.test(n)) return `rgb(186,211,251)`
+    const r = Math.round(parseInt(n.slice(0, 2), 16) + (255 - parseInt(n.slice(0, 2), 16)) * amount)
+    const g = Math.round(parseInt(n.slice(2, 4), 16) + (255 - parseInt(n.slice(2, 4), 16)) * amount)
+    const b = Math.round(parseInt(n.slice(4, 6), 16) + (255 - parseInt(n.slice(4, 6), 16)) * amount)
+    return `rgb(${r},${g},${b})`
+}
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 import { PushDialog } from "@/features/pushes/PushDialog"
@@ -846,7 +866,7 @@ export function Board({
     }
 
     const getParentPushName = (parentId: string) => {
-        return pushes.find(p => p.id === parentId)?.name || "Parent Push"
+        return pushes.find(p => p.id === parentId)?.name || "Parent Project"
     }
 
     const handleEditPush = (e: React.MouseEvent, push: PushType) => {
@@ -992,6 +1012,7 @@ export function Board({
                                         loadedPushes={loadedPushes}
                                         loadingPushes={loadingPushes}
                                         myTaskCounts={userId ? Object.fromEntries(chain.map(p => [p.id, columns.flatMap(c => c.tasks).filter(t => t.push?.id === p.id && (t.assigneeId === userId || t.assignees?.some(a => a.user.id === userId))).length])) : {}}
+                                        projectColor={projectColor}
                                         renderPushBoard={(pushId) => {
                                             const pushColumns = getPushTasks(pushId)
                                             return renderPushBoard(pushColumns, pushId)
@@ -1035,6 +1056,21 @@ export function Board({
                                     isComplete ? "bg-muted/40 border-border/50" : "bg-card",
                                     isLocked && "grayscale opacity-70 border-dashed"
                                 )}>
+                                    <span
+                                        className="absolute -top-2 -left-2 z-20 flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold leading-none pointer-events-none"
+                                        style={{
+                                            background: `linear-gradient(135deg, ${lightenColor(projectColor || '#3b82f6', 0.85)}, ${lightenColor(projectColor || '#3b82f6', 0.62)})`,
+                                            border: `1px solid ${lightenColor(projectColor || '#3b82f6', 0.42)}`,
+                                            color: 'rgba(0,0,0,0.8)',
+                                            transform: myPushTaskCount > 0 ? 'scale(1)' : 'scale(0)',
+                                            opacity: myPushTaskCount > 0 ? 1 : 0,
+                                            transition: myPushTaskCount > 0
+                                                ? 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s ease'
+                                                : 'transform 0.18s ease-in, opacity 0.15s ease',
+                                        }}
+                                    >
+                                        {myPushTaskCount > 99 ? '99' : myPushTaskCount || ''}
+                                    </span>
                                     <button
                                         type="button"
                                         aria-expanded={isOpen}
@@ -1061,72 +1097,46 @@ export function Board({
                                                 <Lock className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                                             )}
 
-                                            {/* Badge: grey count, collapses when push opens */}
-                                            <span
-                                                className="flex items-center overflow-hidden shrink-0"
-                                                style={{
-                                                    width: (!isOpen && myPushTaskCount > 0) ? '1.1rem' : '0',
-                                                    transition: 'width 0.18s ease-in-out',
-                                                }}
-                                            >
-                                                <span
-                                                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-muted-foreground"
-                                                    style={{
-                                                        backgroundColor: 'hsl(var(--muted-foreground) / 0.15)',
-                                                        transition: 'transform 0.18s ease-in-out, opacity 0.18s ease-in-out',
-                                                        transform: (!isOpen && myPushTaskCount > 0) ? 'scale(1)' : 'scale(0.4)',
-                                                        opacity: (!isOpen && myPushTaskCount > 0) ? 1 : 0,
-                                                    }}
-                                                >
-                                                    {myPushTaskCount > 99 ? '99' : myPushTaskCount}
-                                                </span>
-                                            </span>
-
-                                            {/* Add Task: appears when push expands (admin only) */}
+                                            {/* Add Task: fades in when push expands (admin only) */}
                                             {isAdmin && (
-                                                <div
-                                                    role="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        if (isLocked) return
+                                                <div style={{ maxWidth: isOpen ? '100px' : '0', overflow: 'hidden', flexShrink: 0 }}>
+                                                    <div
+                                                        role="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            if (isLocked) return
 
-                                                        // Expand push if collapsed
-                                                        if (collapsedPushes.has(push.id)) {
-                                                            setCollapsedPushes(prev => {
-                                                                const next = new Set(prev)
-                                                                next.delete(push.id)
-                                                                return next
-                                                            })
-                                                            loadPushTasks(push.id)
-                                                        }
-                                                        const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
-                                                        if (todoColumn) {
-                                                            setCreatingColumnId(todoColumn.id)
-                                                            setCreatingPushId(push.id)
-                                                        }
-                                                    }}
-                                                    className={cn(
-                                                        "flex items-center gap-1 rounded-md border text-xs shrink-0 overflow-hidden",
-                                                        isLocked ? "cursor-not-allowed" : "cursor-pointer"
-                                                    )}
-                                                    style={{
-                                                        height: '28px',
-                                                        maxWidth: isOpen ? '100px' : '0px',
-                                                        paddingLeft: isOpen ? '8px' : '0',
-                                                        paddingRight: isOpen ? '8px' : '0',
-                                                        opacity: isOpen ? (isLocked ? 0.5 : 1) : 0,
-                                                        transform: isOpen ? 'scale(1)' : 'scale(0.7)',
-                                                        transformOrigin: 'left center',
-                                                        pointerEvents: isOpen ? 'auto' : 'none',
-                                                        borderColor: isOpen ? undefined : 'transparent',
-                                                        color: isComplete ? 'hsl(var(--muted-foreground) / 0.5)' : undefined,
-                                                        transition: isOpen
-                                                            ? 'max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.28s cubic-bezier(0.34,1.56,0.64,1) 0.06s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1) 0.06s, border-color 0.2s'
-                                                            : 'all 0.15s ease-in',
-                                                    }}
-                                                >
-                                                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                                                    <span className="hidden sm:inline whitespace-nowrap">Add Task</span>
+                                                            // Expand push if collapsed
+                                                            if (collapsedPushes.has(push.id)) {
+                                                                setCollapsedPushes(prev => {
+                                                                    const next = new Set(prev)
+                                                                    next.delete(push.id)
+                                                                    return next
+                                                                })
+                                                                loadPushTasks(push.id)
+                                                            }
+                                                            const todoColumn = columns.find(c => c.name === 'Todo' || c.name === 'To Do')
+                                                            if (todoColumn) {
+                                                                setCreatingColumnId(todoColumn.id)
+                                                                setCreatingPushId(push.id)
+                                                            }
+                                                        }}
+                                                        className={cn(
+                                                            "flex items-center gap-1 rounded-md border text-xs whitespace-nowrap",
+                                                            isLocked ? "cursor-not-allowed" : "cursor-pointer"
+                                                        )}
+                                                        style={{
+                                                            height: '28px',
+                                                            padding: '0 8px',
+                                                            opacity: isOpen ? (isLocked ? 0.5 : 1) : 0,
+                                                            pointerEvents: isOpen ? 'auto' : 'none',
+                                                            color: isComplete ? 'hsl(var(--muted-foreground) / 0.5)' : undefined,
+                                                            transition: 'opacity 0.2s ease',
+                                                        }}
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="hidden sm:inline">Add Task</span>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -1140,7 +1150,7 @@ export function Board({
                                                             e.stopPropagation()
                                                             setPushStatus(push.id, isComplete ? 'Active' : 'Completed')
                                                         }}
-                                                        aria-label={isComplete ? "Mark as not complete" : "Mark this push complete"}
+                                                        aria-label={isComplete ? "Mark as not complete" : "Mark this project complete"}
                                                         className={cn(
                                                             "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-[background-color,border-color,color]",
                                                             isComplete
@@ -1195,7 +1205,7 @@ export function Board({
                                                     role="button"
                                                     onClick={(e) => handleEditPush(e, push)}
                                                     className={`flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-md hover:bg-primary/10 hover:text-primary transition-colors relative z-10 ${isComplete ? "text-muted-foreground/50" : ""}`}
-                                                    title="Edit Push"
+                                                    title="Edit Project"
                                                 >
                                                     <Pencil className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                                 </div>

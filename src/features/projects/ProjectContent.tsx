@@ -308,6 +308,7 @@ export function ProjectContent({ project, board, users, pushes = [] }: ProjectCo
                             tasks={allTasks}
                             projectId={project.id}
                             pushes={pushes}
+                            projectColor={projectColor}
                         />
                     </div>
                 )

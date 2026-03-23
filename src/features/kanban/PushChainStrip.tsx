@@ -4,6 +4,15 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Pencil, Plus, Lock, Check } from "lucide-react"
 
+function lightenColor(hex: string, amount: number) {
+    const n = (hex || '#3b82f6').trim().replace(/^#/, "")
+    if (!/^[0-9a-fA-F]{6}$/.test(n)) return `rgb(186,211,251)`
+    const r = Math.round(parseInt(n.slice(0, 2), 16) + (255 - parseInt(n.slice(0, 2), 16)) * amount)
+    const g = Math.round(parseInt(n.slice(2, 4), 16) + (255 - parseInt(n.slice(2, 4), 16)) * amount)
+    const b = Math.round(parseInt(n.slice(4, 6), 16) + (255 - parseInt(n.slice(4, 6), 16)) * amount)
+    return `rgb(${r},${g},${b})`
+}
+
 type PushType = {
     id: string
     name: string
@@ -31,6 +40,7 @@ type PushChainStripProps = {
     loadingPushes: Record<string, true>
     renderPushBoard: (pushId: string) => React.ReactNode
     myTaskCounts?: Record<string, number>
+    projectColor?: string | null
 }
 
 const COLLAPSED_WIDTH = 56
@@ -54,6 +64,7 @@ export function PushChainStrip({
     loadingPushes,
     renderPushBoard,
     myTaskCounts = {},
+    projectColor,
 }: PushChainStripProps) {
     // Active push = first incomplete push in chain
     const activePushId = useMemo(() => {
@@ -274,24 +285,42 @@ export function PushChainStrip({
                     return (
                         <div
                             key={push.id}
+                            className={cn("relative", isExpanded ? "min-w-0" : "shrink-0")}
+                            style={{ width: isExpanded ? expandedWidth : collapsedWidth, transition: `width ${transitionDuration}ms ease-out` }}
+                            onMouseEnter={() => setHoveredId(push.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                        >
+                        {/* Corner badge on expanded push - fades out when content opens */}
+                        {isExpanded && (
+                            <span
+                                className="absolute -top-2 -left-2 z-30 flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold leading-none pointer-events-none"
+                                style={{
+                                    background: `linear-gradient(135deg, ${lightenColor(projectColor || '#3b82f6', 0.85)}, ${lightenColor(projectColor || '#3b82f6', 0.62)})`,
+                                    border: `1px solid ${lightenColor(projectColor || '#3b82f6', 0.42)}`,
+                                    color: 'rgba(0,0,0,0.8)',
+                                    transform: (myTaskCounts[push.id] ?? 0) > 0 ? 'scale(1)' : 'scale(0)',
+                                    opacity: (myTaskCounts[push.id] ?? 0) > 0 ? 1 : 0,
+                                    transition: (myTaskCounts[push.id] ?? 0) > 0
+                                        ? 'transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s ease'
+                                        : 'transform 0.18s ease-in, opacity 0.15s ease',
+                                }}
+                            >
+                                {(myTaskCounts[push.id] ?? 0) > 99 ? '99' : (myTaskCounts[push.id] || '')}
+                            </span>
+                        )}
+                        <div
                             className={cn(
-                                "relative rounded-lg border shadow-sm overflow-hidden",
-                                "transition-[width] ease-out",
-                                // Only add bg transition for manual clicks, not completion animation
-                                shouldTransitionBg && "transition-[width,background-color,border-color]",
-                                isExpanded ? "min-w-0" : "shrink-0",
+                                "w-full h-full rounded-lg border shadow-sm overflow-hidden",
+                                shouldTransitionBg && "transition-[background-color,border-color]",
                                 !isExpanded && pushIsLocked
                                     ? "opacity-60 grayscale border-dashed cursor-not-allowed"
                                     : !isExpanded && "hover:shadow-md cursor-pointer"
                             )}
                             style={{
-                                width: isExpanded ? expandedWidth : collapsedWidth,
                                 transitionDuration: `${transitionDuration}ms`,
                                 backgroundColor: showGreenBg ? 'rgb(34 197 94)' : undefined,
                                 borderColor: showGreenBg ? 'rgb(34 197 94 / 0.5)' : undefined,
                             }}
-                            onMouseEnter={() => setHoveredId(push.id)}
-                            onMouseLeave={() => setHoveredId(null)}
                             onClick={() => {
                                 if (!isExpanded && !pushIsLocked && !animationPhase) {
                                     handlePushClick(push)
@@ -393,54 +422,27 @@ export function PushChainStrip({
                                             {push.name}
                                         </span>
 
-                                        {/* Badge: grey count, collapses when push opens */}
-                                        <span
-                                            className="flex items-center overflow-hidden shrink-0"
-                                            style={{
-                                                width: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? '1.1rem' : '0',
-                                                transition: 'width 0.18s ease-in-out',
-                                            }}
-                                        >
-                                            <span
-                                                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-muted-foreground"
-                                                style={{
-                                                    backgroundColor: 'hsl(var(--muted-foreground) / 0.15)',
-                                                    transition: 'transform 0.18s ease-in-out, opacity 0.18s ease-in-out',
-                                                    transform: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? 'scale(1)' : 'scale(0.4)',
-                                                    opacity: (!isContentOpen && (myTaskCounts[push.id] ?? 0) > 0) ? 1 : 0,
-                                                }}
-                                            >
-                                                {(myTaskCounts[push.id] ?? 0) > 99 ? '99' : myTaskCounts[push.id]}
-                                            </span>
-                                        </span>
-
-                                        {/* Add Task: appears when push expands (admin only) */}
+                                        {/* Add Task: fades in when push expands (admin only) */}
                                         {isAdmin && (
-                                            <div
-                                                role="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    onAddTask(push)
-                                                }}
-                                                className="flex items-center gap-1 rounded-md border text-xs shrink-0 overflow-hidden cursor-pointer"
-                                                style={{
-                                                    height: '28px',
-                                                    maxWidth: isContentOpen ? '100px' : '0px',
-                                                    paddingLeft: isContentOpen ? '8px' : '0',
-                                                    paddingRight: isContentOpen ? '8px' : '0',
-                                                    opacity: isContentOpen ? 1 : 0,
-                                                    transform: isContentOpen ? 'scale(1)' : 'scale(0.7)',
-                                                    transformOrigin: 'left center',
-                                                    pointerEvents: isContentOpen ? 'auto' : 'none',
-                                                    borderColor: isContentOpen ? undefined : 'transparent',
-                                                    color: pushIsComplete ? 'hsl(var(--muted-foreground) / 0.5)' : undefined,
-                                                    transition: isContentOpen
-                                                        ? 'max-width 0.2s ease-out, padding 0.2s ease-out, opacity 0.28s cubic-bezier(0.34,1.56,0.64,1) 0.06s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1) 0.06s, border-color 0.2s'
-                                                        : 'all 0.15s ease-in',
-                                                }}
-                                            >
-                                                <Plus className="h-3.5 w-3.5 shrink-0" />
-                                                <span className="hidden sm:inline whitespace-nowrap">Add Task</span>
+                                            <div style={{ maxWidth: isContentOpen ? '100px' : '0', overflow: 'hidden', flexShrink: 0 }}>
+                                                <div
+                                                    role="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onAddTask(push)
+                                                    }}
+                                                    className="flex items-center gap-1 rounded-md border text-xs whitespace-nowrap cursor-pointer"
+                                                    style={{
+                                                        height: '28px',
+                                                        padding: '0 8px',
+                                                        opacity: isContentOpen ? (pushIsComplete ? 0.5 : 1) : 0,
+                                                        pointerEvents: isContentOpen ? 'auto' : 'none',
+                                                        transition: 'opacity 0.2s ease',
+                                                    }}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                                                    <span className="hidden sm:inline">Add Task</span>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -463,7 +465,7 @@ export function PushChainStrip({
                                                         setIsContentOpen(false)
                                                         setUserSelectedPushId(null)
                                                     }}
-                                                    aria-label={pushIsComplete ? "Mark as not complete" : "Mark this push complete"}
+                                                    aria-label={pushIsComplete ? "Mark as not complete" : "Mark this project complete"}
                                                     className={cn(
                                                         "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-[background-color,border-color,color]",
                                                         pushIsComplete
@@ -533,6 +535,7 @@ export function PushChainStrip({
                                     </div>
                                 </button>
                             )}
+                        </div>
                         </div>
                     )
                 })}

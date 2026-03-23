@@ -113,6 +113,15 @@ function hexToRgba(hex: string, alpha: number) {
     return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`
 }
 
+function lightenColor(hex: string, amount: number) {
+    const n = (hex || '#3b82f6').trim().replace(/^#/, "")
+    if (!/^[0-9a-fA-F]{6}$/.test(n)) return `rgb(186,211,251)`
+    const r = Math.round(parseInt(n.slice(0, 2), 16) + (255 - parseInt(n.slice(0, 2), 16)) * amount)
+    const g = Math.round(parseInt(n.slice(2, 4), 16) + (255 - parseInt(n.slice(2, 4), 16)) * amount)
+    const b = Math.round(parseInt(n.slice(4, 6), 16) + (255 - parseInt(n.slice(4, 6), 16)) * amount)
+    return `rgb(${r},${g},${b})`
+}
+
 const PROJECT_COLOR_OPTIONS = [
     "#ef4444", // red
     "#f97316", // orange
@@ -154,12 +163,20 @@ type ProjectRowProps = {
     onToggleArchive: (project: Project) => void
 }
 
-function ProjectTaskBadge({ count, color }: { count: number; color?: string | null }) {
+function ProjectTaskBadge({ count, color, isActive }: { count: number; color?: string | null; isActive?: boolean }) {
     if (count === 0) return <span className="h-4 w-4 shrink-0" />
+    const c = color || '#3b82f6'
     return (
         <span
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none text-white"
-            style={{ backgroundColor: color || '#3b82f6' }}
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold leading-none"
+            style={{
+                background: `linear-gradient(135deg, ${lightenColor(c, 0.85)}, ${lightenColor(c, 0.62)})`,
+                border: `1px solid ${lightenColor(c, 0.42)}`,
+                color: 'rgba(0,0,0,0.8)',
+                transform: isActive ? 'scale(0)' : 'scale(1)',
+                opacity: isActive ? 0 : 1,
+                transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1), opacity 0.15s ease',
+            }}
         >
             {count > 99 ? "99" : count}
         </span>
@@ -212,7 +229,7 @@ function ProjectRowInner({
             />
             {dragHandle ?? (
                 <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center">
-                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} />
+                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} isActive={isActive} />
                 </div>
             )}
             <Link
@@ -298,8 +315,10 @@ function ProjectRowInner({
 }
 
 const SortableProjectRow = React.memo((props: ProjectRowProps) => {
-    const { project, taskCount } = props
+    const { project, taskCount, pathname, navigatingTo } = props
     const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: project.id })
+    const href = `/dashboard/projects/${project.id}`
+    const isActive = pathname === href || navigatingTo === href
     const projectColor = project.color || "#3b82f6"
     const style: React.CSSProperties & { '--project-active-bg': string } = {
         transform: CSS.Transform.toString(transform),
@@ -322,7 +341,7 @@ const SortableProjectRow = React.memo((props: ProjectRowProps) => {
                     {...listeners}
                     title="Reorder"
                 >
-                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} />
+                    <ProjectTaskBadge count={taskCount} color={project.archivedAt ? null : project.color} isActive={isActive} />
                 </button>
             )}
         />
