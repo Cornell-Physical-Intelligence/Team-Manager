@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
+import { applyThemePreference, persistThemePreference } from "@/components/ThemeClient"
 import type { CurrentUser } from "@/lib/auth"
 
 export function WorkspaceSelector({ user }: { user: CurrentUser }) {
@@ -198,20 +199,16 @@ export function WorkspaceSelector({ user }: { user: CurrentUser }) {
                                 {/* Dark Mode Submenu */}
                                 <DropdownMenuLabel>Appearance</DropdownMenuLabel>
                                 <DropdownMenuItem onClick={() => {
-                                    document.documentElement.classList.remove('dark')
-                                    document.documentElement.style.colorScheme = 'light'
-                                    localStorage.setItem('cupi_theme', 'light')
-                                    if (user.id) localStorage.setItem(`cupi_theme:${user.id}`, 'light')
+                                    applyThemePreference('light')
+                                    persistThemePreference('light', user.id)
                                     setTheme('light')
                                 }}>
                                     Light
                                     {theme === 'light' && <Check className="w-4 h-4 ml-auto" />}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => {
-                                    document.documentElement.classList.add('dark')
-                                    document.documentElement.style.colorScheme = 'dark'
-                                    localStorage.setItem('cupi_theme', 'dark')
-                                    if (user.id) localStorage.setItem(`cupi_theme:${user.id}`, 'dark')
+                                    applyThemePreference('dark')
+                                    persistThemePreference('dark', user.id)
                                     setTheme('dark')
                                 }}>
                                     Dark

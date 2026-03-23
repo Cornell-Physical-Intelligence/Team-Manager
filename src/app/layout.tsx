@@ -45,11 +45,11 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var theme = localStorage.getItem('cupi_theme');
-                  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                  var isDark = theme === 'dark' || (theme !== 'light' && prefersDark);
+                  var theme = localStorage.getItem('cupi_theme') === 'dark' ? 'dark' : 'light';
+                  var isDark = theme === 'dark';
                   
                   var root = document.documentElement;
+                  root.dataset.theme = theme;
                   if (isDark) {
                     root.classList.add('dark');
                     root.style.colorScheme = 'dark';

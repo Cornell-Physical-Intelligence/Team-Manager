@@ -1,32 +1,24 @@
 "use client"
 
-import { useQuery } from "convex/react"
+import { type Preloaded, usePreloadedQuery } from "convex/react"
 import { api } from "@convex/_generated/api"
-import { MyBoardRouteSkeleton } from "@/components/loading/dashboard-route-skeletons"
 import { useDashboardUser } from "@/components/DashboardUserProvider"
 import { PersonalKanban } from "./PersonalKanban"
 
 export function MyBoardPageClient({
+    preloadedPageData,
 }: {
-    userName?: string
+    preloadedPageData: Preloaded<typeof api.dashboard.getMyBoardPageData>
 }) {
     const user = useDashboardUser()
-    const pageData = useQuery(
-        api.dashboard.getMyBoardPageData,
-        user?.id && user.workspaceId
-            ? {
-                userId: user.id,
-                workspaceId: user.workspaceId,
-            }
-            : "skip"
-    )
+    const pageData = usePreloadedQuery(preloadedPageData)
 
     if (!user?.id || user.id === "pending") {
         return <div className="p-6 text-muted-foreground">Please complete your profile setup.</div>
     }
 
-    if (!user.workspaceId || pageData === undefined) {
-        return <MyBoardRouteSkeleton />
+    if (!user.workspaceId) {
+        return null
     }
 
     const { columns, projects } = pageData
