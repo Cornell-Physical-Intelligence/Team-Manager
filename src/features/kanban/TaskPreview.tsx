@@ -1171,7 +1171,7 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                 <span className="truncate max-w-[120px]">
                                     {task.assignees && task.assignees.length > 0
                                         ? task.assignees.map(a => a?.user?.name || 'Unknown').join(', ')
-                                        : (task.assignee?.name || 'Unassigned')}
+                                        : (task.assignee?.name || 'Unassigned task')}
                                 </span>
                             </span>
                             {showReviewButtons && (

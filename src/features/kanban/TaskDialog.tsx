@@ -498,7 +498,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const hasTitle = title.trim().length > 0
     const hasDescriptionValue = description.trim().length > 0 || !!instructionsFile || !!existingInstructionsFile
     const isDescriptionSatisfied = hasDescriptionValue || isDraggingFile
-    const hasAssignees = assigneeIds.length > 0
     const hasDateRange = startDate !== "" && endDate !== ""
 
     const requiredTagClass = (met: boolean) =>
@@ -526,15 +525,14 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         setEndDate(formatDateOnly(nextEnd))
     }
 
-    // Validation - all fields required
+    // Validation - assignees are optional
     const isValid = useMemo(() => {
         return (
             hasTitle &&
             hasDescriptionValue &&
-            hasAssignees &&
             hasDateRange
         )
-    }, [hasTitle, hasDescriptionValue, hasAssignees, hasDateRange])
+    }, [hasTitle, hasDescriptionValue, hasDateRange])
 
     useEffect(() => {
         if (!open) return
@@ -567,7 +565,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             applySanitizedAssignees(assigneeIds, sanitizedAssigneeIds)
         }
 
-        if (!hasTitle || !hasDescriptionValue || sanitizedAssigneeIds.length === 0 || !hasDateRange) {
+        if (!hasTitle || !hasDescriptionValue || !hasDateRange) {
             return
         }
 
@@ -653,7 +651,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 const result = await createTask({
                     title: title.trim(),
                     description: description.trim(),
-                    assigneeId: sanitizedAssigneeIds.length > 0 ? sanitizedAssigneeIds[0] : "",
+                    assigneeId: sanitizedAssigneeIds[0],
                     assigneeIds: sanitizedAssigneeIds,
                     startDate,
                     endDate,
@@ -836,7 +834,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                         {removedAssigneeNotice.removedCount === 1
                                             ? "A previous assignee was removed from this workspace and has been unassigned."
                                             : `${removedAssigneeNotice.removedCount} previous assignees were removed from this workspace and have been unassigned.`}
-                                        {" "}Add a replacement assignee to swap them.
+                                        {" "}You can leave it open or add a replacement assignee.
                                     </span>
                                 </div>
                             )}
@@ -919,7 +917,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 >
                                                     <span className="truncate">
                                                         {assigneeIds.length === 0
-                                                            ? "Select assignee..."
+                                                            ? "Open task"
                                                             : assigneeIds.length === 1
                                                                 ? sortedUsers.find(u => u.id === assigneeIds[0])?.name || "1 selected"
                                                                 : `${assigneeIds.length} selected`}
@@ -974,9 +972,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             </RemoveScroll>
                                         </PopoverContent>
                                         </Popover>
-                                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasAssignees)}`}>
-                                            Required
-                                        </span>
                                     </div>
                                 </div>
 

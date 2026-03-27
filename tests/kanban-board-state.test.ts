@@ -3,9 +3,14 @@ import test from 'node:test'
 import {
     applyCreatedTask,
     applyUpdatedTask,
+    buildPushChains,
+    getPushChainKey,
     inferLoadedPushes,
     mergeBoardTask,
+    sortPushChainsByPriority,
+    stabilizePushChainOrder,
     type BoardColumnState,
+    type BoardPushState,
     type BoardTaskState,
 } from '@/features/kanban/board-state'
 
@@ -22,6 +27,10 @@ type TestTask = BoardTaskState & {
 type TestColumn = BoardColumnState<TestTask> & {
     name: string
     order: number
+}
+
+type TestPush = BoardPushState & {
+    name: string
 }
 
 const PUSH_A = { id: 'push-a', name: 'Push A', color: '#3b82f6', status: 'Active' }
@@ -75,6 +84,16 @@ function findTask(columns: TestColumn[], taskId: string) {
     return columns.flatMap((column) => column.tasks).find((task) => task.id === taskId) ?? null
 }
 
+function buildPush(overrides: Partial<TestPush> = {}): TestPush {
+    return {
+        id: 'push-1',
+        name: 'Push 1',
+        startDate: '2026-03-20T00:00:00.000Z',
+        dependsOnId: null,
+        ...overrides,
+    }
+}
+
 test('mergeBoardTask preserves rich fields when incoming updates are partial', () => {
     const existingTask = buildTask()
     const incomingTask = buildPartialTask({
@@ -110,6 +129,48 @@ test('mergeBoardTask allows explicit push replacement and explicit backlog remov
 
     assert.equal(switchedPush.push?.id, PUSH_B.id)
     assert.equal(removedPush.push, null)
+})
+
+test('stabilizePushChainOrder preserves the initial my-task ordering after live task-count changes', () => {
+    const pushes = [
+        buildPush({ id: 'push-1', name: 'Push 1', startDate: '2026-03-20T00:00:00.000Z' }),
+        buildPush({ id: 'push-2', name: 'Push 2', startDate: '2026-03-21T00:00:00.000Z' }),
+        buildPush({ id: 'push-3', name: 'Push 3', startDate: '2026-03-22T00:00:00.000Z' }),
+    ]
+    const chains = buildPushChains(pushes)
+    const initialSortedChains = sortPushChainsByPriority(chains, { 'push-2': 2 }, () => false)
+    const initialOrder = initialSortedChains.map((chain) => getPushChainKey(chain))
+    const refreshedSortedChains = sortPushChainsByPriority(chains, { 'push-1': 1 }, () => false)
+
+    const stabilized = stabilizePushChainOrder(initialOrder, chains, refreshedSortedChains)
+
+    assert.deepEqual(
+        stabilized.chains.map((chain) => getPushChainKey(chain)),
+        ['push-2', 'push-1', 'push-3']
+    )
+})
+
+test('stabilizePushChainOrder appends new chains without reshuffling the existing order', () => {
+    const originalPushes = [
+        buildPush({ id: 'push-1', name: 'Push 1', startDate: '2026-03-20T00:00:00.000Z' }),
+        buildPush({ id: 'push-2', name: 'Push 2', startDate: '2026-03-21T00:00:00.000Z' }),
+    ]
+    const originalChains = buildPushChains(originalPushes)
+    const initialOrder = sortPushChainsByPriority(originalChains, { 'push-2': 1 }, () => false)
+        .map((chain) => getPushChainKey(chain))
+
+    const nextPushes = [
+        ...originalPushes,
+        buildPush({ id: 'push-3', name: 'Push 3', startDate: '2026-03-19T00:00:00.000Z' }),
+    ]
+    const nextChains = buildPushChains(nextPushes)
+    const nextSortedChains = sortPushChainsByPriority(nextChains, { 'push-3': 3 }, () => false)
+    const stabilized = stabilizePushChainOrder(initialOrder, nextChains, nextSortedChains)
+
+    assert.deepEqual(
+        stabilized.chains.map((chain) => getPushChainKey(chain)),
+        ['push-2', 'push-1', 'push-3']
+    )
 })
 
 for (const columnId of COLUMN_ORDER) {

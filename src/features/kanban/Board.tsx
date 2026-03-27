@@ -61,7 +61,15 @@ import { TaskPreview } from "./TaskPreview"
 import { useConfetti } from "./Confetti"
 import { PushChainStrip } from "./PushChainStrip"
 import { useDashboardUser } from "@/components/DashboardUserProvider"
-import { applyCreatedTask, applyUpdatedTask, inferLoadedPushes, mergeBoardTask } from "./board-state"
+import {
+    applyCreatedTask,
+    applyUpdatedTask,
+    buildPushChains,
+    inferLoadedPushes,
+    mergeBoardTask,
+    sortPushChainsByPriority,
+    stabilizePushChainOrder,
+} from "./board-state"
 
 type Task = {
     id: string
@@ -158,6 +166,10 @@ export function Board({
         inferLoadedPushes(board.columns, pushes)
     )
     const [pushStatusOverrides, setPushStatusOverrides] = useState<Record<string, 'Active' | 'Completed'>>({})
+    const [pushChainOrderState, setPushChainOrderState] = useState<{ projectId: string; order: string[] }>({
+        projectId,
+        order: [],
+    })
     const { toast } = useToast()
     const dragScrollLockRef = useRef<{
         bodyOverflow: string
@@ -212,6 +224,24 @@ export function Board({
 
         return counts
     }, [columns, userId])
+    const completedPushIds = useMemo(() => {
+        const completedIds = new Set<string>()
+        for (const push of pushes) {
+            if ((pushStatusOverrides[push.id] ?? push.status) === 'Completed') {
+                completedIds.add(push.id)
+            }
+        }
+        return completedIds
+    }, [pushStatusOverrides, pushes])
+    const pushChains = useMemo(() => buildPushChains(pushes), [pushes])
+    const prioritySortedPushChains = useMemo(
+        () => sortPushChainsByPriority(pushChains, myActivePushTaskCounts, (pushId) => completedPushIds.has(pushId)),
+        [completedPushIds, myActivePushTaskCounts, pushChains]
+    )
+    const orderedPushChains = useMemo(() => {
+        const previousOrder = pushChainOrderState.projectId === projectId ? pushChainOrderState.order : null
+        return stabilizePushChainOrder(previousOrder, pushChains, prioritySortedPushChains).chains
+    }, [prioritySortedPushChains, projectId, pushChainOrderState, pushChains])
 
     // Handle initial new task creation from URL
     useEffect(() => {
@@ -253,6 +283,26 @@ export function Board({
     useEffect(() => {
         setColumns(board.columns)
     }, [board.columns])
+
+    useEffect(() => {
+        setPushChainOrderState((current) => {
+            const previousOrder = current.projectId === projectId ? current.order : null
+            const nextOrder = stabilizePushChainOrder(previousOrder, pushChains, prioritySortedPushChains).order
+            const isSameProject = current.projectId === projectId
+            const isSameOrder = isSameProject &&
+                current.order.length === nextOrder.length &&
+                current.order.every((value, index) => value === nextOrder[index])
+
+            if (isSameOrder) {
+                return current
+            }
+
+            return {
+                projectId,
+                order: nextOrder,
+            }
+        })
+    }, [prioritySortedPushChains, projectId, pushChains])
 
     useEffect(() => {
         if (typeof document === 'undefined') return
@@ -994,71 +1044,7 @@ export function Board({
                         </div>
                     )}
 
-                    {(() => {
-                        // Build chains from pushes
-                        const pushMap = new Map(pushes.map(p => [p.id, p]))
-                        const processed = new Set<string>()
-                        const chains: PushType[][] = []
-
-                        // Find root pushes (no parent or parent doesn't exist)
-                        const roots = pushes
-                            .filter(p => !p.dependsOnId || !pushMap.has(p.dependsOnId))
-                            .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-
-                        // Build chains by following dependency links
-                        for (const root of roots) {
-                            if (processed.has(root.id)) continue
-
-                            const chain: PushType[] = [root]
-                            processed.add(root.id)
-
-                            let current = root
-                            while (true) {
-                                const next = pushes.find(p => p.dependsOnId === current.id && !processed.has(p.id))
-                                if (!next) break
-                                chain.push(next)
-                                processed.add(next.id)
-                                current = next
-                            }
-
-                            chains.push(chain)
-                        }
-
-                        // Catch any remaining pushes
-                        for (const push of pushes) {
-                            if (!processed.has(push.id)) {
-                                chains.push([push])
-                                processed.add(push.id)
-                            }
-                        }
-
-                        return chains.sort((a, b) => {
-                            const aMyTaskCount = a.reduce((sum, push) => sum + (myActivePushTaskCounts[push.id] ?? 0), 0)
-                            const bMyTaskCount = b.reduce((sum, push) => sum + (myActivePushTaskCounts[push.id] ?? 0), 0)
-                            const aHasMyTasks = aMyTaskCount > 0
-                            const bHasMyTasks = bMyTaskCount > 0
-
-                            if (aHasMyTasks !== bHasMyTasks) {
-                                return aHasMyTasks ? -1 : 1
-                            }
-
-                            if (aMyTaskCount !== bMyTaskCount) {
-                                return bMyTaskCount - aMyTaskCount
-                            }
-
-                            const aComplete = a.every((push) => isPushMarkedComplete(push.id))
-                            const bComplete = b.every((push) => isPushMarkedComplete(push.id))
-
-                            if (aComplete !== bComplete) {
-                                return aComplete ? 1 : -1
-                            }
-
-                            const aPrimaryPush = a.find((push) => !isPushMarkedComplete(push.id)) ?? a[0]
-                            const bPrimaryPush = b.find((push) => !isPushMarkedComplete(push.id)) ?? b[0]
-
-                            return new Date(aPrimaryPush.startDate).getTime() - new Date(bPrimaryPush.startDate).getTime()
-                        })
-                    })().map((chain) => {
+                    {orderedPushChains.map((chain) => {
                         // For chains with 2+ pushes, render PushChainStrip
                         if (chain.length >= 2) {
                             const firstPush = chain[0]

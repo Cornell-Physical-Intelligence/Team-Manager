@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, ArrowRight, Clock, CalendarDays, CheckCircle2, Lock } from "lucide-react"
+import { ArrowLeft, ArrowRight, Clock, CalendarDays, CheckCircle2, Plus } from "lucide-react"
 import { cn, getInitials } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useMemo, useRef } from "react"
@@ -265,9 +265,14 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                             </Avatar>
                         )}
                         {assigneeUsers.length === 0 && (
-                            <Avatar className="h-6 w-6 shrink-0 bg-background text-[10px] ring-2 ring-background" title="Unassigned">
-                                <AvatarFallback className="bg-muted text-muted-foreground">—</AvatarFallback>
-                            </Avatar>
+                            <div className="flex items-center gap-1.5" title="Unassigned task">
+                                <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+                                    Unassigned task
+                                </span>
+                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
+                                    <Plus className="h-3 w-3" />
+                                </span>
+                            </div>
                         )}
                     </div>
                 </div>
