@@ -10,10 +10,20 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { acceptReviewTask, denyReviewTask } from "@/app/actions/kanban"
+import { acceptReviewTask, denyReviewTask, deleteTask } from "@/app/actions/kanban"
 import { createTaskComment, deleteTaskComment } from "@/app/actions/task-comments"
 import { deleteTaskAttachment, uploadTaskAttachment } from "@/app/actions/task-attachments"
 import {
@@ -99,6 +109,7 @@ type TaskPreviewProps = {
     onEdit: () => void
     projectId: string
     onTaskUpdated?: (task: Task) => void
+    onTaskDeleted?: (taskId: string) => void
 }
 
 const formatTimeAgo = (date: string | number) => {
@@ -285,7 +296,7 @@ const buildCommentTree = (comments: Comment[]): CommentWithReplies[] => {
     return rootComments
 }
 
-export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTaskUpdated }: TaskPreviewProps) {
+export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTaskUpdated, onTaskDeleted }: TaskPreviewProps) {
     const dashboardUser = useDashboardUser()
     const workspaceId = dashboardUser?.workspaceId ?? null
     const [newComment, setNewComment] = useState("")
@@ -302,6 +313,8 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const [uploadingFileName, setUploadingFileName] = useState<string | null>(null)
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
     const deleteTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map())
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [isDeletingTask, setIsDeletingTask] = useState(false)
     const [folderTree, setFolderTree] = useState<DriveFolderNode[]>([])
     const [uploadsPath, setUploadsPath] = useState<string>("")
     const liveComments = useQuery(
@@ -647,6 +660,25 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
         }
     }
 
+    async function handleConfirmDeleteTask() {
+        setIsDeletingTask(true)
+        try {
+            const result = await deleteTask(task.id, projectId)
+            if (result?.error) {
+                setCommentError(result.error)
+            } else {
+                setShowDeleteConfirm(false)
+                onOpenChange(false)
+                onTaskDeleted?.(task.id)
+            }
+        } catch (err) {
+            console.error("Delete task error:", err)
+            setCommentError("Failed to delete task")
+        } finally {
+            setIsDeletingTask(false)
+        }
+    }
+
     // Force download helper (works with cross-origin URLs like Vercel Blob)
     const forceDownload = async (url: string, filename: string) => {
         try {
@@ -751,6 +783,7 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     }
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="w-[95vw] md:max-w-2xl h-[90vh] flex flex-col p-0 gap-0" showCloseButton={false}>
                 <div
@@ -798,6 +831,14 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                             </div>
                             <Button variant="ghost" size="icon" onClick={onEdit} className="shrink-0 h-6 w-6 border-0">
                                 <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="shrink-0 h-6 w-6 border-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            >
+                                <Trash2 className="h-3 w-3" />
                             </Button>
                         </div>
                     </DialogHeader>
@@ -1314,5 +1355,27 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
             )}
 
         </Dialog>
+
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this task? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeletingTask}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDeleteTask}
+                            disabled={isDeletingTask}
+                            className="bg-destructive hover:bg-destructive/90 text-white"
+                        >
+                            {isDeletingTask ? 'Deleting...' : 'Delete'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     )
 }

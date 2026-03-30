@@ -1316,6 +1316,10 @@ export function Board({
                         setPreviewingTask(null)
                     }}
                     onTaskUpdated={handleTaskUpdated}
+                    onTaskDeleted={(taskId) => {
+                        setPreviewingTask(null)
+                        handleTaskDeleted(taskId)
+                    }}
                 />
             )}
 
