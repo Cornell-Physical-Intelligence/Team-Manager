@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { sendDiscordNotification } from '@/lib/discord'
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
@@ -200,7 +199,6 @@ export async function createTask(input: CreateTaskInput) {
             }
         }
 
-        revalidatePath(`/dashboard/projects/${projectId}`)
         const hydratedTask = await getHydratedTask(taskResult.task.id)
         return {
             success: true,
@@ -269,9 +267,6 @@ export async function updateTaskStatus(taskId: string, columnId: string, project
             leadDiscordIds: string[]
             push: { id: string; status: string } | null
         }
-
-        revalidatePath(`/dashboard/projects/${r.projectId}`)
-        revalidatePath('/dashboard/my-board')
 
         // Discord: ping when task moved into Review
         if (r.targetColumnName === 'Review' && r.workspaceDiscordChannelId && r.leadDiscordIds && r.leadDiscordIds.length > 0) {
@@ -424,9 +419,6 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
-        if (r.projectId) {
-            revalidatePath(`/dashboard/projects/${r.projectId}`)
-        }
         const hydratedTask = await getHydratedTask(taskId)
 
         return { success: true, task: hydratedTask ?? r.task }
@@ -465,10 +457,6 @@ export async function deleteTask(taskId: string, projectId: string) {
             return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to delete task' }
         }
 
-        const { projectId: taskProjectId } = result as { success: true; projectId: string }
-        if (taskProjectId) {
-            revalidatePath(`/dashboard/projects/${taskProjectId}`)
-        }
         return { success: true }
     } catch (e) {
         console.error("Delete task error:", e)
@@ -483,20 +471,12 @@ export async function deleteTask(taskId: string, projectId: string) {
 
 export async function acceptReviewTask(taskId: string, columnId: string, projectId: string) {
     // Accept means move to Done
-    const result = await updateTaskStatus(taskId, columnId, projectId)
-    if (result.success) {
-        revalidatePath('/dashboard')
-    }
-    return result
+    return updateTaskStatus(taskId, columnId, projectId)
 }
 
 export async function denyReviewTask(taskId: string, columnId: string, projectId: string) {
     // Deny means move back to In Progress
-    const result = await updateTaskStatus(taskId, columnId, projectId)
-    if (result.success) {
-        revalidatePath('/dashboard')
-    }
-    return result
+    return updateTaskStatus(taskId, columnId, projectId)
 }
 
 // ─────────────────────────────────────────────────────────────

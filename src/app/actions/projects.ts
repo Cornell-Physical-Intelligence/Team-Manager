@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth'
 import { getWorkspaceUserIds } from '@/lib/access'
 import {
@@ -62,7 +61,6 @@ export async function createProject(formData: FormData) {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard/projects')
         return { success: true, project: serializeProjectDetail(result.project) }
     } catch (error) {
         console.error('[createProject] Error:', error)
@@ -119,8 +117,6 @@ export async function updateProjectLead(projectId: string, leadInput: string | s
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard/projects')
-        revalidatePath(`/dashboard/projects/${projectId}`)
         return { success: true }
     } catch (error) {
         console.error('[updateProjectLead] Error:', error)
@@ -220,9 +216,6 @@ export async function updateProjectDetails(input: {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard')
-        revalidatePath('/dashboard/projects')
-        revalidatePath(`/dashboard/projects/${input.projectId}`)
         return { success: true, project: serializeProjectDetail(result.project) }
     } catch (error) {
         console.error('[updateProjectDetails] Error:', error)
@@ -266,8 +259,6 @@ export async function deleteProject(projectId: string, confirmName?: string) {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard')
-        revalidatePath('/dashboard/projects')
         return { success: true }
     } catch (error) {
         console.error('[deleteProject] Error:', error)

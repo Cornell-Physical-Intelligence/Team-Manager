@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { type Preloaded, usePreloadedQuery } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,17 +26,22 @@ export function MembersPageClient({
     currentUser,
     preloadedPageData,
 }: MembersPageClientProps) {
-    const { users, workspaceTasks, activityLogs, allProjects } = usePreloadedQuery(preloadedPageData)
+    const { users: liveUsers, workspaceTasks, activityLogs, allProjects } = usePreloadedQuery(preloadedPageData)
     const canChangeRoles = currentUser.role === "Admin" || currentUser.role === "Team Lead"
+    const [visibleUsers, setVisibleUsers] = useState<typeof liveUsers>(liveUsers)
 
-    const userIds = users.map((user) => user.id)
+    useEffect(() => {
+        setVisibleUsers(liveUsers)
+    }, [liveUsers])
+
+    const userIds = visibleUsers.map((user) => user.id)
     const tasksByUser = buildTasksByUser(userIds, workspaceTasks)
     const activityByUser = userIds.reduce((acc, id) => {
         acc[id] = activityLogs.filter((log) => log.changedBy === id).slice(0, 10)
         return acc
     }, {} as Record<string, typeof activityLogs>)
 
-    const userStats = users.map((user) => {
+    const userStats = visibleUsers.map((user) => {
         const uniqueTasks = tasksByUser.get(user.id) || []
         const userLogs = activityByUser[user.id] || []
         const stats = calculateMemberCardStats(uniqueTasks, userLogs)
@@ -55,10 +61,52 @@ export function MembersPageClient({
         }
     })
 
-    const sortedUsers = userStats.sort((left, right) => {
+    const sortedUsers = [...userStats].sort((left, right) => {
         if (right.completionRate !== left.completionRate) return right.completionRate - left.completionRate
         return right.totalTasks - left.totalTasks
     })
+
+    const handleRoleUpdated = (memberId: string, nextRole: string) => {
+        setVisibleUsers((prev) =>
+            prev.map((user) =>
+                user.id === memberId
+                    ? { ...user, role: nextRole }
+                    : user
+            )
+        )
+    }
+
+    const handleProjectsUpdated = (memberId: string, nextProjectIds: string[]) => {
+        const projectsById = new Map(allProjects.map((project) => [
+            project.id,
+            { id: project.id, name: project.name, color: project.color ?? null },
+        ]))
+        setVisibleUsers((prev) =>
+            prev.map((user) =>
+                user.id === memberId
+                    ? {
+                        ...user,
+                        projectMemberships: nextProjectIds.flatMap((projectId) => {
+                            const project = projectsById.get(projectId)
+                            return project
+                                ? [{
+                                    project: {
+                                        id: project.id,
+                                        name: project.name,
+                                        color: project.color,
+                                    },
+                                }]
+                                : []
+                        }),
+                    }
+                    : user
+            )
+        )
+    }
+
+    const handleMemberRemoved = (memberId: string) => {
+        setVisibleUsers((prev) => prev.filter((user) => user.id !== memberId))
+    }
 
     return (
         <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-4">
@@ -66,7 +114,7 @@ export function MembersPageClient({
                 <div className="flex items-center gap-3">
                     <h1 className="text-xl md:text-2xl font-semibold">Team Members</h1>
                     <Badge variant="secondary" className="text-xs">
-                        {users.length} members
+                        {visibleUsers.length} members
                     </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -154,12 +202,14 @@ export function MembersPageClient({
                                             currentRole={user.role}
                                             currentUserRole={currentUser.role}
                                             disabled={!canChangeRoles}
+                                            onRoleUpdated={(nextRole) => handleRoleUpdated(user.id, nextRole)}
                                         />
                                         <ProjectSelect
                                             userId={user.id}
                                             currentProjectIds={assignedProjectIds}
                                             allProjects={allProjects}
                                             disabled={!canChangeRoles}
+                                            onProjectsUpdated={(nextProjectIds) => handleProjectsUpdated(user.id, nextProjectIds)}
                                         />
                                         {canChangeRoles && (
                                             <MemberActions
@@ -168,6 +218,7 @@ export function MembersPageClient({
                                                 canRemove={canChangeRoles}
                                                 currentUserRole={currentUser.role}
                                                 targetRole={user.role}
+                                                onRemoved={handleMemberRemoved}
                                             />
                                         )}
                                     </div>

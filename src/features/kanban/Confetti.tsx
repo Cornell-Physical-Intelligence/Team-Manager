@@ -72,7 +72,7 @@ export function useConfetti() {
             width: 100vw;
             height: 100vh;
             pointer-events: none;
-            z-index: 1;
+            z-index: 40;
         `
         canvas.width = window.innerWidth
         canvas.height = window.innerHeight
@@ -94,6 +94,7 @@ export function useConfetti() {
             }
             if (animationFrame.current) {
                 cancelAnimationFrame(animationFrame.current)
+                animationFrame.current = null
             }
         }
     }, [])
@@ -132,6 +133,8 @@ export function useConfetti() {
 
         if (particles.current.length > 0) {
             animationFrame.current = requestAnimationFrame(animateFrame)
+        } else {
+            animationFrame.current = null
         }
     }, [])
 

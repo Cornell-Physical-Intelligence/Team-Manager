@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from "next/cache"
 import { getCurrentUser } from '@/lib/auth'
 import { isUserInWorkspace } from '@/lib/access'
 import { api, fetchMutation, fetchQuery } from "@/lib/convex/server"
@@ -72,8 +71,6 @@ export async function updateUserRole(userId: string, newRole: string) {
         if ('error' in result) {
             return { error: 'User not found' }
         }
-        revalidatePath('/dashboard/members')
-        revalidatePath('/dashboard/projects')
         return { success: true }
     } catch (error) {
         console.error("Failed to update role", error)
@@ -122,8 +119,6 @@ export async function updateUserProjects(userId: string, projectIds: string[]) {
             ? result.projectIds
             : uniqueProjectIds
 
-        revalidatePath('/dashboard/members')
-        revalidatePath('/dashboard')
         return { success: true, projectIds: savedProjectIds }
     } catch (error) {
         console.error("Failed to update division assignments", error)
@@ -170,8 +165,6 @@ export async function updateWorkspaceMemberName(userId: string, name: string) {
             return { error: 'User not found' }
         }
 
-        revalidatePath('/dashboard/members')
-        revalidatePath('/dashboard/settings')
         return { success: true }
     } catch (error) {
         console.error("Failed to update member name", error)
@@ -232,9 +225,6 @@ export async function removeUserFromWorkspace(userId: string) {
             userId,
         })
 
-        revalidatePath('/dashboard/members')
-        revalidatePath('/dashboard/projects')
-        revalidatePath('/dashboard')
         return { success: true }
     } catch (error) {
         console.error("Failed to remove user from workspace", error)

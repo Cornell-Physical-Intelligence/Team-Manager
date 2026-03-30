@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth'
 import { getTaskContext } from '@/lib/access'
 import { api, createLegacyId, fetchMutation, fetchQuery } from '@/lib/convex/server'
@@ -71,10 +70,6 @@ export async function createChecklistItem(taskId: string, content: string, order
         })
         await touchTaskInConvex(taskId, now)
 
-        if (taskContext.projectId) {
-            revalidatePath(`/dashboard/projects/${taskContext.projectId}`)
-        }
-
         return { success: true, item }
     } catch (error) {
         console.error('Failed to create checklist item:', error)
@@ -141,10 +136,6 @@ export async function updateChecklistItem(taskId: string, input: {
         }
         await touchTaskInConvex(taskId, now)
 
-        if (taskContext.projectId) {
-            revalidatePath(`/dashboard/projects/${taskContext.projectId}`)
-        }
-
         return { success: true, item: updatedItem }
     } catch (error) {
         console.error('Failed to update checklist item:', error)
@@ -187,10 +178,6 @@ export async function deleteChecklistItem(taskId: string, itemId: string) {
             details: `Removed checklist item: "${item.content}"`,
         })
         await touchTaskInConvex(taskId, Date.now())
-
-        if (taskContext.projectId) {
-            revalidatePath(`/dashboard/projects/${taskContext.projectId}`)
-        }
 
         return { success: true }
     } catch (error) {

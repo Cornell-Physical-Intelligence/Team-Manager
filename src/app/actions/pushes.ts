@@ -1,6 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth'
 import { getProjectContext, getTaskContext } from '@/lib/access'
 import {
@@ -67,9 +66,6 @@ export async function createPush(formData: FormData) {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard')
-        revalidatePath(`/dashboard/projects/${projectId}`)
-
         return { success: true, push: result.push }
     } catch (error) {
         console.error('[createPush] Error:', error)
@@ -127,9 +123,6 @@ export async function updatePush(input: {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard')
-        revalidatePath('/dashboard/projects', 'layout')
-
         return { success: true }
     } catch (error) {
         console.error('Failed to update push:', error)
@@ -162,9 +155,6 @@ export async function deletePush(pushId: string, projectId: string) {
             return { error: result.error }
         }
 
-        revalidatePath('/dashboard')
-        revalidatePath(`/dashboard/projects/${projectId}`)
-
         return { success: true }
     } catch (error) {
         console.error('[deletePush] Error:', error)
@@ -196,10 +186,6 @@ export async function assignTaskToPush(taskId: string, pushId: string | null) {
 
         if ('error' in result) {
             return { error: result.error }
-        }
-
-        if (taskContext.projectId) {
-            revalidatePath(`/dashboard/projects/${taskContext.projectId}`)
         }
 
         return { success: true }

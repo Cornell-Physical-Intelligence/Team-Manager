@@ -281,10 +281,6 @@ export function Board({
     }, [createOverdueNotifications, userId, workspaceId])
 
     useEffect(() => {
-        setColumns(board.columns)
-    }, [board.columns])
-
-    useEffect(() => {
         setPushChainOrderState((current) => {
             const previousOrder = current.projectId === projectId ? current.order : null
             const nextOrder = stabilizePushChainOrder(previousOrder, pushChains, prioritySortedPushChains).order
@@ -492,6 +488,12 @@ export function Board({
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
     )
 
+    const queueConfetti = useCallback((type: 'review' | 'done', position?: { x: number, y: number }) => {
+        window.setTimeout(() => {
+            triggerConfetti(type, position, projectColor)
+        }, 50)
+    }, [projectColor, triggerConfetti])
+
     // Helpers
     const findTaskColumn = (taskId: string) => columns.find(col => col.tasks.some(t => t.id === taskId))
     const canDragFrom = (colName: string) => isAdmin || (colName !== 'Review' && colName !== 'Done')
@@ -633,9 +635,7 @@ export function Board({
         // Trigger confetti on drop into Done (if requirements met)
         // Small delay so it appears after DragOverlay is gone
         if (endColName === 'Done' && startColName !== 'Done' && meetsAttachmentRequirement && dropCenter) {
-            setTimeout(() => {
-                triggerConfetti('done', dropCenter, projectColor)
-            }, 50)
+            queueConfetti('done', dropCenter)
         }
 
         // Handle special dialogs
@@ -751,15 +751,16 @@ export function Board({
 
     const handleReviewConfirm = async () => {
         if (!reviewDialog) return
+        const pendingReviewMove = reviewDialog
 
         // 1. Optimistic Update
-        const task = columns.flatMap(c => c.tasks).find(t => t.id === reviewDialog.taskId)
+        const task = columns.flatMap(c => c.tasks).find(t => t.id === pendingReviewMove.taskId)
         if (task) {
             let newPush = task.push
-            if (reviewDialog.pushId === null) {
+            if (pendingReviewMove.pushId === null) {
                 newPush = null
-            } else if (reviewDialog.pushId !== undefined && reviewDialog.pushId !== task.push?.id) {
-                const pushData = pushes.find(p => p.id === reviewDialog.pushId)
+            } else if (pendingReviewMove.pushId !== undefined && pendingReviewMove.pushId !== task.push?.id) {
+                const pushData = pushes.find(p => p.id === pendingReviewMove.pushId)
                 if (pushData) {
                     newPush = {
                         id: pushData.id,
@@ -772,15 +773,15 @@ export function Board({
 
             const updatedTask = {
                 ...task,
-                columnId: reviewDialog.toColumnId,
+                columnId: pendingReviewMove.toColumnId,
                 push: newPush
             }
 
             const optimColumns = columns.map(col => {
-                if (col.id === reviewDialog.fromColumnId) {
+                if (col.id === pendingReviewMove.fromColumnId) {
                     return { ...col, tasks: col.tasks.filter(t => t.id !== task.id) }
                 }
-                if (col.id === reviewDialog.toColumnId) {
+                if (col.id === pendingReviewMove.toColumnId) {
                     return { ...col, tasks: [...col.tasks, updatedTask] }
                 }
                 return col
@@ -789,23 +790,26 @@ export function Board({
         }
 
         // 2. Server Persistence
-        if (reviewDialog.pushId !== undefined) {
-            await assignTaskToPush(reviewDialog.taskId, reviewDialog.pushId)
+        if (pendingReviewMove.pushId !== undefined) {
+            await assignTaskToPush(pendingReviewMove.taskId, pendingReviewMove.pushId)
         }
 
-        const result = await updateTaskStatus(reviewDialog.taskId, reviewDialog.toColumnId, projectId)
+        const result = await updateTaskStatus(pendingReviewMove.taskId, pendingReviewMove.toColumnId, projectId)
 
         if (result.error === 'ATTACHMENT_REQUIRED') {
             const taskTitle = task?.title || 'This task'
             setAttachmentWarningDialog({ taskTitle })
-            setFlashingColumnId(reviewDialog.toColumnId)
+            setFlashingColumnId(pendingReviewMove.toColumnId)
             setTimeout(() => setFlashingColumnId(null), 500)
             setColumns(board.columns)
         } else if (result.error) {
             toast({ title: "Error", description: result.error, variant: "destructive" })
             setColumns(board.columns)
         } else {
-            triggerConfetti('review', reviewDialog.dropPosition, projectColor)
+            setReviewDialog(null)
+            setIsDragging(false)
+            queueConfetti('review', pendingReviewMove.dropPosition)
+            return
         }
         setReviewDialog(null)
         setIsDragging(false)
