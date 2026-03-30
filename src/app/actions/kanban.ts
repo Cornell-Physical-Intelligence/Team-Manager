@@ -160,7 +160,7 @@ export async function createTask(input: CreateTaskInput) {
             description: description?.trim() || undefined,
             assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
             assigneeIds: input.assigneeIds,
-            requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : true,
+            requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
             enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
             progress: input.progress || 0,
             pushId: pushId,
@@ -213,7 +213,7 @@ export async function createTask(input: CreateTaskInput) {
                 description: input.description?.trim() || null,
                 startDate: startDate ?? null,
                 endDate: endDate ?? null,
-                requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : true,
+                requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
                 enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
             },
         }

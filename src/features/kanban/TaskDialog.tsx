@@ -131,7 +131,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [assigneeIds, setAssigneeIds] = useState<string[]>([])
     const [startDate, setStartDate] = useState<string>(formatDate(task?.startDate) || today)
     const [endDate, setEndDate] = useState<string>(formatDate(task?.endDate) || "")
-    const [requireAttachment, setRequireAttachment] = useState<boolean>(task?.requireAttachment !== undefined ? task.requireAttachment : true)
+    const [requireAttachment, setRequireAttachment] = useState<boolean>(task?.requireAttachment !== undefined ? task.requireAttachment : false)
     const [enableProgress, setEnableProgress] = useState<boolean>(task?.enableProgress !== undefined ? task.enableProgress : false)
     const [instructionsFile, setInstructionsFile] = useState<File | null>(null)
     const [existingInstructionsFile, setExistingInstructionsFile] = useState<{ url: string; name: string } | null>(null)
@@ -225,7 +225,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 }
                 setStartDate(formatDate(task.startDate) || today)
                 setEndDate(formatDate(task.endDate) || "")
-                setRequireAttachment(task.requireAttachment !== undefined ? task.requireAttachment : true)
+                setRequireAttachment(task.requireAttachment !== undefined ? task.requireAttachment : false)
                 setEnableProgress(task.enableProgress !== undefined ? task.enableProgress : false)
                 if (task.instructionsFileUrl && task.instructionsFileName) {
                     setExistingInstructionsFile({ url: task.instructionsFileUrl, name: task.instructionsFileName })
@@ -244,7 +244,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setRemovedAssigneeNotice(null)
                 setStartDate("")
                 setEndDate("")
-                setRequireAttachment(true)
+                setRequireAttachment(false)
                 setEnableProgress(false)
                 setEnableChecklist(false)
                 setChecklistItems([])
