@@ -10,16 +10,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -829,13 +819,22 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                     )}
                                 </div>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={onEdit} className="shrink-0 h-6 w-6 border-0">
+                            <Button variant="ghost" size="icon" onClick={onEdit} className="shrink-0 h-6 w-6 border-0 text-muted-foreground hover:text-foreground">
                                 <Pencil className="h-3 w-3" />
                             </Button>
+                            {showDeleteConfirm && (
+                                <button
+                                    onClick={handleConfirmDeleteTask}
+                                    disabled={isDeletingTask}
+                                    className="shrink-0 h-6 px-2 rounded text-[10px] font-medium text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors border-0 cursor-pointer"
+                                >
+                                    {isDeletingTask ? '...' : 'Confirm?'}
+                                </button>
+                            )}
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setShowDeleteConfirm(true)}
+                                onClick={() => setShowDeleteConfirm(prev => !prev)}
                                 className="shrink-0 h-6 w-6 border-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             >
                                 <Trash2 className="h-3 w-3" />
@@ -1356,26 +1355,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
 
         </Dialog>
 
-            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete this task? This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeletingTask}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleConfirmDeleteTask}
-                            disabled={isDeletingTask}
-                            className="bg-destructive hover:bg-destructive/90 text-white"
-                        >
-                            {isDeletingTask ? 'Deleting...' : 'Delete'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </>
     )
 }

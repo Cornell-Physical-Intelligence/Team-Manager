@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, ArrowRight, Clock, CalendarDays, CheckCircle2, Plus } from "lucide-react"
+import { ArrowLeft, ArrowRight, Clock, CalendarDays, Plus } from "lucide-react"
 import { cn, getInitials } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -70,7 +70,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
         transition,
         opacity: isDragging ? 0 : 1,
         position: 'relative' as const,
-        zIndex: 10, // Ensure card renders above confetti (z-index: 1)
+        zIndex: 10,
         touchAction: isDragDisabled ? 'auto' : 'none',
         WebkitUserSelect: 'none' as const,
         userSelect: 'none' as const,
@@ -156,11 +156,10 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     isDragDisabled ? 'cursor-default' : 'cursor-grab'
                 )}
             >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
                     <h4 className="text-xs font-medium text-emerald-950/80 dark:text-emerald-100/80 leading-snug line-clamp-2">
                         {task.title}
                     </h4>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                 </div>
 
                 {completedDateStr && (

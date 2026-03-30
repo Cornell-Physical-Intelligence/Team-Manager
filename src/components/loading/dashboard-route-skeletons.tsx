@@ -111,47 +111,41 @@ export function MyBoardRouteSkeleton() {
 export function ProjectRouteSkeleton() {
     return (
         <div className="flex flex-col h-full">
-            <div className="shrink-0 bg-background">
+            <div className="shrink-0 border-b bg-background">
                 <div className="flex items-center justify-between gap-2 p-3">
                     <div className="flex items-center gap-3">
                         <div className="h-6 w-32 bg-muted rounded animate-pulse" />
                         <div className="h-7 w-20 bg-muted/50 rounded animate-pulse delay-75" />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-8 w-20 bg-muted rounded-lg animate-pulse" />
-                    </div>
+                    <div className="h-8 w-16 bg-muted rounded-lg animate-pulse" />
                 </div>
             </div>
 
-            <div className="flex-1 p-3 space-y-2 overflow-auto">
-                {[0, 1, 2].map((i) => (
-                    <div
-                        key={i}
-                        className="rounded-lg overflow-hidden bg-muted/30 animate-pulse"
-                        style={{ animationDelay: `${i * 100}ms` }}
-                    >
-                        <div className="flex items-center justify-between p-3">
-                            <div className="flex items-center gap-3">
-                                <div className="w-3 h-3 bg-muted rounded" />
-                                <div className="h-4 w-24 bg-muted rounded" />
-                                <div className="h-3 w-16 bg-muted rounded" />
+            <div className="flex-1 overflow-x-auto p-3">
+                <div className="flex gap-3 h-full">
+                    {[0, 1, 2, 3].map((colIndex) => (
+                        <div
+                            key={colIndex}
+                            className="w-[280px] flex flex-col bg-muted/30 rounded-lg shrink-0"
+                        >
+                            <div className="p-3 flex items-center justify-between">
+                                <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                                <div className="h-4 w-4 bg-muted rounded-full animate-pulse" />
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="h-3 w-12 bg-muted rounded" />
-                                <div className="h-5 w-5 bg-muted rounded" />
+                            <div className="flex-1 p-2 space-y-2">
+                                {Array.from({ length: Math.max(1, 3 - colIndex % 2) }).map((_, cardIndex) => (
+                                    <div
+                                        key={cardIndex}
+                                        className="bg-muted/60 rounded-lg p-3 animate-pulse"
+                                        style={{ animationDelay: `${(colIndex * 3 + cardIndex) * 40}ms` }}
+                                    >
+                                        <div className="h-3.5 w-3/4 bg-muted rounded" />
+                                        <div className="mt-2 h-3 w-1/2 bg-muted/80 rounded" />
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    </div>
-                ))}
-
-                <div className="rounded-lg overflow-hidden bg-muted/20 animate-pulse delay-300">
-                    <div className="flex items-center justify-between p-3">
-                        <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 bg-muted rounded" />
-                            <div className="h-4 w-28 bg-muted rounded" />
-                        </div>
-                        <div className="h-5 w-5 bg-muted rounded" />
-                    </div>
+                    ))}
                 </div>
             </div>
         </div>

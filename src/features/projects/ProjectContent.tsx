@@ -97,7 +97,7 @@ function ProjectBoardSkeleton() {
                 {[0, 1, 2, 3].map((columnIndex) => (
                     <section
                         key={columnIndex}
-                        className="flex w-[280px] shrink-0 flex-col rounded-lg border bg-background/50"
+                        className="flex w-[280px] shrink-0 flex-col rounded-lg bg-muted/30"
                     >
                         <div className="flex items-center justify-between p-3">
                             <div className="h-4 w-24 rounded bg-muted animate-pulse" />
@@ -107,7 +107,7 @@ function ProjectBoardSkeleton() {
                             {Array.from({ length: 3 - (columnIndex % 2) }).map((_, cardIndex) => (
                                 <div
                                     key={cardIndex}
-                                    className="rounded-lg border bg-background/60 p-3 animate-pulse"
+                                    className="rounded-lg bg-muted/60 p-3 animate-pulse"
                                     style={{ animationDelay: `${(columnIndex * 3 + cardIndex) * 35}ms` }}
                                 >
                                     <div className="h-4 w-3/4 rounded bg-muted" />
