@@ -93,6 +93,14 @@ type Task = {
     comments?: { createdAt: Date | string }[]
     attachments?: { id: string; createdAt: Date | string }[]
     push?: { id: string; name: string; color: string; status: string } | null
+    series?: {
+        id: string
+        position: number
+        totalCount: number
+        isBlocked: boolean
+        previousTaskId: string | null
+        previousTaskTitle: string | null
+    } | null
 }
 
 type PushType = {
@@ -515,7 +523,7 @@ export function Board({
                 if (originalColumnId) setColumns(board.columns)
                 return false
             } else if (result.error) {
-                toast({ title: "Error", description: result.error, variant: "destructive" })
+                toast({ title: "Error", description: result.message || result.error, variant: "destructive" })
                 if (originalColumnId) setColumns(board.columns)
                 return false
             }
@@ -802,7 +810,7 @@ export function Board({
             setTimeout(() => setFlashingColumnId(null), 500)
             setColumns(board.columns)
         } else if (result.error) {
-            toast({ title: "Error", description: result.error, variant: "destructive" })
+            toast({ title: "Error", description: result.message || result.error, variant: "destructive" })
             setColumns(board.columns)
         } else {
             triggerConfetti('review', reviewDialog.dropPosition, projectColor)
@@ -1009,8 +1017,8 @@ export function Board({
         return result
     }
 
-    const handleTaskCreated = (newTask: Task) => {
-        setColumns(prev => applyCreatedTask(prev, newTask))
+    const handleTaskCreated = (newTasks: Task[]) => {
+        setColumns((prev) => newTasks.reduce((nextColumns, newTask) => applyCreatedTask(nextColumns, newTask), prev))
     }
 
     const handleTaskUpdated = (updatedTask: Task) => {

@@ -66,6 +66,12 @@ type CreateTaskInput = {
     pushId?: string
     attachmentFolderId?: string | null
     attachmentFolderName?: string | null
+    seriesTasks?: Array<{
+        title: string
+        description?: string
+        startDate?: string | null
+        endDate?: string | null
+    }>
 }
 
 async function getWorkspaceDriveConfig(workspaceId: string) {
@@ -149,6 +155,19 @@ export async function createTask(input: CreateTaskInput) {
 
         const startDateMs = startDate ? parseDateInput(startDate, "startOfDay").getTime() : null
         const endDateMs = endDate ? parseDateInput(endDate, "endOfDay").getTime() : null
+        const seriesTasks = (input.seriesTasks ?? []).map((seriesTask, index) => {
+            const nextTitle = seriesTask.title.trim()
+            if (!nextTitle) {
+                throw new Error(`Series task ${index + 2} title is required`)
+            }
+
+            return {
+                title: nextTitle,
+                description: seriesTask.description?.trim() || undefined,
+                startDate: seriesTask.startDate ? parseDateInput(seriesTask.startDate, "startOfDay").getTime() : null,
+                endDate: seriesTask.endDate ? parseDateInput(seriesTask.endDate, "endOfDay").getTime() : null,
+            }
+        })
 
         const result = await createTaskInConvex({
             title: title.trim(),
@@ -166,6 +185,7 @@ export async function createTask(input: CreateTaskInput) {
             pushId: pushId,
             attachmentFolderId,
             attachmentFolderName,
+            seriesTasks,
             createdBy: user.id,
             createdByName: user.name || 'Unknown',
         })
@@ -174,10 +194,17 @@ export async function createTask(input: CreateTaskInput) {
             return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to create task' }
         }
 
-        const taskResult = result as { success: true; task: { id: string; columnId: string; assigneeIds: string[] }; projectName: string; workspaceDiscordChannelId: string | null }
+        const taskResult = result as {
+            success: true
+            task: { id: string; columnId: string; assigneeIds: string[] }
+            tasks?: Array<{ id: string; columnId: string; assigneeIds: string[] }>
+            projectName: string
+            workspaceDiscordChannelId: string | null
+        }
 
         // Discord: ping only when someone is assigned
-        const assignedIds = taskResult.task.assigneeIds
+        const createdTaskRefs = taskResult.tasks?.length ? taskResult.tasks : [taskResult.task]
+        const assignedIds = createdTaskRefs[0]?.assigneeIds ?? []
         const webhookUrl = taskResult.workspaceDiscordChannelId ?? null
         if (assignedIds.length > 0 && webhookUrl) {
             const assignedUsers = await fetchQuery(api.auth.getUserDiscordIds, { userIds: assignedIds })
@@ -186,11 +213,14 @@ export async function createTask(input: CreateTaskInput) {
                 const mentions = assignedUsers.map((u) => `<@${u.discordId}>`).join(" ")
                 if (mentions) {
                     const dueDate = endDate ? parseDateInput(endDate, "endOfDay") : null
+                    const createdTaskCount = createdTaskRefs.length
                     await sendDiscordNotification(
                         "",
                         [{
-                            title: "📌 Task Assignment",
-                            description: `${mentions}, you have been assigned **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`,
+                            title: createdTaskCount > 1 ? "📚 Task Series Assignment" : "📌 Task Assignment",
+                            description: createdTaskCount > 1
+                                ? `${mentions}, you have been assigned a ${createdTaskCount}-task series starting with **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`
+                                : `${mentions}, you have been assigned **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`,
                             color: 0x5865F2,
                             timestamp: new Date().toISOString(),
                         }],
@@ -201,21 +231,27 @@ export async function createTask(input: CreateTaskInput) {
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`)
-        const hydratedTask = await getHydratedTask(taskResult.task.id)
+        const hydratedTasks = await Promise.all(
+            createdTaskRefs.map(async (taskRef) => getHydratedTask(taskRef.id))
+        )
+        const resolvedTasks = hydratedTasks.filter((task): task is NonNullable<typeof task> => task !== null)
+        const fallbackTask = {
+            id: taskResult.task.id,
+            title: title.trim(),
+            columnId: taskResult.task.columnId,
+            assigneeId: assigneeId || null,
+            assignees: (taskResult.task.assigneeIds || []).map((userId: string) => ({ user: { id: userId, name: '' } })),
+            description: input.description?.trim() || null,
+            startDate: startDate ?? null,
+            endDate: endDate ?? null,
+            requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
+            enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
+        }
+
         return {
             success: true,
-            task: hydratedTask ?? {
-                id: taskResult.task.id,
-                title: title.trim(),
-                columnId: taskResult.task.columnId,
-                assigneeId: assigneeId || null,
-                assignees: (taskResult.task.assigneeIds || []).map((userId: string) => ({ user: { id: userId, name: '' } })),
-                description: input.description?.trim() || null,
-                startDate: startDate ?? null,
-                endDate: endDate ?? null,
-                requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
-                enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
-            },
+            task: resolvedTasks[0] ?? fallbackTask,
+            tasks: resolvedTasks.length > 0 ? resolvedTasks : [fallbackTask],
         }
     } catch (error) {
         console.error("Create task error:", error)

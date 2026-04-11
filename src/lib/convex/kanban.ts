@@ -16,6 +16,12 @@ export async function createTaskInConvex(input: {
     pushId?: string
     attachmentFolderId?: string | null
     attachmentFolderName?: string | null
+    seriesTasks?: Array<{
+        title: string
+        description?: string
+        startDate?: number | null
+        endDate?: number | null
+    }>
     createdBy: string
     createdByName: string
 }) {
@@ -36,6 +42,13 @@ export async function createTaskInConvex(input: {
         pushId: input.pushId,
         attachmentFolderId: input.attachmentFolderId,
         attachmentFolderName: input.attachmentFolderName,
+        seriesTasks: input.seriesTasks?.map((seriesTask) => ({
+            taskId: createLegacyId("task"),
+            title: seriesTask.title,
+            description: seriesTask.description,
+            startDate: seriesTask.startDate ?? null,
+            endDate: seriesTask.endDate ?? null,
+        })),
         createdBy: input.createdBy,
         createdByName: input.createdByName,
         now: Date.now(),

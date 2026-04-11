@@ -42,6 +42,14 @@ type TaskType = {
     instructionsFileName?: string | null
     startDate?: Date | string | null
     endDate?: Date | string | null
+    series?: {
+        id: string
+        position: number
+        totalCount: number
+        isBlocked: boolean
+        previousTaskId: string | null
+        previousTaskTitle: string | null
+    } | null
 }
 
 type TaskDialogResultTask = TaskType & {
@@ -67,6 +75,14 @@ type FolderNode = {
     modifiedTime?: string | null
 }
 
+type SeriesTaskDraft = {
+    id: string
+    title: string
+    description: string
+    startDate: string
+    endDate: string
+}
+
 import {
     AlertDialog,
     AlertDialogAction,
@@ -84,6 +100,17 @@ const formatDate = (d: Date | string | null | undefined) => {
     return dateObj.toISOString().split('T')[0]
 }
 
+function createSeriesTaskDraft(): SeriesTaskDraft {
+    const randomPart = Math.random().toString(36).slice(2, 8)
+    return {
+        id: `series-${Date.now()}-${randomPart}`,
+        title: "",
+        description: "",
+        startDate: "",
+        endDate: "",
+    }
+}
+
 export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack, showOverlay = true }: {
     columnId?: string
     projectId: string
@@ -92,7 +119,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     task?: TaskType | null
     open?: boolean
     onOpenChange?: (open: boolean) => void
-    onTaskCreated?: (task: TaskDialogResultTask) => void
+    onTaskCreated?: (tasks: TaskDialogResultTask[]) => void
     onTaskUpdated?: (task: TaskDialogResultTask) => void
     onTaskDeleted?: (taskId: string) => void
     initialAssigneeIds?: string[]
@@ -190,6 +217,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [enableChecklist, setEnableChecklist] = useState(false)
     const [checklistItems, setChecklistItems] = useState<string[]>([])
     const [newChecklistItem, setNewChecklistItem] = useState("")
+    const [seriesTasks, setSeriesTasks] = useState<SeriesTaskDraft[]>([])
 
     // Reset form when task changes or dialog opens
     useEffect(() => {
@@ -233,6 +261,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     setExistingInstructionsFile(null)
                 }
                 setInstructionsFile(null)
+                setSeriesTasks([])
             } else {
                 setInstructionsFile(null)
                 setExistingInstructionsFile(null)
@@ -249,6 +278,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setEnableChecklist(false)
                 setChecklistItems([])
                 setNewChecklistItem("")
+                setSeriesTasks([])
             }
         }
     }, [task, today, open, sanitizeAssigneeIds])
@@ -493,6 +523,27 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         setChecklistItems(prev => prev.filter((_, i) => i !== index))
     }
 
+    const addSeriesTask = () => {
+        setSeriesTasks((prev) => [...prev, createSeriesTaskDraft()])
+    }
+
+    const updateSeriesTask = (
+        seriesTaskId: string,
+        patch: Partial<Omit<SeriesTaskDraft, "id">>
+    ) => {
+        setSeriesTasks((prev) =>
+            prev.map((seriesTask) =>
+                seriesTask.id === seriesTaskId
+                    ? { ...seriesTask, ...patch }
+                    : seriesTask
+            )
+        )
+    }
+
+    const removeSeriesTask = (seriesTaskId: string) => {
+        setSeriesTasks((prev) => prev.filter((seriesTask) => seriesTask.id !== seriesTaskId))
+    }
+
     const [isLoading, setIsLoading] = useState(false)
 
     const hasTitle = title.trim().length > 0
@@ -530,9 +581,14 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         return (
             hasTitle &&
             hasDescriptionValue &&
-            hasDateRange
+            hasDateRange &&
+            seriesTasks.every((seriesTask) => (
+                seriesTask.title.trim().length > 0 &&
+                seriesTask.startDate !== "" &&
+                seriesTask.endDate !== ""
+            ))
         )
-    }, [hasTitle, hasDescriptionValue, hasDateRange])
+    }, [hasTitle, hasDescriptionValue, hasDateRange, seriesTasks])
 
     useEffect(() => {
         if (!open) return
@@ -565,7 +621,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             applySanitizedAssignees(assigneeIds, sanitizedAssigneeIds)
         }
 
-        if (!hasTitle || !hasDescriptionValue || !hasDateRange) {
+        if (!isValid) {
             return
         }
 
@@ -660,6 +716,12 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     columnId: columnId!,
                     projectId,
                     pushId: pushId || undefined,
+                    seriesTasks: seriesTasks.map((seriesTask) => ({
+                        title: seriesTask.title.trim(),
+                        description: seriesTask.description.trim() || undefined,
+                        startDate: seriesTask.startDate,
+                        endDate: seriesTask.endDate,
+                    })),
                     ...attachmentFolderPayload
                 })
 
@@ -685,11 +747,18 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 }
 
                 // Upload instructions file for new task
-                if (instructionsFile && result.task?.id) {
+                const createdTasks = Array.isArray(result.tasks) && result.tasks.length > 0
+                    ? result.tasks as TaskDialogResultTask[]
+                    : result.task
+                        ? [result.task as TaskDialogResultTask]
+                        : []
+                const primaryCreatedTask = createdTasks[0] ?? null
+
+                if (instructionsFile && primaryCreatedTask?.id) {
                     setIsUploadingInstructions(true)
                     const formData = new FormData()
                     formData.append('file', instructionsFile)
-                    const uploadResult = await uploadTaskInstructions(result.task.id, formData)
+                    const uploadResult = await uploadTaskInstructions(primaryCreatedTask.id, formData)
 
                     if (uploadResult?.error) {
                         console.error('Failed to upload instructions file:', uploadResult.error)
@@ -698,9 +767,9 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 }
 
                 // Create checklist items for new task
-                if (enableChecklist && checklistItems.length > 0 && result.task?.id) {
+                if (enableChecklist && checklistItems.length > 0 && primaryCreatedTask?.id) {
                     for (let i = 0; i < checklistItems.length; i++) {
-                        await createChecklistItem(result.task.id, checklistItems[i], i)
+                        await createChecklistItem(primaryCreatedTask.id, checklistItems[i], i)
                     }
                 }
 
@@ -716,9 +785,10 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setEnableChecklist(false)
                 setChecklistItems([])
                 setNewChecklistItem("")
+                setSeriesTasks([])
 
-                if (result.task && onTaskCreated) {
-                    onTaskCreated(result.task)
+                if (createdTasks.length > 0 && onTaskCreated) {
+                    onTaskCreated(createdTasks)
                 }
 
                 handleClose()
@@ -836,6 +906,25 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                             : `${removedAssigneeNotice.removedCount} previous assignees were removed from this workspace and have been unassigned.`}
                                         {" "}You can leave it open or add a replacement assignee.
                                     </span>
+                                </div>
+                            )}
+                            {task?.series && (
+                                <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-sm font-medium">
+                                                Step {task.series.position} of {task.series.totalCount}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {task.series.isBlocked && task.series.previousTaskTitle
+                                                    ? `Blocked until "${task.series.previousTaskTitle}" reaches Done.`
+                                                    : "This task is part of a sequential task series."}
+                                            </p>
+                                        </div>
+                                        <span className="rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                            Series
+                                        </span>
+                                    </div>
                                 </div>
                             )}
 
@@ -1246,6 +1335,119 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 )}
                             </div>
 
+                            {!task && (
+                                <div className="space-y-3 pt-2">
+                                    {seriesTasks.length > 0 && (
+                                        <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="space-y-1">
+                                                    <p className="text-sm font-medium">Task series</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Step 1 uses the main form above. Each follow-up task unlocks only after the step before it reaches Done. Extra steps inherit assignees, completion rules, push, and upload folder.
+                                                    </p>
+                                                </div>
+                                                <span className="rounded-full border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+                                                    {seriesTasks.length + 1} steps
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                {seriesTasks.map((seriesTask, index) => {
+                                                    const hasSeriesTitle = seriesTask.title.trim().length > 0
+                                                    const hasSeriesDateRange = seriesTask.startDate !== "" && seriesTask.endDate !== ""
+
+                                                    return (
+                                                        <div key={seriesTask.id} className="rounded-lg border bg-background p-3 space-y-3">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div>
+                                                                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                                                        Step {index + 2}
+                                                                    </p>
+                                                                    <p className="text-sm font-medium text-foreground">
+                                                                        {hasSeriesTitle ? seriesTask.title.trim() : "Untitled follow-up task"}
+                                                                    </p>
+                                                                </div>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                                    onClick={() => removeSeriesTask(seriesTask.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor={`series-title-${seriesTask.id}`} className="text-xs font-medium text-muted-foreground">
+                                                                    Task title
+                                                                </Label>
+                                                                <div className="relative">
+                                                                    <Input
+                                                                        id={`series-title-${seriesTask.id}`}
+                                                                        value={seriesTask.title}
+                                                                        onChange={(e) => updateSeriesTask(seriesTask.id, { title: e.target.value })}
+                                                                        autoComplete="off"
+                                                                        placeholder="Next task title"
+                                                                        className="h-10 pr-16"
+                                                                    />
+                                                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasSeriesTitle)}`}>
+                                                                        Required
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor={`series-description-${seriesTask.id}`} className="text-xs font-medium text-muted-foreground">
+                                                                    Notes
+                                                                </Label>
+                                                                <Textarea
+                                                                    id={`series-description-${seriesTask.id}`}
+                                                                    value={seriesTask.description}
+                                                                    onChange={(e) => updateSeriesTask(seriesTask.id, { description: e.target.value })}
+                                                                    placeholder="Optional context for this follow-up step"
+                                                                    className="min-h-[90px] resize-none"
+                                                                />
+                                                            </div>
+
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor={`series-dates-${seriesTask.id}`} className="text-xs font-medium text-muted-foreground">
+                                                                    Dates
+                                                                </Label>
+                                                                <div className="relative">
+                                                                    <DateRangePicker
+                                                                        id={`series-dates-${seriesTask.id}`}
+                                                                        startDate={seriesTask.startDate}
+                                                                        endDate={seriesTask.endDate}
+                                                                        onChange={(start, end) => updateSeriesTask(seriesTask.id, { startDate: start, endDate: end })}
+                                                                        className="h-10 pr-16"
+                                                                        placeholder="Select Days"
+                                                                        quickActions={[]}
+                                                                    />
+                                                                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasSeriesDateRange)}`}>
+                                                                        Required
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full border-dashed"
+                                        onClick={addSeriesTask}
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        {seriesTasks.length > 0 ? "Add another task in series" : "Add task in series"}
+                                    </Button>
+                                </div>
+                            )}
+
                         </div>
 
                         <div className="p-6 pt-2 border-t mt-auto bg-background rounded-b-lg">
@@ -1268,7 +1470,13 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 <div className="flex gap-2 shrink-0">
                                     <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
                                     <Button type="submit" disabled={isLoading || !isValid}>
-                                        {isLoading ? 'Saving...' : (task ? "Save Changes" : "Create Task")}
+                                        {isLoading
+                                            ? 'Saving...'
+                                            : task
+                                                ? "Save Changes"
+                                                : seriesTasks.length > 0
+                                                    ? `Create ${seriesTasks.length + 1} Tasks`
+                                                    : "Create Task"}
                                     </Button>
                                 </div>
                             </DialogFooter>

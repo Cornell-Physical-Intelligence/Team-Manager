@@ -3,7 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ArrowLeft, ArrowRight, Clock, CalendarDays, Plus } from "lucide-react"
+import { ArrowLeft, ArrowRight, Clock, CalendarDays, Lock, Plus } from "lucide-react"
 import { cn, getInitials } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -27,6 +27,14 @@ type TaskCardProps = {
         attachments?: { id: string; createdAt: Date | string }[]
         progress?: number
         enableProgress?: boolean
+        series?: {
+            id: string
+            position: number
+            totalCount: number
+            isBlocked: boolean
+            previousTaskId: string | null
+            previousTaskTitle: string | null
+        } | null
     }
     overlay?: boolean
     onClick?: (task: TaskCardProps['task']) => void
@@ -51,6 +59,10 @@ function getPendingReviewText(updatedAt?: Date | string | null) {
 }
 
 export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn, isAdmin, isDragDisabled, isHighlighted, domId, currentUserId, projectId, validAssigneeUserIds = [] }: TaskCardProps) {
+    const seriesMeta = task.series ?? null
+    const showSeriesStack = !!seriesMeta && seriesMeta.totalCount > 1
+    const isSeriesBlocked = !!seriesMeta?.isBlocked
+    const effectiveDragDisabled = isDragDisabled || isSeriesBlocked
     const {
         setNodeRef,
         attributes,
@@ -61,7 +73,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
     } = useSortable({
         id: task.id,
         data: { type: "Task", task },
-        disabled: isDragDisabled,
+        disabled: effectiveDragDisabled,
         animateLayoutChanges
     })
 
@@ -71,7 +83,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
         opacity: isDragging ? 0 : 1,
         position: 'relative' as const,
         zIndex: 10,
-        touchAction: isDragDisabled ? 'auto' : 'none',
+        touchAction: effectiveDragDisabled ? 'auto' : 'none',
         WebkitUserSelect: 'none' as const,
         userSelect: 'none' as const,
     }
@@ -148,14 +160,27 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                 id={domId}
                 style={style}
                 {...attributes}
-                {...(isDragDisabled ? {} : listeners)}
+                {...(effectiveDragDisabled ? {} : listeners)}
                 onClick={() => onClick?.(task)}
                 className={cn(
-                    "group relative flex flex-col gap-1.5 p-3 rounded-lg border transition-colors transition-shadow duration-200",
+                    "group relative isolate flex flex-col gap-1.5 p-3 rounded-lg border transition-colors transition-shadow duration-200 overflow-visible",
                     "bg-emerald-50/40 border-emerald-100 hover:border-emerald-200 hover:shadow-sm dark:bg-emerald-900/10 dark:border-emerald-900/30 dark:hover:border-emerald-800/50",
-                    isDragDisabled ? 'cursor-default' : 'cursor-grab'
+                    effectiveDragDisabled ? 'cursor-default' : 'cursor-grab'
                 )}
             >
+                {showSeriesStack && (
+                    <>
+                        <div aria-hidden className="pointer-events-none absolute inset-x-1 top-1 bottom-[-4px] rounded-lg border border-emerald-100/70 bg-emerald-50/35 -z-10 dark:border-emerald-900/20 dark:bg-emerald-900/10" />
+                        <div aria-hidden className="pointer-events-none absolute inset-x-2 top-2 bottom-[-8px] rounded-lg border border-emerald-100/50 bg-emerald-50/20 -z-20 dark:border-emerald-900/10 dark:bg-emerald-900/5" />
+                    </>
+                )}
+                {seriesMeta && (
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200/70 bg-background/90 px-2 py-0.5 text-[10px] font-medium text-emerald-700/80 dark:border-emerald-900/30 dark:text-emerald-200/80">
+                            <span>Step {seriesMeta.position} of {seriesMeta.totalCount}</span>
+                        </div>
+                    </div>
+                )}
                 <div className="flex items-start gap-2">
                     <h4 className="text-xs font-medium text-emerald-950/80 dark:text-emerald-100/80 leading-snug line-clamp-2">
                         {task.title}
@@ -181,20 +206,45 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
             id={domId}
             style={style}
             {...attributes}
-            {...(isDragDisabled ? {} : listeners)}
+            {...(effectiveDragDisabled ? {} : listeners)}
             onClick={() => onClick?.(task)}
             className={cn(
-                "group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-colors transition-shadow duration-200",
+                "group relative isolate flex flex-col rounded-lg border bg-card p-3 shadow-sm transition-colors transition-shadow duration-200 overflow-visible",
                 "hover:shadow-md hover:border-primary/20",
                 "border-border",
-                isDragDisabled ? 'cursor-default' : 'cursor-grab',
+                effectiveDragDisabled ? 'cursor-default' : 'cursor-grab',
                 isHighlighted && 'animate-highlight-bulge'
             )}
         >
+            {showSeriesStack && (
+                <>
+                    <div aria-hidden className="pointer-events-none absolute inset-x-1 top-1 bottom-[-4px] rounded-lg border border-border/70 bg-card/75 -z-10" />
+                    <div aria-hidden className="pointer-events-none absolute inset-x-2 top-2 bottom-[-8px] rounded-lg border border-border/50 bg-card/45 -z-20" />
+                </>
+            )}
+            {seriesMeta && (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span>Step {seriesMeta.position} of {seriesMeta.totalCount}</span>
+                    </div>
+                    {isSeriesBlocked && (
+                        <div className="inline-flex items-center gap-1 rounded-full border border-amber-200/70 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                            <Lock className="h-3 w-3" />
+                            Blocked
+                        </div>
+                    )}
+                </div>
+            )}
             {/* Title */}
-            <h4 className="text-sm font-medium leading-snug text-foreground mb-3 line-clamp-2">
+            <h4 className="text-sm font-medium leading-snug text-foreground mb-2 line-clamp-2">
                 {task.title}
             </h4>
+
+            {isSeriesBlocked && seriesMeta?.previousTaskTitle && (
+                <p className="mb-3 text-[11px] leading-relaxed text-amber-700/90">
+                    Finish &ldquo;{seriesMeta.previousTaskTitle}&rdquo; to unlock this step.
+                </p>
+            )}
 
             {/* Meta Row: Date & Avatar */}
             <div className="flex items-center justify-between gap-2 mt-auto">
