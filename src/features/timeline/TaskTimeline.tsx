@@ -25,7 +25,7 @@ export function TaskTimeline({ tasks }: TaskTimelineProps) {
     if (!tasks || tasks.length === 0) {
         return (
             <div className="p-4 text-sm text-center text-muted-foreground border border-dashed rounded">
-                No tasks with dates. Add start and end dates to tasks to see them here.
+                Task timelines are unavailable because tasks no longer track dates.
             </div>
         )
     }

@@ -26,9 +26,9 @@ export function HeatmapPageClient({
     const workloadTasks = buildWorkloadTasks(
         tasks.map((task) => ({
             ...task,
-            dueDate: task.dueDate ? new Date(task.dueDate) : null,
-            endDate: task.endDate ? new Date(task.endDate) : null,
-            startDate: task.startDate ? new Date(task.startDate) : null,
+            dueDate: null,
+            endDate: null,
+            startDate: null,
             createdAt: new Date(task.createdAt),
             updatedAt: new Date(task.updatedAt),
             submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,

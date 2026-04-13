@@ -9,7 +9,6 @@ interface Task {
     id: string
     title: string
     status: string
-    dueDate?: Date | string | null
     projectId?: string | null
     projectName?: string | null
 }
@@ -19,13 +18,7 @@ interface TaskInfoProps {
 }
 
 export function TaskInfo({ tasks }: TaskInfoProps) {
-    const sortedTasks = [...tasks].sort((a, b) => {
-        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity
-        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity
-        return dateA - dateB
-    })
-
-    const pendingTasks = sortedTasks.filter(t => t.status !== 'Done')
+    const pendingTasks = tasks.filter(t => t.status !== 'Done')
     const completedCount = tasks.filter(t => t.status === 'Done').length
 
     return (
@@ -43,7 +36,6 @@ export function TaskInfo({ tasks }: TaskInfoProps) {
                             <p className="text-xs text-muted-foreground py-2">No pending tasks.</p>
                         ) : (
                             pendingTasks.slice(0, 8).map(task => {
-                                const isOverdue = task.dueDate && new Date(task.dueDate) < new Date()
                                 return (
                                     <div 
                                         key={task.id} 
@@ -53,11 +45,6 @@ export function TaskInfo({ tasks }: TaskInfoProps) {
                                             <p className="text-xs font-medium line-clamp-1">{task.title}</p>
                                             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                                 {task.projectName && <span>{task.projectName}</span>}
-                                                {task.dueDate && (
-                                                    <span className={isOverdue ? "text-red-500" : ""}>
-                                                        {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                    </span>
-                                                )}
                                             </div>
                                         </div>
                                         {task.projectId && (

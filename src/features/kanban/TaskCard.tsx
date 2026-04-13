@@ -16,8 +16,6 @@ type TaskCardProps = {
         title: string
         columnId: string | null
         push?: { id: string; name: string; color: string; status: string } | null
-        startDate?: Date | string | null
-        endDate?: Date | string | null
         updatedAt?: Date | string | null
         requireAttachment?: boolean
         assignee?: { id?: string; name: string } | null
@@ -60,7 +58,6 @@ function getPendingReviewText(updatedAt?: Date | string | null) {
 
 export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn, isAdmin, isDragDisabled, isHighlighted, domId, currentUserId, projectId, validAssigneeUserIds = [] }: TaskCardProps) {
     const seriesMeta = task.series ?? null
-    const showSeriesStack = !!seriesMeta && seriesMeta.totalCount > 1
     const isSeriesBlocked = !!seriesMeta?.isBlocked
     const effectiveDragDisabled = isDragDisabled || isSeriesBlocked
     const {
@@ -86,18 +83,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
         touchAction: effectiveDragDisabled ? 'auto' : 'none',
         WebkitUserSelect: 'none' as const,
         userSelect: 'none' as const,
-    }
-
-    // Calculate due date status
-    const now = new Date().getTime()
-    const endTime = task.endDate ? new Date(task.endDate).getTime() : null
-
-    let daysLeft: number | null = null
-    let isOverdue = false
-
-    if (endTime) {
-        daysLeft = Math.ceil((endTime - now) / (1000 * 60 * 60 * 24))
-        isOverdue = daysLeft < 0
     }
 
     const reviewPendingText = isReviewColumn ? getPendingReviewText(task.updatedAt) : null
@@ -168,12 +153,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                     effectiveDragDisabled ? 'cursor-default' : 'cursor-grab'
                 )}
             >
-                {showSeriesStack && (
-                    <>
-                        <div aria-hidden className="pointer-events-none absolute inset-x-1 top-1 bottom-[-4px] rounded-lg border border-emerald-100/70 bg-emerald-50/35 -z-10 dark:border-emerald-900/20 dark:bg-emerald-900/10" />
-                        <div aria-hidden className="pointer-events-none absolute inset-x-2 top-2 bottom-[-8px] rounded-lg border border-emerald-100/50 bg-emerald-50/20 -z-20 dark:border-emerald-900/10 dark:bg-emerald-900/5" />
-                    </>
-                )}
                 {seriesMeta && (
                     <div className="flex items-center justify-between gap-2">
                         <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200/70 bg-background/90 px-2 py-0.5 text-[10px] font-medium text-emerald-700/80 dark:border-emerald-900/30 dark:text-emerald-200/80">
@@ -216,12 +195,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                 isHighlighted && 'animate-highlight-bulge'
             )}
         >
-            {showSeriesStack && (
-                <>
-                    <div aria-hidden className="pointer-events-none absolute inset-x-1 top-1 bottom-[-4px] rounded-lg border border-border/70 bg-card/75 -z-10" />
-                    <div aria-hidden className="pointer-events-none absolute inset-x-2 top-2 bottom-[-8px] rounded-lg border border-border/50 bg-card/45 -z-20" />
-                </>
-            )}
             {seriesMeta && (
                 <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -246,11 +219,10 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                 </p>
             )}
 
-            {/* Meta Row: Date & Avatar */}
+            {/* Meta Row */}
             <div className="flex items-center justify-between gap-2 mt-auto">
                 <div className="flex items-center gap-1.5 min-w-0">
-                    {/* Status / Date Badge - Show pending time for Review, due date for others */}
-                    {isReviewColumn ? (
+                    {isReviewColumn && (
                         reviewPendingText && (
                             <div
                                 className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
@@ -263,28 +235,6 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                             >
                                 <Clock className="w-3 h-3 shrink-0" />
                                 <span className="truncate">{reviewPendingText}</span>
-                            </div>
-                        )
-                    ) : (
-                        daysLeft !== null && (
-                            <div
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
-                                style={isOverdue ? {
-                                    background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
-                                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    color: 'rgb(220, 38, 38)',
-                                    '--tag-color': 'rgba(239, 68, 68, 0.15)'
-                                } as React.CSSProperties : {
-                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
-                                    borderColor: 'rgba(156, 163, 175, 0.3)',
-                                    color: 'rgb(107, 114, 128)',
-                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
-                                } as React.CSSProperties}
-                            >
-                                <Clock className="w-3 h-3 shrink-0" />
-                                <span className="truncate">
-                                    {isOverdue ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
-                                </span>
                             </div>
                         )
                     )}

@@ -12,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { DateRangePicker } from "@/components/ui/date-picker"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -39,8 +38,6 @@ type TaskType = {
     attachmentFolderName?: string | null
     instructionsFileUrl?: string | null
     instructionsFileName?: string | null
-    startDate?: Date | string | null
-    endDate?: Date | string | null
     series?: {
         id: string
         position: number
@@ -78,8 +75,6 @@ type SeriesTaskDraft = {
     id: string
     title: string
     description: string
-    startDate: string
-    endDate: string
 }
 
 import {
@@ -93,81 +88,13 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-const formatDate = (d: Date | string | null | undefined) => {
-    if (!d) return ""
-    const dateObj = typeof d === 'string' ? new Date(d) : d
-    return dateObj.toISOString().split('T')[0]
-}
-
 function createSeriesTaskDraft(): SeriesTaskDraft {
     const randomPart = Math.random().toString(36).slice(2, 8)
     return {
         id: `series-${Date.now()}-${randomPart}`,
         title: "",
         description: "",
-        startDate: "",
-        endDate: "",
     }
-}
-
-function SeriesStackCard({
-    task,
-    depth,
-    layer,
-    onSelect,
-}: {
-    task: SeriesTaskDraft
-    depth: number
-    layer: number
-    onSelect: () => void
-}) {
-    const titlePreview = task.title.trim() || "Task Title"
-    const descriptionPreview = task.description.trim() || "Type Description"
-
-    return (
-        <button
-            type="button"
-            onClick={onSelect}
-            className="pointer-events-auto absolute top-3 bottom-3 rounded-[22px] border border-border/70 bg-background/95 text-left shadow-[0_24px_64px_-40px_rgba(15,23,42,0.4)] transition-colors hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-            style={{
-                left: `-${depth * 22}px`,
-                right: `${depth * 8}px`,
-                transform: `scale(${1 - depth * 0.02})`,
-                zIndex: layer,
-            }}
-            aria-label={`Open ${titlePreview}`}
-        >
-            <div className="flex h-full flex-col overflow-hidden rounded-[inherit] bg-gradient-to-br from-background via-background to-muted/20 px-6 py-6 opacity-90">
-                <div className="space-y-2">
-                    <div className="h-5 w-40 rounded-md bg-muted/70" />
-                </div>
-
-                <div className="mt-6 flex-1 space-y-4">
-                    <div className="rounded-md border bg-background/80 px-3 py-2 text-sm text-foreground/65">
-                        <span className="block truncate">{titlePreview}</span>
-                    </div>
-                    <div className="min-h-[120px] rounded-md border bg-background/80 px-3 py-2 text-sm text-muted-foreground">
-                        <span className="block line-clamp-5 whitespace-pre-wrap break-words">
-                            {descriptionPreview}
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="h-10 rounded-md border bg-background/80" />
-                        <div className="h-10 rounded-md border bg-background/80" />
-                    </div>
-                    <div className="space-y-3">
-                        <div className="h-[74px] rounded-lg border bg-muted/25" />
-                        <div className="h-[74px] rounded-lg border bg-muted/25" />
-                    </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-2 border-t pt-4">
-                    <div className="h-10 w-20 rounded-md border bg-background/80" />
-                    <div className="h-10 w-28 rounded-md bg-foreground/10" />
-                </div>
-            </div>
-        </button>
-    )
 }
 
 export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack, showOverlay = true }: {
@@ -194,7 +121,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [error, setError] = useState<string | null>(null)
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-    const today = useMemo(() => new Date().toISOString().split('T')[0], [])
     const [workspaceUsers, setWorkspaceUsers] = useState(users)
     const projectMembershipById = useMemo(() => {
         const map = new Map<string, boolean>()
@@ -215,8 +141,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [description, setDescription] = useState(task?.description || "")
     const [assigneeId, setAssigneeId] = useState<string>(task?.assigneeId || "")
     const [assigneeIds, setAssigneeIds] = useState<string[]>([])
-    const [startDate, setStartDate] = useState<string>(formatDate(task?.startDate) || today)
-    const [endDate, setEndDate] = useState<string>(formatDate(task?.endDate) || "")
     const [requireAttachment, setRequireAttachment] = useState<boolean>(task?.requireAttachment !== undefined ? task.requireAttachment : false)
     const [enableProgress, setEnableProgress] = useState<boolean>(task?.enableProgress !== undefined ? task.enableProgress : false)
     const [instructionsFile, setInstructionsFile] = useState<File | null>(null)
@@ -311,8 +235,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 } else {
                     setRemovedAssigneeNotice(null)
                 }
-                setStartDate(formatDate(task.startDate) || today)
-                setEndDate(formatDate(task.endDate) || "")
                 setRequireAttachment(task.requireAttachment !== undefined ? task.requireAttachment : false)
                 setEnableProgress(task.enableProgress !== undefined ? task.enableProgress : false)
                 if (task.instructionsFileUrl && task.instructionsFileName) {
@@ -332,8 +254,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setAssigneeId(sanitizedInitialAssigneeIds[0] || "")
                 setAssigneeIds(sanitizedInitialAssigneeIds)
                 setRemovedAssigneeNotice(null)
-                setStartDate("")
-                setEndDate("")
                 setRequireAttachment(false)
                 setEnableProgress(false)
                 setEnableChecklist(false)
@@ -343,7 +263,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setActiveSeriesTaskIndex(0)
             }
         }
-    }, [task, today, open, sanitizeAssigneeIds])
+    }, [task, open, sanitizeAssigneeIds])
 
     useEffect(() => {
         return () => {
@@ -592,8 +512,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
             id: seriesTasks[activeSeriesTaskIndex]?.id ?? createSeriesTaskDraft().id,
             title,
             description,
-            startDate,
-            endDate,
         }
 
         if (seriesTasks.length === 0) {
@@ -605,13 +523,11 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 ? nextDraft
                 : seriesTask
         ))
-    }, [activeSeriesTaskIndex, description, endDate, seriesTasks, startDate, task, title])
+    }, [activeSeriesTaskIndex, description, seriesTasks, task, title])
 
     const loadSeriesTaskDraft = useCallback((seriesTask: SeriesTaskDraft) => {
         setTitle(seriesTask.title)
         setDescription(seriesTask.description)
-        setStartDate(seriesTask.startDate)
-        setEndDate(seriesTask.endDate)
     }, [])
 
     const isSeriesTaskDescriptionValid = useCallback((seriesTask: SeriesTaskDraft, index: number) => {
@@ -622,18 +538,14 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const isSeriesTaskValid = useCallback((seriesTask: SeriesTaskDraft, index: number) => {
         return (
             seriesTask.title.trim().length > 0 &&
-            isSeriesTaskDescriptionValid(seriesTask, index) &&
-            seriesTask.startDate !== "" &&
-            seriesTask.endDate !== ""
+            isSeriesTaskDescriptionValid(seriesTask, index)
         )
     }, [isSeriesTaskDescriptionValid])
 
     const isSeriesTaskEmpty = useCallback((seriesTask: SeriesTaskDraft) => {
         return (
             seriesTask.title.trim().length === 0 &&
-            seriesTask.description.trim().length === 0 &&
-            seriesTask.startDate === "" &&
-            seriesTask.endDate === ""
+            seriesTask.description.trim().length === 0
         )
     }, [])
 
@@ -671,7 +583,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const hasTitle = title.trim().length > 0
     const hasDescriptionValue = description.trim().length > 0 || !!instructionsFile || !!existingInstructionsFile
     const isDescriptionSatisfied = hasDescriptionValue || isDraggingFile
-    const hasDateRange = startDate !== "" && endDate !== ""
     const isPrimarySeriesStep = !task && activeSeriesTaskIndex === 0
     const canUseInstructionsForCurrentStep = !!task || isPrimarySeriesStep
     const seriesTaskDrafts = useMemo(
@@ -692,9 +603,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const currentSeriesTaskDraft = !task
         ? seriesTaskDrafts[activeSeriesTaskIndex] ?? null
         : null
-    const visibleSeriesStack = !task && activeSeriesTaskIndex > 0
-        ? seriesTaskDrafts.slice(Math.max(0, activeSeriesTaskIndex - 4), activeSeriesTaskIndex)
-        : []
     const canAddSeriesTask = !task && !!currentSeriesTaskDraft && isSeriesTaskValid(currentSeriesTaskDraft, activeSeriesTaskIndex)
 
     const requiredTagClass = (met: boolean) =>
@@ -705,21 +613,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         if (!el) return
         el.style.height = "auto"
         el.style.height = `${el.scrollHeight}px`
-    }
-
-    const applyDateQuickAction = (days: number) => {
-        const formatDateOnly = (date: Date) => date.toISOString().split("T")[0]
-
-        const startBase = startDate ? new Date(`${startDate}T00:00:00`) : new Date()
-        const existingEnd = endDate ? new Date(`${endDate}T00:00:00`) : null
-        const nextStart = startDate || formatDateOnly(startBase)
-        const endBase = existingEnd || new Date(`${nextStart}T00:00:00`)
-
-        const nextEnd = new Date(endBase)
-        nextEnd.setDate(endBase.getDate() + days)
-
-        setStartDate(nextStart)
-        setEndDate(formatDateOnly(nextEnd))
     }
 
     // Validation - assignees are optional
@@ -733,10 +626,9 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
 
         return (
             hasTitle &&
-            hasDescriptionValue &&
-            hasDateRange
+            hasDescriptionValue
         )
-    }, [hasDateRange, hasDescriptionValue, hasTitle, isSeriesTaskValid, submittableSeriesTaskDrafts, task])
+    }, [hasDescriptionValue, hasTitle, isSeriesTaskValid, submittableSeriesTaskDrafts, task])
 
     useEffect(() => {
         if (!open) return
@@ -749,6 +641,15 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 ? prev.filter(id => id !== userId)
                 : [...prev, userId]
         )
+    }
+
+    const handleHeaderBack = () => {
+        if (!task && activeSeriesTaskIndex > 0) {
+            goToSeriesTask(activeSeriesTaskIndex - 1)
+            return
+        }
+
+        onBack?.()
     }
 
     function handleClose() {
@@ -787,8 +688,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     description: description.trim(),
                     assigneeId: sanitizedAssigneeIds.length > 0 ? sanitizedAssigneeIds[0] : "",
                     assigneeIds: sanitizedAssigneeIds,
-                    startDate,
-                    endDate,
                     requireAttachment,
                     enableProgress,
                     projectId,
@@ -865,8 +764,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     description: primaryTask.description.trim(),
                     assigneeId: sanitizedAssigneeIds[0],
                     assigneeIds: sanitizedAssigneeIds,
-                    startDate: primaryTask.startDate,
-                    endDate: primaryTask.endDate,
                     requireAttachment,
                     enableProgress,
                     columnId: columnId!,
@@ -875,8 +772,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     seriesTasks: completeSeriesTasks.slice(1).map((seriesTask) => ({
                         title: seriesTask.title.trim(),
                         description: seriesTask.description.trim() || undefined,
-                        startDate: seriesTask.startDate,
-                        endDate: seriesTask.endDate,
                     })),
                     ...attachmentFolderPayload
                 })
@@ -935,8 +830,6 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setAssigneeId("")
                 setAssigneeIds([])
                 setRemovedAssigneeNotice(null)
-                setStartDate(today)
-                setEndDate("")
                 setInstructionsFile(null)
                 setEnableChecklist(false)
                 setChecklistItems([])
@@ -1028,38 +921,22 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                         </Button>
                     </DialogTrigger>
                 )}
-                <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] p-0 overflow-visible" showOverlay={showOverlay}>
-                    {!task && visibleSeriesStack.length > 0 && (
-                        <div className="pointer-events-none absolute inset-0 z-0">
-                            {visibleSeriesStack.map((seriesTask, index) => {
-                                const depth = visibleSeriesStack.length - index
-                                return (
-                                    <SeriesStackCard
-                                        key={seriesTask.id}
-                                        task={seriesTask}
-                                        depth={depth}
-                                        layer={index + 1}
-                                        onSelect={() => goToSeriesTask(Math.max(0, activeSeriesTaskIndex - visibleSeriesStack.length + index))}
-                                    />
-                                )
-                            })}
-                        </div>
-                    )}
+                <DialogContent ref={dialogContentRef} className="sm:max-w-[600px] p-0" showOverlay={showOverlay}>
                     <form
                         onSubmit={handleSubmit}
-                        className="relative z-10 flex h-full max-h-[85vh] flex-col rounded-[inherit] bg-background"
+                        className="flex h-full max-h-[85vh] flex-col rounded-[inherit] bg-background"
                     >
                         <DialogHeader className="p-6 pb-2">
-                            {onBack ? (
+                            {((!task && activeSeriesTaskIndex > 0) || onBack) ? (
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    onClick={onBack}
+                                    onClick={handleHeaderBack}
                                     className="w-fit -ml-2 mb-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-                                    Back
+                                    {!task && activeSeriesTaskIndex > 0 ? "Previous task" : "Back"}
                                 </Button>
                             ) : null}
                             <div className="space-y-1">
@@ -1170,28 +1047,27 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-1">
-                                    <Label className="sr-only">Assignees</Label>
-                                    <div className="relative">
-                                        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    className="w-full justify-between h-10 font-normal px-3 pr-16"
-                                                    onMouseEnter={handleAssigneePopoverMouseEnter}
-                                                    onMouseLeave={handleAssigneePopoverMouseLeave}
-                                                >
-                                                    <span className="truncate">
-                                                        {assigneeIds.length === 0
-                                                            ? "Open task"
-                                                            : assigneeIds.length === 1
-                                                                ? sortedUsers.find(u => u.id === assigneeIds[0])?.name || "1 selected"
-                                                                : `${assigneeIds.length} selected`}
-                                                    </span>
-                                                </Button>
-                                            </PopoverTrigger>
+                            <div className="space-y-1">
+                                <Label className="sr-only">Assignees</Label>
+                                <div className="relative">
+                                    <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full justify-between h-10 font-normal px-3 pr-16"
+                                                onMouseEnter={handleAssigneePopoverMouseEnter}
+                                                onMouseLeave={handleAssigneePopoverMouseLeave}
+                                            >
+                                                <span className="truncate">
+                                                    {assigneeIds.length === 0
+                                                        ? "Open task"
+                                                        : assigneeIds.length === 1
+                                                            ? sortedUsers.find(u => u.id === assigneeIds[0])?.name || "1 selected"
+                                                            : `${assigneeIds.length} selected`}
+                                                </span>
+                                            </Button>
+                                        </PopoverTrigger>
                                         <PopoverContent
                                             className="w-[260px] p-0"
                                             align="start"
@@ -1239,49 +1115,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                                 </div>
                                             </RemoveScroll>
                                         </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <Label htmlFor="taskDates" className="sr-only">Dates</Label>
-                                    <div className="relative flex-1">
-                                        {!task && (
-                                            <div className="absolute right-1 top-0 z-10 flex -translate-y-full items-center gap-2 bg-background px-1 py-0.5">
-                                                <button
-                                                    type="button"
-                                                    className="text-[10px] leading-none font-medium text-muted-foreground hover:text-foreground"
-                                                    onClick={() => applyDateQuickAction(1)}
-                                                >
-                                                    +1 day
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="text-[10px] leading-none font-medium text-muted-foreground hover:text-foreground"
-                                                    onClick={() => applyDateQuickAction(7)}
-                                                >
-                                                    +1 week
-                                                </button>
-                                            </div>
-                                        )}
-                                        <div className="relative">
-                                            <DateRangePicker
-                                                id="taskDates"
-                                                startDate={startDate}
-                                                endDate={endDate}
-                                                onChange={(start, end) => {
-                                                    setStartDate(start)
-                                                    setEndDate(end)
-                                                }}
-                                                className="h-10 pr-16"
-                                                placeholder="Select Days"
-                                                quickActions={[]}
-                                            />
-                                            <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${requiredTagClass(hasDateRange)}`}>
-                                                Required
-                                            </span>
-                                        </div>
-                                    </div>
+                                    </Popover>
                                 </div>
                             </div>
 

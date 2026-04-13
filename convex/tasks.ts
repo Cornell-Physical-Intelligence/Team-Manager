@@ -247,35 +247,12 @@ export const getOverdueTasks = query({
             taskMap.set(task.id, task)
         }
 
-        // Filter: overdue (dueDate < now), not in Done column, in active workspace project
+        // Task dates were removed, so there is no overdue-task feed to build here.
         const result: Array<{
             id: string
             title: string
             projectId: string | null
         }> = []
-
-        for (const task of taskMap.values()) {
-            if (!task.dueDate || task.dueDate >= args.now) continue
-
-            // Check column membership
-            if (task.columnId) {
-                const colName = columnNameMap.get(task.columnId)
-                if (colName === 'Done') continue
-                const boardId = columnBoardMap.get(task.columnId)
-                if (!boardId) continue
-                const projectId = boardProjectMap.get(boardId)
-                if (!projectId || !activeProjectIds.has(projectId)) continue
-                result.push({ id: task.id, title: task.title, projectId })
-            } else if (task.pushId) {
-                // Task in a push - find its project via push
-                const push = await ctx.db
-                    .query("pushes")
-                    .withIndex("by_legacy_id", (q) => q.eq("id", task.pushId!))
-                    .unique()
-                if (!push || !activeProjectIds.has(push.projectId)) continue
-                result.push({ id: task.id, title: task.title, projectId: push.projectId })
-            }
-        }
 
         return result
     },

@@ -5,8 +5,6 @@ export async function createTaskInConvex(input: {
     projectId: string
     workspaceId: string
     columnId?: string | null
-    startDate?: number | null
-    endDate?: number | null
     description?: string
     assigneeId?: string
     assigneeIds?: string[]
@@ -19,8 +17,6 @@ export async function createTaskInConvex(input: {
     seriesTasks?: Array<{
         title: string
         description?: string
-        startDate?: number | null
-        endDate?: number | null
     }>
     createdBy: string
     createdByName: string
@@ -31,8 +27,6 @@ export async function createTaskInConvex(input: {
         projectId: input.projectId,
         workspaceId: input.workspaceId,
         columnId: input.columnId ?? undefined,
-        startDate: input.startDate ?? undefined,
-        endDate: input.endDate ?? undefined,
         description: input.description,
         assigneeId: input.assigneeId,
         assigneeIds: input.assigneeIds,
@@ -46,8 +40,6 @@ export async function createTaskInConvex(input: {
             taskId: createLegacyId("task"),
             title: seriesTask.title,
             description: seriesTask.description,
-            startDate: seriesTask.startDate ?? null,
-            endDate: seriesTask.endDate ?? null,
         })),
         createdBy: input.createdBy,
         createdByName: input.createdByName,
@@ -85,8 +77,6 @@ export async function updateTaskDetailsInConvex(
         description?: string | null
         assigneeId?: string | null
         assigneeIds?: string[]
-        startDate?: number | null
-        endDate?: number | null
         requireAttachment?: boolean
         enableProgress?: boolean
         progress?: number

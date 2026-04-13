@@ -15,14 +15,10 @@ type TaskRowProps = {
         projectName: string
         projectColor: string
         pushId: string | null
-        dueText: string
-        isOverdue: boolean
         commentsCount: number
         attachmentsCount: number
         progress: number
         enableProgress: boolean
-        startDate: string | null
-        endDate: string | null
     }
 }
 
@@ -56,29 +52,7 @@ export function TaskRow({ task }: TaskRowProps) {
                 <span className="text-sm font-medium leading-snug line-clamp-2">{task.title}</span>
             </div>
 
-            <div className="flex items-center justify-between gap-2 mt-auto">
-                <div className="flex items-center gap-1.5 min-w-0">
-                    {task.dueText && (
-                        <div
-                            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate tag-shimmer"
-                            style={task.isOverdue ? {
-                                background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
-                                borderColor: 'rgba(239, 68, 68, 0.3)',
-                                color: 'rgb(220, 38, 38)',
-                                '--tag-color': 'rgba(239, 68, 68, 0.15)'
-                            } as React.CSSProperties : {
-                                background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
-                                borderColor: 'rgba(156, 163, 175, 0.3)',
-                                color: 'rgb(107, 114, 128)',
-                                '--tag-color': 'rgba(156, 163, 175, 0.15)'
-                            } as React.CSSProperties}
-                        >
-                            <Clock className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{task.dueText}</span>
-                        </div>
-                    )}
-                </div>
-
+            <div className="flex items-center justify-end gap-2 mt-auto">
                 <div
                     className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px] border tag-shimmer"
                     style={{
@@ -109,8 +83,6 @@ type ApprovalRowProps = {
         attachmentsCount: number
         progress: number
         enableProgress: boolean
-        startDate: string | null
-        endDate: string | null
         doneColumnId: string
         inProgressColumnId: string
     }

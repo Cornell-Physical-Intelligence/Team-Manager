@@ -11,9 +11,6 @@ type PendingReviewTaskProps = {
         id: string
         title: string
         description: string | null
-        startDate: Date | string | null
-        endDate: Date | string | null
-        dueDate: Date | string | null
         assignee: { id: string; name: string } | null
         column: {
             name: string
@@ -128,9 +125,6 @@ export function PendingReviewTask({ task }: PendingReviewTaskProps) {
                         id: task.id,
                         title: task.title,
                         description: task.description,
-                        startDate: task.startDate,
-                        endDate: task.endDate,
-                        dueDate: task.dueDate,
                         assignee: task.assignee,
                         column: task.column,
                         columnId: null,

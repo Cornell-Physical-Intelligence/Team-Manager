@@ -29,22 +29,10 @@ function sortProjectsByCreatedDesc(a: Doc<"projects">, b: Doc<"projects">) {
     return (b.createdAt ?? 0) - (a.createdAt ?? 0) || a.name.localeCompare(b.name)
 }
 
-function sortTasksByDueThenUpdated<T extends { dueDate: string | null; endDate: string | null; updatedAt: string | null }>(
+function sortTasksByRecentUpdate<T extends { updatedAt: string | null }>(
     tasks: T[]
 ) {
     return tasks.slice().sort((left, right) => {
-        const leftDue = left.dueDate ?? left.endDate
-        const rightDue = right.dueDate ?? right.endDate
-
-        if (leftDue && rightDue) {
-            const byDue = new Date(leftDue).getTime() - new Date(rightDue).getTime()
-            if (byDue !== 0) return byDue
-        } else if (leftDue) {
-            return -1
-        } else if (rightDue) {
-            return 1
-        }
-
         return new Date(right.updatedAt ?? 0).getTime() - new Date(left.updatedAt ?? 0).getTime()
     })
 }
@@ -78,9 +66,6 @@ type HydratedTask = {
         color: string
         status?: string
     } | null
-    startDate: string | null
-    endDate: string | null
-    dueDate: string | null
     submittedAt: string | null
     approvedAt: string | null
     createdAt: string
@@ -341,9 +326,6 @@ async function hydrateTasks(
                     status: push.status,
                 }
                 : null,
-            startDate: toIso(task.startDate),
-            endDate: toIso(task.endDate),
-            dueDate: toIso(task.dueDate),
             submittedAt: toIso(task.submittedAt),
             approvedAt: toIso(task.approvedAt),
             createdAt: new Date(task.createdAt).toISOString(),
@@ -456,7 +438,7 @@ export const getDashboardPageData = query({
             ? new Set(projectIds.filter((projectId) => memberProjectIds.has(projectId)))
             : new Set(projectIds)
 
-        const myTasks = sortTasksByDueThenUpdated(
+        const myTasks = sortTasksByRecentUpdate(
             allTasks.filter((task) => {
                 const projectId = task.column?.board?.project?.id
                 return !!projectId && accessibleProjectIds.has(projectId) && isAssignedToUser(task, args.userId)
@@ -494,7 +476,6 @@ export const getDashboardPageData = query({
                                 columnName: task.column?.name || "Unknown",
                                 projectId: task.column?.board?.project?.id || "",
                                 projectName: task.column?.board?.project?.name || "",
-                                dueDate: task.dueDate ?? task.endDate,
                             })),
                         }
                     })
@@ -563,9 +544,6 @@ export const getMembersPageData = query({
                 id: task.id,
                 title: task.title,
                 description: task.description,
-                dueDate: task.dueDate,
-                endDate: task.endDate,
-                startDate: task.startDate,
                 updatedAt: task.updatedAt,
                 progress: task.progress,
                 enableProgress: task.enableProgress,
@@ -620,7 +598,7 @@ export const getMyBoardPageData = query({
         const activeProjects = await getActiveWorkspaceProjects(ctx, args.workspaceId)
         const tasks = await hydrateTasks(ctx, await getTasksForProjectIds(ctx, activeProjects.map((project) => project.id)))
 
-        const transformedTasks = sortTasksByDueThenUpdated(
+        const transformedTasks = sortTasksByRecentUpdate(
             tasks.filter((task) => isAssignedToUser(task, args.userId))
         ).map((task) => ({
             id: task.id,
@@ -634,9 +612,6 @@ export const getMyBoardPageData = query({
             pushId: task.push?.id || null,
             pushName: task.push?.name || null,
             pushColor: task.push?.color || null,
-            dueDate: task.dueDate ?? task.endDate,
-            startDate: task.startDate,
-            endDate: task.endDate,
             progress: task.progress,
             enableProgress: task.enableProgress,
             commentsCount: task.commentsCount,
@@ -740,9 +715,6 @@ export const getHeatmapWidgetData = query({
                     }
                     : null,
                 push: task.push ? { id: task.push.id, name: task.push.name } : null,
-                dueDate: task.dueDate,
-                endDate: task.endDate,
-                startDate: task.startDate,
                 createdAt: task.createdAt,
                 updatedAt: task.updatedAt,
                 submittedAt: task.submittedAt,
@@ -827,9 +799,6 @@ export const getHeatmapPageData = query({
                         color: task.push.color,
                     }
                     : null,
-                dueDate: task.dueDate,
-                endDate: task.endDate,
-                startDate: task.startDate,
                 createdAt: task.createdAt,
                 updatedAt: task.updatedAt,
                 submittedAt: task.submittedAt,

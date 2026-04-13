@@ -7,7 +7,6 @@ import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
 import { resolveProjectColumnId } from '@/lib/kanban-columns'
 import { driveConfigTableExists, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
 import { getWorkspaceProjectColumns } from '@/lib/convex/projects'
-import { differenceInCalendarDays } from 'date-fns'
 import {
     createTaskInConvex,
     updateTaskStatusInConvex,
@@ -17,46 +16,11 @@ import {
 } from '@/lib/convex/kanban'
 import { api, fetchQuery } from '@/lib/convex/server'
 
-function parseDateOnlyStart(dateStr: string) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
-    if (!match) return null
-    const year = Number(match[1])
-    const monthIndex = Number(match[2]) - 1
-    const day = Number(match[3])
-    return new Date(year, monthIndex, day, 0, 0, 0, 0)
-}
-
-function parseDateInput(dateStr: string, mode: "startOfDay" | "endOfDay") {
-    const dateOnly = parseDateOnlyStart(dateStr)
-    if (dateOnly) {
-        if (mode === "endOfDay") {
-            dateOnly.setHours(23, 59, 59, 999)
-        }
-        return dateOnly
-    }
-    return new Date(dateStr)
-}
-
-function formatDueLine(due: Date | null) {
-    if (!due) return 'It has no due date'
-    const now = new Date()
-
-    const daysLeft = differenceInCalendarDays(due, now)
-    if (daysLeft < 0) {
-        const daysOver = Math.abs(daysLeft)
-        return `It is overdue by ${daysOver} day${daysOver === 1 ? '' : 's'}`
-    }
-    if (daysLeft === 0) return 'It is due today'
-    return `It is due in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`
-}
-
 type CreateTaskInput = {
     title: string
     projectId: string
     boardId?: string
     columnId?: string | null
-    startDate?: string | null
-    endDate?: string | null
     description?: string
     assigneeId?: string
     assigneeIds?: string[]
@@ -69,8 +33,6 @@ type CreateTaskInput = {
     seriesTasks?: Array<{
         title: string
         description?: string
-        startDate?: string | null
-        endDate?: string | null
     }>
 }
 
@@ -106,7 +68,7 @@ async function resolveTaskStatusColumnId(
 
 export async function createTask(input: CreateTaskInput) {
 
-    const { title, projectId, columnId, startDate, endDate, description, assigneeId, pushId } = input
+    const { title, projectId, columnId, description, assigneeId, pushId } = input
 
     if (!title || !projectId) {
         return { error: 'Title and Project are required' }
@@ -153,8 +115,6 @@ export async function createTask(input: CreateTaskInput) {
             attachmentFolderName = null
         }
 
-        const startDateMs = startDate ? parseDateInput(startDate, "startOfDay").getTime() : null
-        const endDateMs = endDate ? parseDateInput(endDate, "endOfDay").getTime() : null
         const seriesTasks = (input.seriesTasks ?? []).map((seriesTask, index) => {
             const nextTitle = seriesTask.title.trim()
             if (!nextTitle) {
@@ -164,8 +124,6 @@ export async function createTask(input: CreateTaskInput) {
             return {
                 title: nextTitle,
                 description: seriesTask.description?.trim() || undefined,
-                startDate: seriesTask.startDate ? parseDateInput(seriesTask.startDate, "startOfDay").getTime() : null,
-                endDate: seriesTask.endDate ? parseDateInput(seriesTask.endDate, "endOfDay").getTime() : null,
             }
         })
 
@@ -174,8 +132,6 @@ export async function createTask(input: CreateTaskInput) {
             projectId,
             workspaceId: user.workspaceId,
             columnId: columnId ?? null,
-            startDate: startDateMs,
-            endDate: endDateMs,
             description: description?.trim() || undefined,
             assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
             assigneeIds: input.assigneeIds,
@@ -212,15 +168,14 @@ export async function createTask(input: CreateTaskInput) {
             if (assignedUsers.length > 0) {
                 const mentions = assignedUsers.map((u) => `<@${u.discordId}>`).join(" ")
                 if (mentions) {
-                    const dueDate = endDate ? parseDateInput(endDate, "endOfDay") : null
                     const createdTaskCount = createdTaskRefs.length
                     await sendDiscordNotification(
                         "",
                         [{
                             title: createdTaskCount > 1 ? "📚 Task Series Assignment" : "📌 Task Assignment",
                             description: createdTaskCount > 1
-                                ? `${mentions}, you have been assigned a ${createdTaskCount}-task series starting with **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`
-                                : `${mentions}, you have been assigned **${title.trim()}** in project **${taskResult.projectName}**\n${formatDueLine(dueDate)}`,
+                                ? `${mentions}, you have been assigned a ${createdTaskCount}-task series starting with **${title.trim()}** in project **${taskResult.projectName}**`
+                                : `${mentions}, you have been assigned **${title.trim()}** in project **${taskResult.projectName}**`,
                             color: 0x5865F2,
                             timestamp: new Date().toISOString(),
                         }],
@@ -242,8 +197,6 @@ export async function createTask(input: CreateTaskInput) {
             assigneeId: assigneeId || null,
             assignees: (taskResult.task.assigneeIds || []).map((userId: string) => ({ user: { id: userId, name: '' } })),
             description: input.description?.trim() || null,
-            startDate: startDate ?? null,
-            endDate: endDate ?? null,
             requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
             enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
         }
@@ -394,14 +347,6 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
-        // Convert date strings to milliseconds for Convex
-        const startDateMs = input.startDate !== undefined
-            ? (input.startDate ? parseDateInput(input.startDate, "startOfDay").getTime() : null)
-            : undefined
-        const endDateMs = input.endDate !== undefined
-            ? (input.endDate ? parseDateInput(input.endDate, "endOfDay").getTime() : null)
-            : undefined
-
         const result = await updateTaskDetailsInConvex(
             taskId,
             user.workspaceId,
@@ -413,8 +358,6 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
                 description: input.description !== undefined ? (input.description || null) : undefined,
                 assigneeId: input.assigneeId !== undefined ? (input.assigneeId && input.assigneeId !== "" ? input.assigneeId : null) : undefined,
                 assigneeIds: input.assigneeIds,
-                startDate: startDateMs,
-                endDate: endDateMs,
                 requireAttachment: input.requireAttachment,
                 enableProgress: input.enableProgress,
                 progress: input.progress,
@@ -443,15 +386,11 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             const mentions = assignedUsers.map((u) => `<@${u.discordId}>`).join(" ")
 
             if (mentions) {
-                const dueDate =
-                    input.endDate !== undefined
-                        ? (input.endDate ? parseDateInput(input.endDate, "endOfDay") : null)
-                        : null
                 await sendDiscordNotification(
                     "",
                     [{
                         title: "📌 Task Assignment",
-                        description: `${mentions}, you have been assigned **${r.taskTitle}** in project **${r.projectName}**\n${formatDueLine(dueDate)}`,
+                        description: `${mentions}, you have been assigned **${r.taskTitle}** in project **${r.projectName}**`,
                         color: 0x5865F2,
                         timestamp: new Date().toISOString(),
                     }],

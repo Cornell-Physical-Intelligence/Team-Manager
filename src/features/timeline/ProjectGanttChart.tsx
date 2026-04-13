@@ -60,8 +60,8 @@ export function ProjectGanttChart({ tasks, projectId, pushes = [], projectColor 
     if (tasksWithDates.length === 0) {
         return (
             <div className="p-8 text-sm text-center text-muted-foreground border border-dashed rounded-lg">
-                <p className="font-medium mb-1">No tasks with dates</p>
-                <p className="text-xs">Add start and end dates to tasks to see the Gantt chart.</p>
+                <p className="font-medium mb-1">Task scheduling is unavailable</p>
+                <p className="text-xs">Tasks no longer track dates, so this view only reflects project timelines.</p>
             </div>
         )
     }

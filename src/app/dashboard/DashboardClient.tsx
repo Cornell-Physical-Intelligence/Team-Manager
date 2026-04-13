@@ -61,7 +61,6 @@ function getActionDescription(action: string, field: string | null): string {
         if (field === 'title') return 'Updated the title'
         if (field === 'description') return 'Updated the description'
         if (field === 'assignee') return 'Changed the assignee'
-        if (field === 'dueDate' || field === 'endDate') return 'Updated the due date'
         if (field === 'progress') return 'Updated progress'
         if (field === 'status') return 'Changed status'
         return `Updated ${field || 'details'}`

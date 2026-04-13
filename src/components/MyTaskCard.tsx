@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Clock } from "lucide-react"
 import { TaskPreview } from "@/features/kanban/TaskPreview"
 
 type MyTaskCardProps = {
@@ -9,9 +8,6 @@ type MyTaskCardProps = {
         id: string
         title: string
         description: string | null
-        startDate: Date | string | null
-        endDate: Date | string | null
-        dueDate: Date | string | null
         assignee: { id: string; name: string } | null
         column: {
             name: string
@@ -28,37 +24,11 @@ type MyTaskCardProps = {
     }
 }
 
-function getTimeUntilDue(dueDate: Date | string | null): { text: string; isOverdue: boolean } {
-    if (!dueDate) return { text: '', isOverdue: false }
-
-    const now = new Date()
-    const due = new Date(dueDate)
-    const diffMs = due.getTime() - now.getTime()
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60))
-
-    if (diffMs < 0) {
-        const overdueDays = Math.abs(diffDays)
-        if (overdueDays === 0) return { text: 'Today', isOverdue: true }
-        if (overdueDays === 1) return { text: '1d overdue', isOverdue: true }
-        return { text: `${overdueDays}d overdue`, isOverdue: true }
-    }
-
-    if (diffHours <= 24) return { text: 'Today', isOverdue: false }
-    if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false }
-    if (diffDays <= 7) return { text: `${diffDays}d`, isOverdue: false }
-    return { text: `${diffDays}d`, isOverdue: false }
-}
-
 export function MyTaskCard({ task }: MyTaskCardProps) {
     const [showTaskPreview, setShowTaskPreview] = useState(false)
 
     const project = task.column?.board?.project
     const projectColor = project?.color || '#6b7280'
-    const effectiveDueDate = task.endDate || task.dueDate
-    const { text: dueText, isOverdue } = task.column?.name !== 'Done'
-        ? getTimeUntilDue(effectiveDueDate)
-        : { text: '', isOverdue: false }
 
     return (
         <>
@@ -83,16 +53,6 @@ export function MyTaskCard({ task }: MyTaskCardProps) {
                             </span>
                         )}
                     </div>
-
-                    {dueText && (
-                        <span className={`
-                            text-[10px] shrink-0 flex items-center gap-1 mt-0.5
-                            ${isOverdue ? 'text-red-500 font-medium' : 'text-muted-foreground'}
-                        `}>
-                            <Clock className="h-3 w-3" />
-                            {dueText}
-                        </span>
-                    )}
                 </div>
             </div>
 
@@ -102,9 +62,6 @@ export function MyTaskCard({ task }: MyTaskCardProps) {
                         id: task.id,
                         title: task.title,
                         description: task.description,
-                        startDate: task.startDate,
-                        endDate: task.endDate,
-                        dueDate: task.dueDate,
                         assignee: task.assignee,
                         column: task.column,
                         columnId: null,

@@ -42,22 +42,6 @@ export function DashboardPageClient({
 
     const pendingTasks = myTasks.filter((task) => task.column?.name !== "Done" && task.column?.name !== "Review")
 
-    const getDueText = (dueDate: string | null): { text: string; isOverdue: boolean } => {
-        if (!dueDate) return { text: "", isOverdue: false }
-        const now = new Date().getTime()
-        const endTime = new Date(dueDate).getTime()
-        const daysLeft = Math.ceil((endTime - now) / (1000 * 60 * 60 * 24))
-        const isOverdue = daysLeft < 0
-
-        const text = isOverdue
-            ? `${Math.abs(daysLeft)}d overdue`
-            : daysLeft === 0
-                ? "Today"
-                : `${daysLeft}d`
-
-        return { text, isOverdue }
-    }
-
     const driveConnected = !!driveConfig?.connected
     const driveHasFolder = !!driveConfig?.folderId
     const showDriveSetup = isAdmin && (!driveConnected || !driveHasFolder)
@@ -124,8 +108,6 @@ export function DashboardPageClient({
                                         {pendingTasks.map((task) => {
                                             const project = task.column?.board?.project
                                             const projectColor = project?.color || "#6b7280"
-                                            const dueDate = task.dueDate || task.endDate
-                                            const { text: dueText, isOverdue } = getDueText(dueDate)
 
                                             return (
                                                 <TaskRow
@@ -138,14 +120,10 @@ export function DashboardPageClient({
                                                         projectName: project?.name || "",
                                                         projectColor,
                                                         pushId: task.push?.id || null,
-                                                        dueText,
-                                                        isOverdue,
                                                         commentsCount: task.commentsCount,
                                                         attachmentsCount: task.attachmentsCount,
                                                         progress: task.progress,
                                                         enableProgress: task.enableProgress,
-                                                        startDate: task.startDate || null,
-                                                        endDate: task.endDate || null,
                                                     }}
                                                 />
                                             )
@@ -191,8 +169,6 @@ export function DashboardPageClient({
                                                             attachmentsCount: task.attachmentsCount,
                                                             progress: task.progress,
                                                             enableProgress: task.enableProgress,
-                                                            startDate: task.startDate || null,
-                                                            endDate: task.endDate || null,
                                                             doneColumnId: doneColumn?.id || "",
                                                             inProgressColumnId: inProgressColumn?.id || "",
                                                         }}

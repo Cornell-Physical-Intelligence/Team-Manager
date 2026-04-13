@@ -17,7 +17,7 @@ import { acceptReviewTask, denyReviewTask, deleteTask } from "@/app/actions/kanb
 import { createTaskComment, deleteTaskComment } from "@/app/actions/task-comments"
 import { deleteTaskAttachment, uploadTaskAttachment } from "@/app/actions/task-attachments"
 import {
-    Pencil, Calendar, Clock,
+    Pencil, Clock,
     Send, FileText, Upload, Reply, X, Download, Maximize2, Trash2, CheckCircle, XCircle, ListChecks, Lock
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -31,9 +31,6 @@ type Task = {
     title: string
     description?: string | null
     status?: string
-    startDate?: Date | string | null
-    endDate?: Date | string | null
-    dueDate?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
     attachmentFolderId?: string | null
@@ -229,11 +226,6 @@ const CommentNode = ({ comment, depth = 0, userRole, currentUserId, onReply, onD
             )}
         </div>
     )
-}
-
-const formatDate = (date: Date | string | null | undefined) => {
-    if (!date) return '—'
-    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 const formatFileSize = (bytes: number) => {
@@ -697,7 +689,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const daysActive = task.createdAt
         ? Math.floor((new Date().getTime() - new Date(task.createdAt).getTime()) / (1000 * 60 * 60 * 24))
         : 0
-    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.column?.name !== 'Done'
     const isReviewColumn = task.column?.name === 'Review'
     const isAdminOrLead = userRole === 'Admin' || userRole === 'Team Lead'
     const showReviewButtons = isReviewColumn && isAdminOrLead
@@ -798,7 +789,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                             Blocked
                                         </Badge>
                                     )}
-                                    {isOverdue && <Badge variant="destructive" className="text-[9px] h-4">Overdue</Badge>}
                                 </div>
                                 {task.series?.isBlocked && task.series.previousTaskTitle && (
                                     <p className="mt-1 text-[10px] text-amber-700/90">
@@ -1241,11 +1231,6 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                             <span className="flex items-center gap-1" suppressHydrationWarning>
                                 <Clock className="h-2.5 w-2.5" />
                                 {daysActive}d active
-                            </span>
-                            <span className="text-muted-foreground/30">•</span>
-                            <span className="flex items-center gap-1" suppressHydrationWarning>
-                                <Calendar className="h-2.5 w-2.5" />
-                                {formatDate(task.startDate)} → {formatDate(task.endDate)}
                             </span>
                             {showReviewButtons && (
                                 <>

@@ -44,9 +44,6 @@ type Task = {
     pushId: string | null
     pushName: string | null
     pushColor: string | null
-    dueDate: string | null
-    startDate: string | null
-    endDate: string | null
     progress: number
     enableProgress: boolean
     commentsCount: number
@@ -74,29 +71,6 @@ type PersonalKanbanProps = {
     columns: Column[]
     projects: Project[]
     userName: string
-}
-
-function getDueInfo(dueDate: string | null): { text: string; isOverdue: boolean; isUrgent: boolean } {
-    if (!dueDate) return { text: '', isOverdue: false, isUrgent: false }
-
-    const now = new Date()
-    const due = new Date(dueDate)
-    const diffMs = due.getTime() - now.getTime()
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-
-    if (diffMs < 0) {
-        const overdueDays = Math.abs(diffDays)
-        return {
-            text: overdueDays === 0 ? 'Today' : `${overdueDays}d overdue`,
-            isOverdue: true,
-            isUrgent: true
-        }
-    }
-
-    if (diffDays === 0) return { text: 'Today', isOverdue: false, isUrgent: true }
-    if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false, isUrgent: true }
-    if (diffDays <= 3) return { text: `${diffDays}d`, isOverdue: false, isUrgent: true }
-    return { text: `${diffDays}d`, isOverdue: false, isUrgent: false }
 }
 
 function getPendingReviewText(submittedAt: string | null) {
@@ -138,7 +112,6 @@ function DraggableTaskCard({ task, onClick }: { task: Task; onClick: () => void 
 function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
     const isDone = task.columnName === 'Done'
     const isReview = task.columnName === 'Review'
-    const dueInfo = isDone ? null : getDueInfo(task.dueDate)
     const reviewPendingText = isReview ? getPendingReviewText(task.submittedAt) : null
 
     // Done column variant
@@ -186,44 +159,19 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
 
             {/* Meta Row */}
             <div className="flex items-center justify-between gap-2 mt-auto">
-                {/* Due Date / Pending Review Info (Left) */}
+                {/* Pending Review Info (Left) */}
                 <div className="flex items-center gap-1.5 min-w-0">
-                    {isReview ? (
-                        // Show pending review time for Review cards
-                        reviewPendingText && (
-                            <div
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border bg-muted text-muted-foreground border-transparent truncate tag-shimmer"
-                                style={{
-                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
-                                } as React.CSSProperties}
-                            >
-                                <Clock className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{reviewPendingText}</span>
-                            </div>
-                        )
-                    ) : (
-                        // Show due date for other cards
-                        dueInfo && (
-                            <div
-                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate tag-shimmer"
-                                style={dueInfo.isOverdue ? {
-                                    background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
-                                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    color: 'rgb(220, 38, 38)',
-                                    '--tag-color': 'rgba(239, 68, 68, 0.15)'
-                                } as React.CSSProperties : {
-                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
-                                    borderColor: 'rgba(156, 163, 175, 0.3)',
-                                    color: 'rgb(107, 114, 128)',
-                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
-                                } as React.CSSProperties}
-                            >
-                                <Clock className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{dueInfo.text}</span>
-                            </div>
-                        )
+                    {isReview && reviewPendingText && (
+                        <div
+                            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border bg-muted text-muted-foreground border-transparent truncate tag-shimmer"
+                            style={{
+                                '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                            } as React.CSSProperties}
+                        >
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{reviewPendingText}</span>
+                        </div>
                     )}
-
                 </div>
 
                 {/* Project Badge (Right) */}
@@ -316,7 +264,6 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
     const { toast } = useToast()
     const [columns, setColumns] = useState<Column[]>(initialColumns)
     const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
-    const [showOverdueOnly, setShowOverdueOnly] = useState(false)
     const [activeTask, setActiveTask] = useState<Task | null>(null)
     const [overColumnId, setOverColumnId] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
@@ -381,16 +328,10 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                 if (selectedProjects.size > 0 && !selectedProjects.has(task.projectId)) {
                     return false
                 }
-                if (showOverdueOnly) {
-                    const { isOverdue } = getDueInfo(task.dueDate)
-                    if (!isOverdue) return false
-                }
                 return true
             })
         }))
-    }, [columns, selectedProjects, showOverdueOnly])
-
-    const overdueCount = columns.flatMap(c => c.tasks).filter(t => t.columnName !== 'Done' && getDueInfo(t.dueDate).isOverdue).length
+    }, [columns, selectedProjects])
 
     const toggleProject = (projectId: string) => {
         setSelectedProjects(prev => {
@@ -403,7 +344,6 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
 
     const clearFilters = () => {
         setSelectedProjects(new Set())
-        setShowOverdueOnly(false)
     }
 
     const keepFilterMenuOpen = useCallback((event: Event) => {
@@ -522,7 +462,7 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
         }
     }, [columns, toast])
 
-    const hasActiveFilters = selectedProjects.size > 0 || showOverdueOnly
+    const hasActiveFilters = selectedProjects.size > 0
 
     return (
         <DndContext
@@ -557,26 +497,15 @@ export function PersonalKanban({ columns: initialColumns, projects, userName }: 
                                     Filter
                                     {hasActiveFilters && (
                                         <span className="ml-1.5 px-1.5 py-0.5 bg-primary text-primary-foreground rounded-full text-[10px]">
-                                            {selectedProjects.size + (showOverdueOnly ? 1 : 0)}
+                                            {selectedProjects.size}
                                         </span>
                                     )}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuLabel className="text-xs">Quick Filters</DropdownMenuLabel>
-                                <DropdownMenuCheckboxItem
-                                    checked={showOverdueOnly}
-                                    onCheckedChange={setShowOverdueOnly}
-                                    onSelect={keepFilterMenuOpen}
-                                    className="text-xs"
-                                >
-                                    <Clock className="h-3 w-3 mr-2 text-red-500" />
-                                    Overdue only ({overdueCount})
-                                </DropdownMenuCheckboxItem>
-
                                 {projects.length > 0 && (
                                     <>
-                                        <DropdownMenuSeparator />
                                         <DropdownMenuLabel className="text-xs">Divisions</DropdownMenuLabel>
                                         {projects.map(project => (
                                             <DropdownMenuCheckboxItem

@@ -142,8 +142,6 @@ export const createTask = mutation({
         projectId: v.string(),
         workspaceId: v.string(),
         columnId: v.optional(v.string()),
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
         description: v.optional(v.string()),
         assigneeId: v.optional(v.string()),
         assigneeIds: v.optional(v.array(v.string())),
@@ -157,8 +155,6 @@ export const createTask = mutation({
             taskId: v.string(),
             title: v.string(),
             description: v.optional(v.string()),
-            startDate: v.optional(v.union(v.number(), v.null())),
-            endDate: v.optional(v.union(v.number(), v.null())),
         }))),
         now: v.number(),
         createdBy: v.string(),
@@ -216,8 +212,6 @@ export const createTask = mutation({
                 taskId: args.taskId,
                 title: primaryTitle,
                 description: args.description?.trim() || undefined,
-                startDate: args.startDate,
-                endDate: args.endDate,
             },
             ...normalizedSeriesTasks,
         ]
@@ -251,8 +245,6 @@ export const createTask = mutation({
                 requireAttachment: args.requireAttachment,
                 enableProgress: args.enableProgress,
                 progress: args.progress,
-                startDate: taskDefinition.startDate ?? undefined,
-                endDate: taskDefinition.endDate ?? undefined,
                 attachmentFolderId: args.attachmentFolderId ?? undefined,
                 attachmentFolderName: args.attachmentFolderName ?? undefined,
                 seriesId,
@@ -492,8 +484,6 @@ export const updateTaskDetails = mutation({
         description: v.optional(v.union(v.string(), v.null())),
         assigneeId: v.optional(v.union(v.string(), v.null())),
         assigneeIds: v.optional(v.array(v.string())),
-        startDate: v.optional(v.union(v.number(), v.null())),
-        endDate: v.optional(v.union(v.number(), v.null())),
         requireAttachment: v.optional(v.boolean()),
         enableProgress: v.optional(v.boolean()),
         progress: v.optional(v.number()),
@@ -599,34 +589,6 @@ export const updateTaskDetails = mutation({
             })
         }
 
-        // Start date
-        if (args.startDate !== undefined) {
-            const oldStartDate = task.startDate ? new Date(task.startDate as number).toISOString().split("T")[0] : "None"
-            const newStartDate = args.startDate ? new Date(args.startDate).toISOString().split("T")[0] : "None"
-            if (oldStartDate !== newStartDate) {
-                activityEntries.push({
-                    action: "updated",
-                    field: "startDate",
-                    oldValue: oldStartDate,
-                    newValue: newStartDate,
-                })
-            }
-        }
-
-        // End date
-        if (args.endDate !== undefined) {
-            const oldEndDate = task.endDate ? new Date(task.endDate as number).toISOString().split("T")[0] : "None"
-            const newEndDate = args.endDate ? new Date(args.endDate).toISOString().split("T")[0] : "None"
-            if (oldEndDate !== newEndDate) {
-                activityEntries.push({
-                    action: "updated",
-                    field: "endDate",
-                    oldValue: oldEndDate,
-                    newValue: newEndDate,
-                })
-            }
-        }
-
         // Build task patch
         const taskPatch: Record<string, unknown> = { updatedAt: args.now }
         if (titleChanged) taskPatch.title = nextTitle
@@ -634,8 +596,6 @@ export const updateTaskDetails = mutation({
         if (args.assigneeId !== undefined) {
             taskPatch.assigneeId = args.assigneeId && args.assigneeId !== "" ? args.assigneeId : undefined
         }
-        if (args.startDate !== undefined) taskPatch.startDate = args.startDate ?? undefined
-        if (args.endDate !== undefined) taskPatch.endDate = args.endDate ?? undefined
         if (args.requireAttachment !== undefined) taskPatch.requireAttachment = args.requireAttachment
         if (args.enableProgress !== undefined) taskPatch.enableProgress = args.enableProgress
         if (args.progress !== undefined) taskPatch.progress = args.progress

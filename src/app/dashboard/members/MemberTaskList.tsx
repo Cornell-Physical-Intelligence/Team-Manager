@@ -5,16 +5,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ChevronDown, ChevronUp, ExternalLink, Clock, CheckCircle2, Circle, AlertCircle, Calendar, History } from "lucide-react"
+import { ChevronDown, ChevronUp, ExternalLink, Clock, CheckCircle2, Circle, AlertCircle, History } from "lucide-react"
 import { ProjectRouteLink } from "@/features/projects/ProjectRouteLink"
 
 type Task = {
     id: string
     title: string
     description?: string | null
-    dueDate?: Date | string | null
-    endDate?: Date | string | null
-    startDate?: Date | string | null
     updatedAt?: Date | string | null
     progress?: number | null
     column?: {
@@ -70,21 +67,12 @@ function formatTimeAgo(date: Date | string) {
     return formatDate(date)
 }
 
-function isOverdue(task: Task) {
-    if (task.column?.name === 'Done') return false
-    const dueDate = task.dueDate || task.endDate
-    if (!dueDate) return false
-    return new Date(dueDate) < new Date()
-}
-
 function TaskItem({ task }: { task: Task }) {
-    const overdue = isOverdue(task)
     const status = task.column?.name || 'Unknown'
-    const dueDate = task.dueDate || task.endDate
     const project = task.column?.board?.project
 
     return (
-        <div className={`flex items-center justify-between p-3 rounded-lg border ${overdue ? 'border-red-200 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20' : 'border-border bg-muted/20'} hover:bg-muted/40 transition-colors group`}>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors group">
             <div className="flex items-center gap-3 min-w-0 flex-1">
                 {status === 'Done' && <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
                 {status === 'In Progress' && <Clock className="h-4 w-4 text-blue-500 shrink-0" />}
@@ -94,11 +82,6 @@ function TaskItem({ task }: { task: Task }) {
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                         <span className="font-medium text-sm truncate">{task.title}</span>
-                        {overdue && (
-                            <Badge variant="destructive" className="text-[9px] h-4 px-1 shrink-0">
-                                Overdue
-                            </Badge>
-                        )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                         {project && (
@@ -121,12 +104,6 @@ function TaskItem({ task }: { task: Task }) {
                                 }}
                             >
                                 {task.push.name}
-                            </span>
-                        )}
-                        {dueDate && (
-                            <span className={`text-[10px] flex items-center gap-0.5 ${overdue ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
-                                <Calendar className="h-3 w-3" />
-                                {formatDate(dueDate)}
                             </span>
                         )}
                     </div>
@@ -183,7 +160,6 @@ export function MemberTaskList({ tasks, activityLogs, userId }: MemberTaskListPr
     const todoTasks = tasks.filter(t => t.column?.name === 'Todo' || t.column?.name === 'To Do')
     const reviewTasks = tasks.filter(t => t.column?.name === 'Review')
     const completedTasks = tasks.filter(t => t.column?.name === 'Done')
-    const overdueTasks = tasks.filter(isOverdue)
 
     if (tasks.length === 0 && activityLogs.length === 0) {
         return (
@@ -226,11 +202,6 @@ export function MemberTaskList({ tasks, activityLogs, userId }: MemberTaskListPr
                             <TabsTrigger value="completed" className="text-xs h-7">
                                 Done ({completedTasks.length})
                             </TabsTrigger>
-                            {overdueTasks.length > 0 && (
-                                <TabsTrigger value="overdue" className="text-xs h-7 text-red-600">
-                                    Overdue ({overdueTasks.length})
-                                </TabsTrigger>
-                            )}
                             <TabsTrigger value="activity" className="text-xs h-7">
                                 Activity
                             </TabsTrigger>
@@ -279,18 +250,6 @@ export function MemberTaskList({ tasks, activityLogs, userId }: MemberTaskListPr
                                         <p className="text-sm text-muted-foreground text-center py-8">No completed tasks</p>
                                     ) : (
                                         completedTasks.map(task => <TaskItem key={task.id} task={task} />)
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </TabsContent>
-
-                        <TabsContent value="overdue" className="mt-0">
-                            <ScrollArea className="h-[300px]">
-                                <div className="space-y-2 pr-3">
-                                    {overdueTasks.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground text-center py-8">No overdue tasks</p>
-                                    ) : (
-                                        overdueTasks.map(task => <TaskItem key={task.id} task={task} />)
                                     )}
                                 </div>
                             </ScrollArea>

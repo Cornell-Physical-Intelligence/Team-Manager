@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ChevronRight, ChevronDown, Clock } from "lucide-react"
+import { ChevronRight, ChevronDown } from "lucide-react"
 import { ProjectRouteLink } from "@/features/projects/ProjectRouteLink"
 
 type TeamMember = {
@@ -20,7 +20,6 @@ type TeamMember = {
         columnName: string
         projectId: string
         projectName: string
-        dueDate: string | null
     }[]
 }
 
@@ -28,23 +27,6 @@ type TeamPopupProps = {
     members: TeamMember[]
     totalTasks: number
     children: React.ReactNode
-}
-
-function formatDueDate(date: string | null): { text: string; isOverdue: boolean } {
-    if (!date) return { text: '', isOverdue: false }
-    const now = new Date()
-    const due = new Date(date)
-    const diffMs = due.getTime() - now.getTime()
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-
-    if (diffMs < 0) {
-        const overdueDays = Math.abs(diffDays)
-        if (overdueDays === 0) return { text: 'Today', isOverdue: true }
-        return { text: `${overdueDays}d overdue`, isOverdue: true }
-    }
-    if (diffDays === 0) return { text: 'Today', isOverdue: false }
-    if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false }
-    return { text: `${diffDays}d`, isOverdue: false }
 }
 
 export function TeamPopup({ members, totalTasks, children }: TeamPopupProps) {
@@ -102,7 +84,6 @@ export function TeamPopup({ members, totalTasks, children }: TeamPopupProps) {
                                     {isExpanded && activeTasks.length > 0 && (
                                         <div className="border-t border-border bg-muted/20 p-2 space-y-1">
                                             {activeTasks.slice(0, 10).map(task => {
-                                                const { text: dueText, isOverdue } = formatDueDate(task.dueDate)
                                                 return (
                                                     <ProjectRouteLink
                                                         key={task.id}
@@ -118,12 +99,6 @@ export function TeamPopup({ members, totalTasks, children }: TeamPopupProps) {
                                                             <span className="text-xs truncate">{task.title}</span>
                                                         </div>
                                                         <div className="flex items-center gap-2 shrink-0 ml-2">
-                                                            {dueText && (
-                                                                <span className={`text-[10px] flex items-center gap-0.5 ${isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                                                    <Clock className="h-2.5 w-2.5" />
-                                                                    {dueText}
-                                                                </span>
-                                                            )}
                                                             <span className="text-[10px] text-muted-foreground hidden sm:inline">
                                                                 {task.projectName}
                                                             </span>
