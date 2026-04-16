@@ -17,7 +17,7 @@ import { acceptReviewTask, denyReviewTask, deleteTask } from "@/app/actions/kanb
 import { createTaskComment, deleteTaskComment } from "@/app/actions/task-comments"
 import { deleteTaskAttachment, uploadTaskAttachment } from "@/app/actions/task-attachments"
 import {
-    Pencil, Clock,
+    Pencil, Clock, Calendar,
     Send, FileText, Upload, Reply, X, Download, Maximize2, Trash2, CheckCircle, XCircle, ListChecks
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -31,6 +31,8 @@ type Task = {
     title: string
     description?: string | null
     status?: string
+    endDate?: Date | string | null
+    dueDate?: Date | string | null
     requireAttachment?: boolean
     enableProgress?: boolean
     attachmentFolderId?: string | null
@@ -108,6 +110,13 @@ const formatTimeAgo = (date: string | number) => {
     if (hours > 0) return `${hours}h ago`
     if (minutes > 0) return `${minutes}m ago`
     return 'Just now'
+}
+
+const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return '—'
+    const parsedDate = new Date(date)
+    if (Number.isNaN(parsedDate.getTime())) return '—'
+    return parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 const getAttachmentUrls = (attachment: Attachment) => {
@@ -681,6 +690,8 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const daysActive = task.createdAt
         ? Math.floor((new Date().getTime() - new Date(task.createdAt).getTime()) / (1000 * 60 * 60 * 24))
         : 0
+    const effectiveDueDate = task.dueDate || task.endDate
+    const isOverdue = !!effectiveDueDate && new Date(effectiveDueDate) < new Date() && task.column?.name !== 'Done'
     const isReviewColumn = task.column?.name === 'Review'
     const isAdminOrLead = userRole === 'Admin' || userRole === 'Team Lead'
     const showReviewButtons = isReviewColumn && isAdminOrLead
@@ -1208,6 +1219,18 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                 <Clock className="h-2.5 w-2.5" />
                                 {daysActive}d active
                             </span>
+                            {effectiveDueDate && (
+                                <>
+                                    <span className="text-muted-foreground/30">•</span>
+                                    <span
+                                        className={`flex items-center gap-1 ${isOverdue ? 'text-red-600' : ''}`}
+                                        suppressHydrationWarning
+                                    >
+                                        <Calendar className="h-2.5 w-2.5" />
+                                        {isOverdue ? `Overdue ${formatDate(effectiveDueDate)}` : `Due ${formatDate(effectiveDueDate)}`}
+                                    </span>
+                                </>
+                            )}
                             {showReviewButtons && (
                                 <>
                                     <span className="text-muted-foreground/30">•</span>

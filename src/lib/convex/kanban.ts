@@ -5,6 +5,7 @@ export async function createTaskInConvex(input: {
     projectId: string
     workspaceId: string
     columnId?: string | null
+    dueDate?: number | null
     description?: string
     assigneeId?: string
     assigneeIds?: string[]
@@ -23,6 +24,7 @@ export async function createTaskInConvex(input: {
         projectId: input.projectId,
         workspaceId: input.workspaceId,
         columnId: input.columnId ?? undefined,
+        dueDate: input.dueDate ?? undefined,
         description: input.description,
         assigneeId: input.assigneeId,
         assigneeIds: input.assigneeIds,
@@ -68,6 +70,7 @@ export async function updateTaskDetailsInConvex(
         description?: string | null
         assigneeId?: string | null
         assigneeIds?: string[]
+        dueDate?: number | null
         requireAttachment?: boolean
         enableProgress?: boolean
         progress?: number

@@ -16,11 +16,38 @@ import {
 } from '@/lib/convex/kanban'
 import { api, fetchQuery } from '@/lib/convex/server'
 
+function parseDateOnlyStart(dateStr: string) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
+    if (!match) return null
+    const year = Number(match[1])
+    const monthIndex = Number(match[2]) - 1
+    const day = Number(match[3])
+    return new Date(year, monthIndex, day, 0, 0, 0, 0)
+}
+
+function parseDateInput(dateStr: string, mode: "startOfDay" | "endOfDay") {
+    const dateOnly = parseDateOnlyStart(dateStr)
+    if (dateOnly) {
+        if (mode === "endOfDay") {
+            dateOnly.setHours(23, 59, 59, 999)
+        }
+        return dateOnly
+    }
+    return new Date(dateStr)
+}
+
+function parseDueDateInput(dateStr: string | null | undefined) {
+    if (!dateStr) return null
+    const time = parseDateInput(dateStr, "endOfDay").getTime()
+    return Number.isFinite(time) ? time : null
+}
+
 type CreateTaskInput = {
     title: string
     projectId: string
     boardId?: string
     columnId?: string | null
+    dueDate?: string | null
     description?: string
     assigneeId?: string
     assigneeIds?: string[]
@@ -64,7 +91,7 @@ async function resolveTaskStatusColumnId(
 
 export async function createTask(input: CreateTaskInput) {
 
-    const { title, projectId, columnId, description, assigneeId, pushId } = input
+    const { title, projectId, columnId, dueDate, description, assigneeId, pushId } = input
 
     if (!title || !projectId) {
         return { error: 'Title and Project are required' }
@@ -111,11 +138,14 @@ export async function createTask(input: CreateTaskInput) {
             attachmentFolderName = null
         }
 
+        const dueDateMs = parseDueDateInput(dueDate)
+
         const result = await createTaskInConvex({
             title: title.trim(),
             projectId,
             workspaceId: user.workspaceId,
             columnId: columnId ?? null,
+            dueDate: dueDateMs,
             description: description?.trim() || undefined,
             assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
             assigneeIds: input.assigneeIds,
@@ -172,6 +202,7 @@ export async function createTask(input: CreateTaskInput) {
             assigneeId: assigneeId || null,
             assignees: (taskResult.task.assigneeIds || []).map((userId: string) => ({ user: { id: userId, name: '' } })),
             description: input.description?.trim() || null,
+            dueDate: dueDateMs ? new Date(dueDateMs).toISOString() : null,
             requireAttachment: input.requireAttachment !== undefined ? input.requireAttachment : false,
             enableProgress: input.enableProgress !== undefined ? input.enableProgress : false,
         }
@@ -332,6 +363,9 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
                 description: input.description !== undefined ? (input.description || null) : undefined,
                 assigneeId: input.assigneeId !== undefined ? (input.assigneeId && input.assigneeId !== "" ? input.assigneeId : null) : undefined,
                 assigneeIds: input.assigneeIds,
+                dueDate: input.dueDate !== undefined
+                    ? parseDueDateInput(input.dueDate)
+                    : undefined,
                 requireAttachment: input.requireAttachment,
                 enableProgress: input.enableProgress,
                 progress: input.progress,

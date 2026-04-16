@@ -71,6 +71,7 @@ export function ActivityLogDetails({ open, onOpenChange, activity }: ActivityLog
             'description': 'Description',
             'startDate': 'Start Date',
             'endDate': 'Due Date',
+            'dueDate': 'Due Date',
             'status': 'Status'
         }
         return labels[field] || field.charAt(0).toUpperCase() + field.slice(1)

@@ -16,6 +16,8 @@ type TaskCardProps = {
         title: string
         columnId: string | null
         push?: { id: string; name: string; color: string; status: string } | null
+        endDate?: Date | string | null
+        dueDate?: Date | string | null
         updatedAt?: Date | string | null
         requireAttachment?: boolean
         assignee?: { id?: string; name: string } | null
@@ -74,6 +76,14 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
         userSelect: 'none' as const,
     }
 
+    const effectiveDueDate = task.dueDate || task.endDate
+    const parsedDueTime = effectiveDueDate ? new Date(effectiveDueDate).getTime() : NaN
+    const dueTime = Number.isFinite(parsedDueTime) ? parsedDueTime : null
+    const now = new Date().getTime()
+    const daysLeft = dueTime !== null
+        ? Math.ceil((dueTime - now) / (1000 * 60 * 60 * 24))
+        : null
+    const isOverdue = daysLeft !== null && daysLeft < 0
     const reviewPendingText = isReviewColumn ? getPendingReviewText(task.updatedAt) : null
 
     const assigneeUsers =
@@ -185,7 +195,7 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
             {/* Meta Row */}
             <div className="flex items-center justify-between gap-2 mt-auto">
                 <div className="flex items-center gap-1.5 min-w-0">
-                    {isReviewColumn && (
+                    {isReviewColumn ? (
                         reviewPendingText && (
                             <div
                                 className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
@@ -198,6 +208,34 @@ export function TaskCard({ task, overlay, onClick, isReviewColumn, isDoneColumn,
                             >
                                 <Clock className="w-3 h-3 shrink-0" />
                                 <span className="truncate">{reviewPendingText}</span>
+                            </div>
+                        )
+                    ) : (
+                        daysLeft !== null && (
+                            <div
+                                className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
+                                style={isOverdue ? {
+                                    background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
+                                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                                    color: 'rgb(220, 38, 38)',
+                                    '--tag-color': 'rgba(239, 68, 68, 0.15)'
+                                } as React.CSSProperties : {
+                                    background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                    borderColor: 'rgba(156, 163, 175, 0.3)',
+                                    color: 'rgb(107, 114, 128)',
+                                    '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                                } as React.CSSProperties}
+                            >
+                                <Clock className="w-3 h-3 shrink-0" />
+                                <span className="truncate">
+                                    {isOverdue
+                                        ? `${Math.abs(daysLeft)}d overdue`
+                                        : daysLeft === 0
+                                            ? "Today"
+                                            : daysLeft === 1
+                                                ? "Tomorrow"
+                                                : `${daysLeft}d`}
+                                </span>
                             </div>
                         )
                     )}

@@ -82,6 +82,7 @@ export const createTask = mutation({
         projectId: v.string(),
         workspaceId: v.string(),
         columnId: v.optional(v.string()),
+        dueDate: v.optional(v.union(v.number(), v.null())),
         description: v.optional(v.string()),
         assigneeId: v.optional(v.string()),
         assigneeIds: v.optional(v.array(v.string())),
@@ -151,6 +152,8 @@ export const createTask = mutation({
             requireAttachment: args.requireAttachment,
             enableProgress: args.enableProgress,
             progress: args.progress,
+            endDate: args.dueDate ?? undefined,
+            dueDate: args.dueDate ?? undefined,
             attachmentFolderId: args.attachmentFolderId ?? undefined,
             attachmentFolderName: args.attachmentFolderName ?? undefined,
             createdAt: args.now,
@@ -368,6 +371,7 @@ export const updateTaskDetails = mutation({
         description: v.optional(v.union(v.string(), v.null())),
         assigneeId: v.optional(v.union(v.string(), v.null())),
         assigneeIds: v.optional(v.array(v.string())),
+        dueDate: v.optional(v.union(v.number(), v.null())),
         requireAttachment: v.optional(v.boolean()),
         enableProgress: v.optional(v.boolean()),
         progress: v.optional(v.number()),
@@ -473,12 +477,34 @@ export const updateTaskDetails = mutation({
             })
         }
 
+        if (args.dueDate !== undefined) {
+            const previousDueAt = typeof task.dueDate === "number"
+                ? task.dueDate
+                : typeof task.endDate === "number"
+                    ? task.endDate
+                    : null
+            const oldDueDate = previousDueAt ? new Date(previousDueAt).toISOString().split("T")[0] : "None"
+            const newDueDate = args.dueDate ? new Date(args.dueDate).toISOString().split("T")[0] : "None"
+            if (oldDueDate !== newDueDate) {
+                activityEntries.push({
+                    action: "updated",
+                    field: "dueDate",
+                    oldValue: oldDueDate,
+                    newValue: newDueDate,
+                })
+            }
+        }
+
         // Build task patch
         const taskPatch: Record<string, unknown> = { updatedAt: args.now }
         if (titleChanged) taskPatch.title = nextTitle
         if (args.description !== undefined) taskPatch.description = args.description ?? undefined
         if (args.assigneeId !== undefined) {
             taskPatch.assigneeId = args.assigneeId && args.assigneeId !== "" ? args.assigneeId : undefined
+        }
+        if (args.dueDate !== undefined) {
+            taskPatch.dueDate = args.dueDate ?? undefined
+            taskPatch.endDate = args.dueDate ?? undefined
         }
         if (args.requireAttachment !== undefined) taskPatch.requireAttachment = args.requireAttachment
         if (args.enableProgress !== undefined) taskPatch.enableProgress = args.enableProgress

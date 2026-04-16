@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -37,6 +38,8 @@ type TaskType = {
     attachmentFolderName?: string | null
     instructionsFileUrl?: string | null
     instructionsFileName?: string | null
+    endDate?: Date | string | null
+    dueDate?: Date | string | null
 }
 
 type TaskDialogResultTask = TaskType & {
@@ -72,6 +75,12 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+
+function formatDateValue(value: Date | string | null | undefined) {
+    if (!value) return ""
+    const date = typeof value === "string" ? new Date(value) : value
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0]
+}
 
 export function TaskDialog({ columnId, projectId, pushId, users, task, open: externalOpen, onOpenChange, onTaskCreated, onTaskUpdated, onTaskDeleted, initialAssigneeIds, onBack, showOverlay = true }: {
     columnId?: string
@@ -117,6 +126,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
     const [description, setDescription] = useState(task?.description || "")
     const [assigneeId, setAssigneeId] = useState<string>(task?.assigneeId || "")
     const [assigneeIds, setAssigneeIds] = useState<string[]>([])
+    const [dueDate, setDueDate] = useState<string>(formatDateValue(task?.dueDate ?? task?.endDate))
     const [requireAttachment, setRequireAttachment] = useState<boolean>(task?.requireAttachment !== undefined ? task.requireAttachment : false)
     const [enableProgress, setEnableProgress] = useState<boolean>(task?.enableProgress !== undefined ? task.enableProgress : false)
     const [instructionsFile, setInstructionsFile] = useState<File | null>(null)
@@ -211,6 +221,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 }
                 setRequireAttachment(task.requireAttachment !== undefined ? task.requireAttachment : false)
                 setEnableProgress(task.enableProgress !== undefined ? task.enableProgress : false)
+                setDueDate(formatDateValue(task.dueDate ?? task.endDate))
                 if (task.instructionsFileUrl && task.instructionsFileName) {
                     setExistingInstructionsFile({ url: task.instructionsFileUrl, name: task.instructionsFileName })
                 } else {
@@ -228,6 +239,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setRemovedAssigneeNotice(null)
                 setRequireAttachment(false)
                 setEnableProgress(false)
+                setDueDate("")
                 setEnableChecklist(false)
                 setChecklistItems([])
                 setNewChecklistItem("")
@@ -542,6 +554,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     description: description.trim(),
                     assigneeId: sanitizedAssigneeIds.length > 0 ? sanitizedAssigneeIds[0] : "",
                     assigneeIds: sanitizedAssigneeIds,
+                    dueDate,
                     requireAttachment,
                     enableProgress,
                     projectId,
@@ -610,6 +623,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                     description: description.trim(),
                     assigneeId: sanitizedAssigneeIds[0],
                     assigneeIds: sanitizedAssigneeIds,
+                    dueDate,
                     requireAttachment,
                     enableProgress,
                     columnId: columnId!,
@@ -667,6 +681,7 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                 setAssigneeId("")
                 setAssigneeIds([])
                 setRemovedAssigneeNotice(null)
+                setDueDate("")
                 setInstructionsFile(null)
                 setEnableChecklist(false)
                 setChecklistItems([])
@@ -926,6 +941,18 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
                                         </PopoverContent>
                                     </Popover>
                                 </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label htmlFor="dueDate" className="text-xs font-medium text-muted-foreground">
+                                    Due date
+                                </Label>
+                                <DatePicker
+                                    id="dueDate"
+                                    value={dueDate}
+                                    onChange={setDueDate}
+                                    placeholder="Set due date"
+                                />
                             </div>
 
                             {showDriveSection && (
@@ -1207,4 +1234,3 @@ export function TaskDialog({ columnId, projectId, pushId, users, task, open: ext
         </>
     )
 }
-
