@@ -25,6 +25,7 @@ import { getInitials } from "@/lib/utils"
 import { MAX_ATTACHMENT_SIZE } from "@/lib/attachments"
 import { TaskChecklist } from "@/components/TaskChecklist"
 import { useDashboardUser } from "@/components/DashboardUserProvider"
+import { AttachmentPreviewDialog, canPreviewAttachment } from "@/components/AttachmentPreviewDialog"
 
 type Task = {
     id: string
@@ -121,8 +122,8 @@ const formatDate = (date: Date | string | null | undefined) => {
 
 const getAttachmentUrls = (attachment: Attachment) => {
     return {
-        preview: attachment.url,
-        download: `${attachment.url}?download=1`
+        preview: `/api/attachments/${attachment.id}`,
+        download: `/api/attachments/${attachment.id}?download=1`
     }
 }
 
@@ -295,6 +296,13 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
     const [commentError, setCommentError] = useState<string | null>(null)
     const [replyingTo, setReplyingTo] = useState<Comment | null>(null)
     const [enlargedImage, setEnlargedImage] = useState<{ url: string; name: string } | null>(null)
+    const [previewAttachment, setPreviewAttachment] = useState<{
+        name: string
+        url: string
+        downloadUrl: string
+        size?: number
+        type?: string
+    } | null>(null)
     const [isProcessingReview, setIsProcessingReview] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -1077,15 +1085,27 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                                                         </div>
 
                                                         <a
-                                                            href={download}
+                                                            href={preview}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                setPreviewAttachment({
+                                                                    name: a.name,
+                                                                    url: preview,
+                                                                    downloadUrl: download,
+                                                                    size: a.size,
+                                                                    type: a.type,
+                                                                })
+                                                            }}
                                                             className="flex flex-col items-center justify-center w-full h-full gap-1 group-hover:opacity-50 transition-opacity"
                                                         >
                                                             <FileText className={`h-8 w-8 ${isPdfFile(a.name) ? 'text-red-400' : 'text-blue-400'}`} />
                                                             <div className="w-full overflow-hidden">
                                                                 <p className="text-[9px] font-medium truncate w-full px-1">{a.name}</p>
-                                                                <p className="text-[8px] text-muted-foreground">{formatFileSize(a.size)}</p>
+                                                                <p className="text-[8px] text-muted-foreground">
+                                                                    {canPreviewAttachment(a.name, a.type) ? "Preview" : formatFileSize(a.size)}
+                                                                </p>
                                                             </div>
                                                         </a>
                                                     </div>
@@ -1347,6 +1367,15 @@ export function TaskPreview({ task, open, onOpenChange, onEdit, projectId, onTas
                     </DialogContent>
                 </Dialog>
             )}
+
+            <AttachmentPreviewDialog
+                attachment={previewAttachment}
+                open={!!previewAttachment}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) setPreviewAttachment(null)
+                }}
+                onDownload={forceDownload}
+            />
 
         </Dialog>
 

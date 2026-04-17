@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useQuery } from "convex/react"
 import { api } from "@convex/_generated/api"
-import { Eye, Check, X, Clock, Loader2, Paperclip, MessageSquare, Download, ExternalLink } from "lucide-react"
+import { Eye, Check, X, Clock, Loader2, Paperclip, MessageSquare, ExternalLink } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
+import { AttachmentPreviewDialog, canPreviewAttachment } from "@/components/AttachmentPreviewDialog"
 
 type Attachment = {
     id: string
@@ -81,10 +82,22 @@ const isImageFile = (filename: string) => {
     return /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(filename)
 }
 
+const getAttachmentUrls = (attachment: Attachment) => ({
+    preview: `/api/attachments/${attachment.id}`,
+    download: `/api/attachments/${attachment.id}?download=1`,
+})
+
 export function ApprovalPreviewButton({ task, onApproved, onDenied }: ApprovalPreviewProps) {
     const [open, setOpen] = useState(false)
     const [isApproving, setIsApproving] = useState(false)
     const [isDenying, setIsDenying] = useState(false)
+    const [previewAttachment, setPreviewAttachment] = useState<{
+        name: string
+        url: string
+        downloadUrl: string
+        size?: number
+        type?: string
+    } | null>(null)
     const attachments = useQuery(api.tasks.getAttachments, open ? { taskId: task.id } : "skip") as Attachment[] | undefined
     const comments = useQuery(api.tasks.getComments, open ? { taskId: task.id } : "skip") as Comment[] | undefined
     const { toast } = useToast()
@@ -151,6 +164,23 @@ export function ApprovalPreviewButton({ task, onApproved, onDenied }: ApprovalPr
             })
         } finally {
             setIsDenying(false)
+        }
+    }
+
+    const forceDownload = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url)
+            const blob = await response.blob()
+            const blobUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = blobUrl
+            link.download = filename
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(blobUrl)
+        } catch (error) {
+            window.open(url, '_blank')
         }
     }
 
@@ -230,38 +260,42 @@ export function ApprovalPreviewButton({ task, onApproved, onDenied }: ApprovalPr
                                             Attachments ({(attachments ?? []).length})
                                         </div>
                                         <div className="space-y-2">
-                                            {(attachments ?? []).map(attachment => (
-                                                <div
-                                                    key={attachment.id}
-                                                    className="flex items-center gap-3 p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                                                >
-                                                    {isImageFile(attachment.name) ? (
-                                                        <img
-                                                            src={attachment.url}
-                                                            alt={attachment.name}
-                                                            className="h-10 w-10 object-cover rounded"
-                                                        />
-                                                    ) : (
-                                                        <div className="h-10 w-10 flex items-center justify-center bg-muted rounded">
-                                                            <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                                        </div>
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-xs font-medium truncate">{attachment.name}</div>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            {formatFileSize(attachment.size)}
-                                                        </div>
-                                                    </div>
-                                                    <a
-                                                        href={attachment.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                                            {(attachments ?? []).map(attachment => {
+                                                const { preview, download } = getAttachmentUrls(attachment)
+                                                return (
+                                                    <button
+                                                        key={attachment.id}
+                                                        type="button"
+                                                        onClick={() => setPreviewAttachment({
+                                                            name: attachment.name,
+                                                            url: preview,
+                                                            downloadUrl: download,
+                                                            size: attachment.size,
+                                                            type: attachment.type,
+                                                        })}
+                                                        className="flex w-full items-center gap-3 rounded-lg bg-muted/30 p-2 text-left transition-colors hover:bg-muted/50"
                                                     >
-                                                        <ExternalLink className="h-3.5 w-3.5" />
-                                                    </a>
-                                                </div>
-                                            ))}
+                                                        {isImageFile(attachment.name) ? (
+                                                            <img
+                                                                src={preview}
+                                                                alt={attachment.name}
+                                                                className="h-10 w-10 rounded object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                                                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="truncate text-xs font-medium">{attachment.name}</div>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                {canPreviewAttachment(attachment.name, attachment.type) ? "Preview" : formatFileSize(attachment.size)}
+                                                            </div>
+                                                        </div>
+                                                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                                                    </button>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -337,6 +371,15 @@ export function ApprovalPreviewButton({ task, onApproved, onDenied }: ApprovalPr
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <AttachmentPreviewDialog
+                attachment={previewAttachment}
+                open={!!previewAttachment}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) setPreviewAttachment(null)
+                }}
+                onDownload={forceDownload}
+            />
         </>
     )
 }
