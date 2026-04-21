@@ -447,7 +447,7 @@ export function PushChainStrip({
                                                             title="Add task"
                                                             onClick={() => onAddTask!(push)}
                                                         >
-                                                            <AvatarFallback className="bg-muted/60 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors">
+                                                            <AvatarFallback className="bg-primary/10 text-primary border border-border/70 hover:bg-primary/15 hover:border-primary/40 transition-colors dark:bg-primary/25 dark:text-primary dark:border-border dark:hover:bg-primary/30">
                                                                 <Plus className="h-3 w-3" />
                                                             </AvatarFallback>
                                                         </Avatar>
@@ -459,7 +459,7 @@ export function PushChainStrip({
                                                             title={a.name}
                                                             style={{ zIndex: maxVisible - i }}
                                                         >
-                                                            <AvatarFallback className="bg-primary/5 text-primary">
+                                                            <AvatarFallback className="bg-primary/10 text-primary border border-border/70 dark:bg-primary/25 dark:text-primary dark:border-border">
                                                                 {getInitials(a.name)}
                                                             </AvatarFallback>
                                                         </Avatar>
@@ -491,8 +491,8 @@ export function PushChainStrip({
                                                     className={cn(
                                                         "h-7 w-7 md:w-full inline-flex items-center justify-center gap-1.5 overflow-hidden rounded-md border px-0 md:px-3 text-xs font-medium transition-[background-color,border-color,color]",
                                                         pushIsComplete
-                                                            ? "border-transparent bg-transparent text-emerald-700/70 hover:bg-emerald-50/40 hover:text-emerald-700"
-                                                            : "border-green-200/80 bg-green-50/35 text-foreground hover:border-green-300 hover:bg-green-100/70"
+                                                            ? "border-transparent bg-transparent text-emerald-700/70 hover:bg-emerald-50/40 hover:text-emerald-700 dark:text-emerald-400/85 dark:hover:bg-emerald-950/50 dark:hover:text-emerald-300"
+                                                            : "border-green-300/80 bg-green-50/50 text-green-800 hover:border-green-400 hover:bg-green-100/80 dark:border-emerald-700/70 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:border-emerald-600 dark:hover:bg-emerald-900/55 dark:hover:text-emerald-100"
                                                     )}
                                                 >
                                                     <Check className="h-3.5 w-3.5 shrink-0" />
