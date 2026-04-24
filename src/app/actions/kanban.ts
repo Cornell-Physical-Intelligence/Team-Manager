@@ -145,7 +145,6 @@ export async function createTask(input: CreateTaskInput) {
             projectId,
             workspaceId: user.workspaceId,
             columnId: columnId ?? null,
-            dueDate: dueDateMs,
             description: description?.trim() || undefined,
             assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
             assigneeIds: input.assigneeIds,
@@ -168,6 +167,24 @@ export async function createTask(input: CreateTaskInput) {
             task: { id: string; columnId: string; assigneeIds: string[] }
             projectName: string
             workspaceDiscordChannelId: string | null
+        }
+
+        if (dueDateMs !== null) {
+            const dueDateResult = await updateTaskDetailsInConvex(
+                taskResult.task.id,
+                user.workspaceId,
+                user.role,
+                user.id,
+                user.name || 'Unknown',
+                { dueDate: dueDateMs }
+            )
+
+            if (!dueDateResult || 'error' in dueDateResult) {
+                return {
+                    error: ((dueDateResult as Record<string, unknown> | null)?.error as string)
+                        || 'Task was created, but setting the due date failed',
+                }
+            }
         }
 
         // Discord: ping only when someone is assigned
