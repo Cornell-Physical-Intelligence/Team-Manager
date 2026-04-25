@@ -7,6 +7,7 @@ import { getProjectContext, getWorkspaceUserIds } from '@/lib/access'
 import { resolveProjectColumnId } from '@/lib/kanban-columns'
 import { driveConfigTableExists, getDriveFolderCache, isFolderWithinRoot } from '@/lib/googleDrive'
 import { getWorkspaceProjectColumns } from '@/lib/convex/projects'
+import { appendActivityLogToConvex } from '@/lib/convex/mirror'
 import {
     createTaskInConvex,
     updateTaskStatusInConvex,
@@ -14,7 +15,7 @@ import {
     deleteTaskInConvex,
     updateTaskProgressInConvex,
 } from '@/lib/convex/kanban'
-import { api, fetchQuery } from '@/lib/convex/server'
+import { api, fetchMutation, fetchQuery } from '@/lib/convex/server'
 
 function parseDateOnlyStart(dateStr: string) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
@@ -59,6 +60,32 @@ type CreateTaskInput = {
     attachmentFolderName?: string | null
 }
 
+type RawTaskDoc = {
+    id: string
+    title: string
+    description?: string
+    status: string
+    assigneeId?: string
+    pushId?: string
+    columnId?: string
+    subteamId?: string
+    priority: string
+    requireAttachment: boolean
+    attachmentFolderId?: string
+    attachmentFolderName?: string
+    instructionsFileUrl?: string
+    instructionsFileName?: string
+    progress: number
+    enableProgress: boolean
+    startDate?: number
+    endDate?: number
+    dueDate?: number
+    submittedAt?: number
+    approvedAt?: number
+    createdAt: number
+    updatedAt: number
+}
+
 async function getWorkspaceDriveConfig(workspaceId: string) {
     if (!(await driveConfigTableExists())) return null
     return fetchQuery(api.settings.getWorkspaceDriveConfig, { workspaceId })
@@ -66,6 +93,74 @@ async function getWorkspaceDriveConfig(workspaceId: string) {
 
 async function getHydratedTask(taskId: string) {
     return fetchQuery(api.tasks.getById, { taskId })
+}
+
+async function getRawTask(taskId: string) {
+    return fetchQuery(api.tasks.getTaskById, { taskId }) as Promise<RawTaskDoc | null>
+}
+
+async function setTaskDueDateViaMirror(
+    taskId: string,
+    dueDateMs: number,
+    changedBy: string,
+    changedByName: string
+) {
+    const task = await getRawTask(taskId)
+    if (!task) {
+        return { error: 'Task not found' }
+    }
+
+    const previousDueAt = typeof task.dueDate === 'number'
+        ? task.dueDate
+        : typeof task.endDate === 'number'
+            ? task.endDate
+            : null
+    const updatedAt = Date.now()
+
+    await fetchMutation(api.mirror.upsertTask, {
+        task: {
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            status: task.status || 'Todo',
+            assigneeId: task.assigneeId,
+            pushId: task.pushId,
+            columnId: task.columnId,
+            subteamId: task.subteamId,
+            priority: task.priority || 'Medium',
+            requireAttachment: task.requireAttachment ?? true,
+            attachmentFolderId: task.attachmentFolderId,
+            attachmentFolderName: task.attachmentFolderName,
+            instructionsFileUrl: task.instructionsFileUrl,
+            instructionsFileName: task.instructionsFileName,
+            progress: task.progress ?? 0,
+            enableProgress: task.enableProgress ?? false,
+            startDate: task.startDate,
+            endDate: dueDateMs,
+            dueDate: dueDateMs,
+            submittedAt: task.submittedAt,
+            approvedAt: task.approvedAt,
+            createdAt: task.createdAt,
+            updatedAt,
+        },
+    })
+
+    const oldDueDate = previousDueAt ? new Date(previousDueAt).toISOString().split('T')[0] : 'None'
+    const newDueDate = new Date(dueDateMs).toISOString().split('T')[0]
+    if (oldDueDate !== newDueDate) {
+        await appendActivityLogToConvex({
+            taskId: task.id,
+            taskTitle: task.title,
+            action: 'updated',
+            field: 'dueDate',
+            oldValue: oldDueDate,
+            newValue: newDueDate,
+            changedBy,
+            changedByName,
+        })
+    }
+
+    return { success: true as const }
 }
 
 async function resolveTaskStatusColumnId(
@@ -170,19 +265,16 @@ export async function createTask(input: CreateTaskInput) {
         }
 
         if (dueDateMs !== null) {
-            const dueDateResult = await updateTaskDetailsInConvex(
+            const dueDateResult = await setTaskDueDateViaMirror(
                 taskResult.task.id,
-                user.workspaceId,
-                user.role,
+                dueDateMs,
                 user.id,
-                user.name || 'Unknown',
-                { dueDate: dueDateMs }
+                user.name || 'Unknown'
             )
 
-            if (!dueDateResult || 'error' in dueDateResult) {
+            if ('error' in dueDateResult) {
                 return {
-                    error: ((dueDateResult as Record<string, unknown> | null)?.error as string)
-                        || 'Task was created, but setting the due date failed',
+                    error: dueDateResult.error || 'Task was created, but setting the due date failed',
                 }
             }
         }
@@ -369,27 +461,79 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             }
         }
 
-        const result = await updateTaskDetailsInConvex(
+        const dueDateMs = input.dueDate !== undefined
+            ? parseDueDateInput(input.dueDate)
+            : undefined
+        const convexInput = {
+            title: input.title,
+            description: input.description !== undefined ? (input.description || null) : undefined,
+            assigneeId: input.assigneeId !== undefined ? (input.assigneeId && input.assigneeId !== "" ? input.assigneeId : null) : undefined,
+            assigneeIds: input.assigneeIds,
+            dueDate: dueDateMs,
+            requireAttachment: input.requireAttachment,
+            enableProgress: input.enableProgress,
+            progress: input.progress,
+            attachmentFolderId: nextAttachmentFolderId,
+            attachmentFolderName: nextAttachmentFolderName,
+        }
+
+        let result = await updateTaskDetailsInConvex(
             taskId,
             user.workspaceId,
             user.role,
             user.id,
             user.name || 'Unknown',
-            {
-                title: input.title,
-                description: input.description !== undefined ? (input.description || null) : undefined,
-                assigneeId: input.assigneeId !== undefined ? (input.assigneeId && input.assigneeId !== "" ? input.assigneeId : null) : undefined,
-                assigneeIds: input.assigneeIds,
-                dueDate: input.dueDate !== undefined
-                    ? parseDueDateInput(input.dueDate)
-                    : undefined,
-                requireAttachment: input.requireAttachment,
-                enableProgress: input.enableProgress,
-                progress: input.progress,
-                attachmentFolderId: nextAttachmentFolderId,
-                attachmentFolderName: nextAttachmentFolderName,
-            }
+            convexInput
         )
+
+        const resultError =
+            result && 'error' in result && typeof result.error === 'string'
+                ? result.error
+                : null
+        const liveValidatorRejectedDueDate =
+            typeof resultError === 'string'
+            && (resultError.includes('extra field `dueDate`')
+                || resultError.includes("extra field 'dueDate'"))
+
+        if (liveValidatorRejectedDueDate) {
+            const existingTask = dueDateMs === null && input.dueDate !== undefined
+                ? await getRawTask(taskId)
+                : null
+
+            result = await updateTaskDetailsInConvex(
+                taskId,
+                user.workspaceId,
+                user.role,
+                user.id,
+                user.name || 'Unknown',
+                {
+                    ...convexInput,
+                    dueDate: undefined,
+                }
+            )
+
+            if (result && !('error' in result) && dueDateMs !== undefined && dueDateMs !== null) {
+                const dueDateResult = await setTaskDueDateViaMirror(
+                    taskId,
+                    dueDateMs,
+                    user.id,
+                    user.name || 'Unknown'
+                )
+                if ('error' in dueDateResult) {
+                    return { error: dueDateResult.error }
+                }
+            } else if (
+                result
+                && !('error' in result)
+                && dueDateMs === null
+                && existingTask
+                && (typeof existingTask.dueDate === 'number' || typeof existingTask.endDate === 'number')
+            ) {
+                return {
+                    error: 'Clearing an existing due date requires the latest Convex functions to be deployed.',
+                }
+            }
+        }
 
         if (!result || 'error' in result) {
             return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to update task' }
