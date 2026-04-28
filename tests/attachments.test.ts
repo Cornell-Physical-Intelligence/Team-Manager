@@ -4,6 +4,7 @@ import {
     buildAttachmentAccessUrl,
     buildAttachmentContentDisposition,
     buildAttachmentStoragePath,
+    getAttachmentResponseContentType,
     getAttachmentExtension,
     isAllowedAttachmentType,
 } from '@/lib/attachments'
@@ -28,6 +29,20 @@ const allowedCases = [
     ['data.json', 'application/json'],
     ['feed.xml', 'application/xml'],
     ['table.csv', 'text/csv'],
+    ['script.py', 'text/x-python'],
+    ['script.py', 'application/octet-stream'],
+    ['notebook.ipynb', 'application/x-ipynb+json'],
+    ['component.tsx', 'application/octet-stream'],
+    ['module.js', 'application/javascript'],
+    ['page.html', 'text/html'],
+    ['styles.scss', 'text/x-scss'],
+    ['config.yaml', 'application/octet-stream'],
+    ['pyproject.toml', 'application/toml'],
+    ['schema.sql', 'application/sql'],
+    ['main.go', 'text/plain'],
+    ['Makefile', 'text/plain'],
+    ['Dockerfile', 'text/plain'],
+    ['.gitignore', 'text/plain'],
     ['archive.zip', 'application/zip'],
     ['archive.rar', 'application/octet-stream'],
     ['archive.7z', 'application/octet-stream'],
@@ -71,6 +86,7 @@ const rejectedCases = [
     ['program.app', 'application/octet-stream'],
     ['batch.bat', 'text/plain'],
     ['command.cmd', 'text/plain'],
+    ['secrets.env', 'text/plain'],
     ['malware.scr', 'application/octet-stream'],
     ['extension.crx', 'application/octet-stream'],
     ['unknown', 'application/octet-stream'],
@@ -122,6 +138,21 @@ const contentDispositionCases: Array<[string, boolean, string]> = [
 for (const [fileName, download, expected] of contentDispositionCases) {
     test(`builds content disposition for ${fileName}`, () => {
         assert.equal(buildAttachmentContentDisposition(fileName, download), expected)
+    })
+}
+
+const responseContentTypeCases: Array<[string, string, string]> = [
+    ['page.html', 'text/html', 'text/plain; charset=utf-8'],
+    ['module.js', 'application/javascript', 'text/plain; charset=utf-8'],
+    ['component.tsx', 'application/octet-stream', 'text/plain; charset=utf-8'],
+    ['script.py', 'text/x-python', 'text/x-python'],
+    ['notes.txt', 'text/plain', 'text/plain'],
+    ['unknown.bin', '', 'application/octet-stream'],
+]
+
+for (const [fileName, fileType, expected] of responseContentTypeCases) {
+    test(`builds response content type for ${fileName}`, () => {
+        assert.equal(getAttachmentResponseContentType(fileName, fileType), expected)
     })
 }
 

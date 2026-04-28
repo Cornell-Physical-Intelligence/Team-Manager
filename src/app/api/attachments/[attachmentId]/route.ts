@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { Readable } from "stream"
 import { getCurrentUser } from "@/lib/auth"
 import { getTaskContext } from "@/lib/access"
-import { buildAttachmentContentDisposition } from "@/lib/attachments"
+import { buildAttachmentContentDisposition, getAttachmentResponseContentType } from "@/lib/attachments"
 import { getDriveClientForWorkspace } from "@/lib/googleDrive"
 import { api, fetchQuery } from "@/lib/convex/server"
 
@@ -31,7 +31,7 @@ export async function GET(
 
     const download = new URL(request.url).searchParams.get("download") === "1"
     const headers = new Headers({
-        "Content-Type": attachment.type || "application/octet-stream",
+        "Content-Type": getAttachmentResponseContentType(attachment.name, attachment.type || ""),
         "Content-Disposition": buildAttachmentContentDisposition(attachment.name, download),
         "Cache-Control": "private, max-age=60",
     })

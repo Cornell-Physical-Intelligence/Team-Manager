@@ -9,6 +9,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { TEXT_PREVIEW_ATTACHMENT_EXTENSIONS } from "@/lib/attachmentFileTypes"
 
 type PreviewAttachment = {
     name: string
@@ -21,23 +22,7 @@ type PreviewAttachment = {
 type Vertex = { x: number; y: number; z: number }
 type Face = [Vertex, Vertex, Vertex]
 
-const TEXT_PREVIEW_EXTENSIONS = new Set([
-    "step",
-    "stp",
-    "iges",
-    "igs",
-    "obj",
-    "mtl",
-    "dxf",
-    "gcode",
-    "nc",
-    "gltf",
-    "txt",
-    "md",
-    "json",
-    "xml",
-    "csv",
-])
+const TEXT_PREVIEW_EXTENSIONS = new Set(TEXT_PREVIEW_ATTACHMENT_EXTENSIONS)
 
 const MAX_TEXT_PREVIEW_BYTES = 350_000
 const MAX_STL_FACES = 18_000
@@ -258,7 +243,6 @@ function TextPreview({ url, fileName }: { url: string; fileName: string }) {
     useEffect(() => {
         let cancelled = false
 
-        setState({ text: "", truncated: false, loading: true, error: null })
         readLimitedText(url)
             .then((result) => {
                 if (!cancelled) setState({ ...result, loading: false, error: null })
@@ -308,7 +292,6 @@ function StlPreview({ url }: { url: string }) {
     useEffect(() => {
         let cancelled = false
 
-        setState({ faces: [], error: null, loading: true })
         fetch(url)
             .then(async (response) => {
                 if (!response.ok) throw new Error("Unable to load STL preview")
@@ -457,8 +440,8 @@ export function AttachmentPreviewDialog({
                             title={`${attachment.name} preview`}
                         />
                     )}
-                    {previewKind === "stl" && <StlPreview url={attachment.url} />}
-                    {previewKind === "text" && <TextPreview url={attachment.url} fileName={attachment.name} />}
+                    {previewKind === "stl" && <StlPreview key={attachment.url} url={attachment.url} />}
+                    {previewKind === "text" && <TextPreview key={attachment.url} url={attachment.url} fileName={attachment.name} />}
                     {previewKind === "unsupported" && <UnsupportedPreview fileName={attachment.name} />}
                 </div>
             </DialogContent>

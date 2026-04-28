@@ -1,4 +1,8 @@
 import crypto from "crypto"
+import {
+    ALLOWED_ATTACHMENT_EXTENSIONS,
+    PLAIN_TEXT_ATTACHMENT_RESPONSE_EXTENSIONS,
+} from "./attachmentFileTypes"
 
 export const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
 
@@ -21,86 +25,28 @@ const ALLOWED_MIME_PREFIXES = [
     "application/xml",
 ]
 
-const ALLOWED_EXTENSIONS = [
-    "jpg",
-    "jpeg",
-    "png",
-    "gif",
-    "webp",
-    "svg",
-    "bmp",
-    "ico",
-    "mp4",
-    "webm",
-    "mov",
-    "avi",
-    "mkv",
-    "mp3",
-    "wav",
-    "ogg",
-    "flac",
-    "pdf",
-    "doc",
-    "docx",
-    "xls",
-    "xlsx",
-    "ppt",
-    "pptx",
-    "txt",
-    "md",
-    "json",
-    "xml",
-    "csv",
-    "zip",
-    "rar",
-    "7z",
-    "tar",
-    "gz",
-    "step",
-    "stp",
-    "stl",
-    "obj",
-    "mtl",
-    "3mf",
-    "iges",
-    "igs",
-    "dxf",
-    "dwg",
-    "x_t",
-    "x_b",
-    "sat",
-    "sab",
-    "sldprt",
-    "sldasm",
-    "slddrw",
-    "ipt",
-    "iam",
-    "prt",
-    "asm",
-    "catpart",
-    "catproduct",
-    "fcstd",
-    "f3d",
-    "skp",
-    "gcode",
-    "nc",
-    "glb",
-    "gltf",
-]
-
 export function getAttachmentExtension(fileName: string) {
     return fileName.split(".").pop()?.toLowerCase() || ""
 }
 
 export function isAllowedAttachmentType(fileName: string, fileType: string) {
     const extension = getAttachmentExtension(fileName)
-    const allowedByExtension = ALLOWED_EXTENSIONS.includes(extension)
+    const allowedByExtension = ALLOWED_ATTACHMENT_EXTENSIONS.includes(extension)
     const allowedByMime =
         fileType.length > 0 &&
         !fileType.startsWith("text/") &&
         ALLOWED_MIME_PREFIXES.some((prefix) => fileType.startsWith(prefix))
 
     return allowedByMime || allowedByExtension
+}
+
+export function getAttachmentResponseContentType(fileName: string, fileType: string) {
+    const extension = getAttachmentExtension(fileName)
+    if (PLAIN_TEXT_ATTACHMENT_RESPONSE_EXTENSIONS.includes(extension)) {
+        return "text/plain; charset=utf-8"
+    }
+
+    return fileType || "application/octet-stream"
 }
 
 export function buildAttachmentAccessUrl(attachmentId: string, download = false) {
