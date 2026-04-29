@@ -19,6 +19,8 @@ type TaskRowProps = {
         attachmentsCount: number
         progress: number
         enableProgress: boolean
+        dueDate?: string | null
+        endDate?: string | null
     }
 }
 
@@ -30,6 +32,21 @@ const getInitials = (name: string) => {
 
 export function TaskRow({ task }: TaskRowProps) {
     const { prefetchProjectRoute, pushProjectRoute } = useProjectRoute()
+    const effectiveDueDate = task.dueDate || task.endDate
+    const dueTime = effectiveDueDate ? new Date(effectiveDueDate).getTime() : NaN
+    const daysLeft = Number.isFinite(dueTime)
+        ? Math.ceil((dueTime - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        : null
+    const dueLabel = daysLeft === null
+        ? null
+        : daysLeft < 0
+            ? `${Math.abs(daysLeft)}d overdue`
+            : daysLeft === 0
+                ? "Today"
+                : daysLeft === 1
+                    ? "Tomorrow"
+                    : `${daysLeft}d`
+    const isOverdue = daysLeft !== null && daysLeft < 0
 
     const handleClick = () => {
         let url = `/dashboard/projects/${task.projectId}?highlight=${task.id}`
@@ -52,7 +69,28 @@ export function TaskRow({ task }: TaskRowProps) {
                 <span className="text-sm font-medium leading-snug line-clamp-2">{task.title}</span>
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-auto">
+            <div className="flex items-center justify-between gap-2 mt-auto">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    {dueLabel && (
+                        <div
+                            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
+                            style={isOverdue ? {
+                                background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
+                                borderColor: 'rgba(239, 68, 68, 0.3)',
+                                color: 'rgb(220, 38, 38)',
+                                '--tag-color': 'rgba(239, 68, 68, 0.15)'
+                            } as React.CSSProperties : {
+                                background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                borderColor: 'rgba(156, 163, 175, 0.3)',
+                                color: 'rgb(107, 114, 128)',
+                                '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                            } as React.CSSProperties}
+                        >
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{dueLabel}</span>
+                        </div>
+                    )}
+                </div>
                 <div
                     className="text-[10px] px-2 py-0.5 rounded-sm font-medium text-muted-foreground truncate max-w-[120px] border tag-shimmer"
                     style={{

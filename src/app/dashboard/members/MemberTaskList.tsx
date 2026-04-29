@@ -13,6 +13,8 @@ type Task = {
     title: string
     description?: string | null
     updatedAt?: Date | string | null
+    dueDate?: Date | string | null
+    endDate?: Date | string | null
     progress?: number | null
     column?: {
         name: string
@@ -70,6 +72,10 @@ function formatTimeAgo(date: Date | string) {
 function TaskItem({ task }: { task: Task }) {
     const status = task.column?.name || 'Unknown'
     const project = task.column?.board?.project
+    const dueDate = task.dueDate || task.endDate
+    const dueDateLabel = formatDate(dueDate)
+    const dueTime = dueDate ? new Date(dueDate).getTime() : NaN
+    const isOverdue = status !== 'Done' && Number.isFinite(dueTime) && dueTime < new Date().getTime()
 
     return (
         <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors group">
@@ -104,6 +110,11 @@ function TaskItem({ task }: { task: Task }) {
                                 }}
                             >
                                 {task.push.name}
+                            </span>
+                        )}
+                        {dueDateLabel && status !== 'Done' && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${isOverdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-muted text-muted-foreground'}`}>
+                                Due {dueDateLabel}
                             </span>
                         )}
                     </div>

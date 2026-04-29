@@ -68,6 +68,9 @@ type HydratedTask = {
     } | null
     submittedAt: string | null
     approvedAt: string | null
+    startDate: string | null
+    endDate: string | null
+    dueDate: string | null
     createdAt: string
     updatedAt: string
     progress: number
@@ -328,6 +331,9 @@ async function hydrateTasks(
                 : null,
             submittedAt: toIso(task.submittedAt),
             approvedAt: toIso(task.approvedAt),
+            startDate: toIso(task.startDate),
+            endDate: toIso(task.endDate),
+            dueDate: toIso(task.dueDate),
             createdAt: new Date(task.createdAt).toISOString(),
             updatedAt: new Date(task.updatedAt).toISOString(),
             progress: task.progress,
@@ -544,6 +550,9 @@ export const getMembersPageData = query({
                 id: task.id,
                 title: task.title,
                 description: task.description,
+                startDate: task.startDate,
+                endDate: task.endDate,
+                dueDate: task.dueDate,
                 updatedAt: task.updatedAt,
                 progress: task.progress,
                 enableProgress: task.enableProgress,
@@ -618,6 +627,9 @@ export const getMyBoardPageData = query({
             attachmentsCount: task.attachmentsCount,
             checklistTotal: task.checklistItems.length,
             checklistCompleted: task.checklistItems.filter((item) => item.completed).length,
+            startDate: task.startDate,
+            endDate: task.endDate,
+            dueDate: task.dueDate,
             submittedAt: task.submittedAt,
             createdAt: task.createdAt,
             updatedAt: task.updatedAt,
@@ -717,6 +729,9 @@ export const getHeatmapWidgetData = query({
                 push: task.push ? { id: task.push.id, name: task.push.name } : null,
                 createdAt: task.createdAt,
                 updatedAt: task.updatedAt,
+                startDate: task.startDate,
+                endDate: task.endDate,
+                dueDate: task.dueDate,
                 submittedAt: task.submittedAt,
                 approvedAt: task.approvedAt,
                 progress: task.progress,
@@ -801,6 +816,9 @@ export const getHeatmapPageData = query({
                     : null,
                 createdAt: task.createdAt,
                 updatedAt: task.updatedAt,
+                startDate: task.startDate,
+                endDate: task.endDate,
+                dueDate: task.dueDate,
                 submittedAt: task.submittedAt,
                 approvedAt: task.approvedAt,
                 progress: task.progress,

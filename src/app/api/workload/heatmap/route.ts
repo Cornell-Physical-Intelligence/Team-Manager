@@ -28,9 +28,9 @@ export async function GET() {
         const workloadTasks = buildWorkloadTasks(
             tasks.map((task) => ({
                 ...task,
-                dueDate: null,
-                endDate: null,
-                startDate: null,
+                dueDate: task.dueDate ? new Date(task.dueDate) : null,
+                endDate: task.endDate ? new Date(task.endDate) : null,
+                startDate: task.startDate ? new Date(task.startDate) : null,
                 createdAt: new Date(task.createdAt),
                 updatedAt: new Date(task.updatedAt),
                 submittedAt: task.submittedAt ? new Date(task.submittedAt) : null,

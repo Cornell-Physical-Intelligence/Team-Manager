@@ -124,6 +124,8 @@ export function DashboardPageClient({
                                                         attachmentsCount: task.attachmentsCount,
                                                         progress: task.progress,
                                                         enableProgress: task.enableProgress,
+                                                        dueDate: task.dueDate,
+                                                        endDate: task.endDate,
                                                     }}
                                                 />
                                             )

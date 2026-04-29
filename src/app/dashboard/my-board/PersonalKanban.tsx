@@ -51,6 +51,8 @@ type Task = {
     checklistTotal: number
     checklistCompleted: number
     submittedAt: string | null
+    endDate: string | null
+    dueDate: string | null
     createdAt: string
     updatedAt: string
 }
@@ -78,6 +80,26 @@ function getPendingReviewText(submittedAt: string | null) {
 
     const days = Math.floor((new Date().getTime() - new Date(submittedAt).getTime()) / (1000 * 60 * 60 * 24))
     return days === 0 ? 'Pending today' : `Pending ${days}d`
+}
+
+function getDueDateBadge(task: Pick<Task, "dueDate" | "endDate">) {
+    const effectiveDueDate = task.dueDate || task.endDate
+    if (!effectiveDueDate) return null
+
+    const dueTime = new Date(effectiveDueDate).getTime()
+    if (!Number.isFinite(dueTime)) return null
+
+    const daysLeft = Math.ceil((dueTime - Date.now()) / (1000 * 60 * 60 * 24))
+    return {
+        isOverdue: daysLeft < 0,
+        label: daysLeft < 0
+            ? `${Math.abs(daysLeft)}d overdue`
+            : daysLeft === 0
+                ? "Today"
+                : daysLeft === 1
+                    ? "Tomorrow"
+                    : `${daysLeft}d`,
+    }
 }
 
 // Draggable Task Card Component
@@ -113,6 +135,7 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
     const isDone = task.columnName === 'Done'
     const isReview = task.columnName === 'Review'
     const reviewPendingText = isReview ? getPendingReviewText(task.submittedAt) : null
+    const dueDateBadge = !isReview ? getDueDateBadge(task) : null
 
     // Done column variant
     if (isDone) {
@@ -170,6 +193,25 @@ function PersonalTaskCard({ task, onClick }: { task: Task; onClick: () => void }
                         >
                             <Clock className="w-3 h-3 shrink-0" />
                             <span className="truncate">{reviewPendingText}</span>
+                        </div>
+                    )}
+                    {!isReview && dueDateBadge && (
+                        <div
+                            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm font-medium border truncate max-w-[120px] tag-shimmer"
+                            style={dueDateBadge.isOverdue ? {
+                                background: 'linear-gradient(to right, rgba(239, 68, 68, 0.15), transparent)',
+                                borderColor: 'rgba(239, 68, 68, 0.3)',
+                                color: 'rgb(220, 38, 38)',
+                                '--tag-color': 'rgba(239, 68, 68, 0.15)'
+                            } as React.CSSProperties : {
+                                background: 'linear-gradient(to right, rgba(156, 163, 175, 0.15), transparent)',
+                                borderColor: 'rgba(156, 163, 175, 0.3)',
+                                color: 'rgb(107, 114, 128)',
+                                '--tag-color': 'rgba(156, 163, 175, 0.15)'
+                            } as React.CSSProperties}
+                        >
+                            <Clock className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{dueDateBadge.label}</span>
                         </div>
                     )}
                 </div>

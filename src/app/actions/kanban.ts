@@ -86,6 +86,46 @@ type RawTaskDoc = {
     updatedAt: number
 }
 
+function getResultError(result: unknown) {
+    if (result && typeof result === 'object' && 'error' in result) {
+        const error = (result as { error?: unknown }).error
+        return typeof error === 'string' ? error : null
+    }
+    return null
+}
+
+function getErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message
+    return typeof error === 'string' ? error : null
+}
+
+function isDateFieldValidatorError(error: string | null) {
+    if (!error) return false
+    return (
+        error.includes('extra field `dueDate`') ||
+        error.includes("extra field 'dueDate'") ||
+        error.includes('extra field `endDate`') ||
+        error.includes("extra field 'endDate'")
+    )
+}
+
+function toDueDateIso(dueDateMs: number | null | undefined) {
+    return typeof dueDateMs === 'number' ? new Date(dueDateMs).toISOString() : null
+}
+
+function withDueDateOverride<T>(task: T, dueDateMs: number | null | undefined, shouldOverride: boolean): T {
+    if (!shouldOverride || !task || typeof task !== 'object') {
+        return task
+    }
+
+    const dueDateIso = toDueDateIso(dueDateMs)
+    return {
+        ...(task as Record<string, unknown>),
+        dueDate: dueDateIso,
+        endDate: dueDateIso,
+    } as T
+}
+
 async function getWorkspaceDriveConfig(workspaceId: string) {
     if (!(await driveConfigTableExists())) return null
     return fetchQuery(api.settings.getWorkspaceDriveConfig, { workspaceId })
@@ -235,11 +275,12 @@ export async function createTask(input: CreateTaskInput) {
 
         const dueDateMs = parseDueDateInput(dueDate)
 
-        const result = await createTaskInConvex({
+        const createTaskPayload = {
             title: title.trim(),
             projectId,
             workspaceId: user.workspaceId,
             columnId: columnId ?? null,
+            dueDate: dueDateMs,
             description: description?.trim() || undefined,
             assigneeId: assigneeId && assigneeId !== "" ? assigneeId : undefined,
             assigneeIds: input.assigneeIds,
@@ -251,7 +292,31 @@ export async function createTask(input: CreateTaskInput) {
             attachmentFolderName,
             createdBy: user.id,
             createdByName: user.name || 'Unknown',
-        })
+        }
+
+        let result
+        let createdWithPrimaryDueDate = dueDateMs !== null
+
+        try {
+            result = await createTaskInConvex(createTaskPayload)
+        } catch (error) {
+            if (dueDateMs === null || !isDateFieldValidatorError(getErrorMessage(error))) {
+                throw error
+            }
+            result = await createTaskInConvex({
+                ...createTaskPayload,
+                dueDate: undefined,
+            })
+            createdWithPrimaryDueDate = false
+        }
+
+        if (dueDateMs !== null && isDateFieldValidatorError(getResultError(result))) {
+            result = await createTaskInConvex({
+                ...createTaskPayload,
+                dueDate: undefined,
+            })
+            createdWithPrimaryDueDate = false
+        }
 
         if (!result || 'error' in result) {
             return { error: ((result as Record<string, unknown> | null)?.error as string) || 'Failed to create task' }
@@ -264,7 +329,7 @@ export async function createTask(input: CreateTaskInput) {
             workspaceDiscordChannelId: string | null
         }
 
-        if (dueDateMs !== null) {
+        if (dueDateMs !== null && !createdWithPrimaryDueDate) {
             const dueDateResult = await setTaskDueDateViaMirror(
                 taskResult.task.id,
                 dueDateMs,
@@ -303,6 +368,7 @@ export async function createTask(input: CreateTaskInput) {
         }
 
         revalidatePath(`/dashboard/projects/${projectId}`)
+        revalidatePath('/dashboard/my-board')
         const hydratedTask = await getHydratedTask(taskResult.task.id)
         const fallbackTask = {
             id: taskResult.task.id,
@@ -318,7 +384,7 @@ export async function createTask(input: CreateTaskInput) {
 
         return {
             success: true,
-            task: hydratedTask ?? fallbackTask,
+            task: withDueDateOverride(hydratedTask ?? fallbackTask, dueDateMs, dueDate !== undefined),
         }
     } catch (error) {
         console.error("Create task error:", error)
@@ -477,23 +543,27 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
             attachmentFolderName: nextAttachmentFolderName,
         }
 
-        let result = await updateTaskDetailsInConvex(
-            taskId,
-            user.workspaceId,
-            user.role,
-            user.id,
-            user.name || 'Unknown',
-            convexInput
-        )
+        let result
+        try {
+            result = await updateTaskDetailsInConvex(
+                taskId,
+                user.workspaceId,
+                user.role,
+                user.id,
+                user.name || 'Unknown',
+                convexInput
+            )
+        } catch (error) {
+            const errorMessage = getErrorMessage(error)
+            if (!isDateFieldValidatorError(errorMessage)) {
+                throw error
+            }
+            result = { error: errorMessage }
+        }
 
-        const resultError =
-            result && 'error' in result && typeof result.error === 'string'
-                ? result.error
-                : null
+        const resultError = getResultError(result)
         const liveValidatorRejectedDueDate =
-            typeof resultError === 'string'
-            && (resultError.includes('extra field `dueDate`')
-                || resultError.includes("extra field 'dueDate'"))
+            isDateFieldValidatorError(resultError)
 
         if (liveValidatorRejectedDueDate) {
             const existingTask = dueDateMs === null && input.dueDate !== undefined
@@ -571,9 +641,13 @@ export async function updateTaskDetails(taskId: string, input: Partial<CreateTas
         if (r.projectId) {
             revalidatePath(`/dashboard/projects/${r.projectId}`)
         }
+        revalidatePath('/dashboard/my-board')
         const hydratedTask = await getHydratedTask(taskId)
 
-        return { success: true, task: hydratedTask ?? r.task }
+        return {
+            success: true,
+            task: withDueDateOverride(hydratedTask ?? r.task, dueDateMs, input.dueDate !== undefined),
+        }
     } catch (e) {
         console.error("Update details error:", e)
         const errorMessage = e instanceof Error ? e.message : 'Unknown error'
