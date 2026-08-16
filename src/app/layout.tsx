@@ -15,8 +15,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CuPI Platform",
-  description: "Cornell Physical Intelligence Team Management",
+  title: "CUPI Team Platform | Cornell Physical Intelligence",
+  description:
+    "Internal team platform for Cornell Physical Intelligence (CUPI), a Cornell University student robotics organization.",
+  robots: {
+    index: false,
+    follow: true,
+    googleBot: {
+      index: false,
+      follow: true,
+    },
+  },
   icons: {
     icon: "/CUPI logos.png",
     shortcut: "/CUPI logos.png",

@@ -28,10 +28,16 @@ export default async function LandingPage() {
                 {/* Hero Section */}
                 <div className="space-y-4">
                     <h1 className="text-5xl md:text-7xl font-bold tracking-tighter text-zinc-900 pb-2">
-                        CuPI
+                        CUPI
                     </h1>
                     <p className="text-lg md:text-xl text-zinc-500 font-medium max-w-lg mx-auto leading-relaxed">
-                        Team management solution developed by <br /> <span className="text-zinc-900 font-semibold">Cornell Physical Intelligence</span>
+                        Internal team platform for <br />
+                        <a
+                            href="https://cornellphysicalintelligence.com/"
+                            className="text-zinc-900 font-semibold hover:underline underline-offset-4"
+                        >
+                            Cornell Physical Intelligence
+                        </a>
                     </p>
                 </div>
 
@@ -97,9 +103,13 @@ export default async function LandingPage() {
 
             <footer className="absolute bottom-6 z-40 text-center space-y-4 px-4 w-full">
                 <p className="text-[10px] text-zinc-400 max-w-md mx-auto leading-relaxed opacity-60">
-                    This organization is not yet a registered student organization of Cornell University.
+                    Cornell lists this group as the Cornell Physical Intelligence Club; see the official directory for current registration status.
                     <br />
-                    <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" className="hover:text-zinc-600 transition-colors">Equal Education and Employment</a>
+                    <a href="https://cornell.campusgroups.com/cupi/home/" className="hover:text-zinc-600 transition-colors">Official Cornell listing</a>
+                    <span aria-hidden="true"> · </span>
+                    <a href="https://cornellphysicalintelligence.com/" className="hover:text-zinc-600 transition-colors">Public CUPI website</a>
+                    <span aria-hidden="true"> · </span>
+                    <a href="https://hr.cornell.edu/about/workplace-rights/equal-education-and-employment" className="hover:text-zinc-600 transition-colors">Equal Education &amp; Employment</a>
                 </p>
             </footer>
         </div>
