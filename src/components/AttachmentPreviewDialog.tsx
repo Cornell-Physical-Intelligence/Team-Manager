@@ -258,7 +258,6 @@ function TextPreview({ url, fileName }: { url: string; fileName: string }) {
     useEffect(() => {
         let cancelled = false
 
-        setState({ text: "", truncated: false, loading: true, error: null })
         readLimitedText(url)
             .then((result) => {
                 if (!cancelled) setState({ ...result, loading: false, error: null })
@@ -308,7 +307,6 @@ function StlPreview({ url }: { url: string }) {
     useEffect(() => {
         let cancelled = false
 
-        setState({ faces: [], error: null, loading: true })
         fetch(url)
             .then(async (response) => {
                 if (!response.ok) throw new Error("Unable to load STL preview")
@@ -457,8 +455,8 @@ export function AttachmentPreviewDialog({
                             title={`${attachment.name} preview`}
                         />
                     )}
-                    {previewKind === "stl" && <StlPreview url={attachment.url} />}
-                    {previewKind === "text" && <TextPreview url={attachment.url} fileName={attachment.name} />}
+                    {previewKind === "stl" && <StlPreview key={attachment.url} url={attachment.url} />}
+                    {previewKind === "text" && <TextPreview key={attachment.url} url={attachment.url} fileName={attachment.name} />}
                     {previewKind === "unsupported" && <UnsupportedPreview fileName={attachment.name} />}
                 </div>
             </DialogContent>
